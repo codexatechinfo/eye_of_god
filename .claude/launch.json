@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:\\Users\\joaow\\Desktop\\FIMM_\\FIMM\\projeto_olho_de_Deus\\BACKEND", "run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:\\Users\\joaow\\Desktop\\FIMM_\\FIMM\\projeto_olho_de_Deus\\FRONTEND", "start"],
+      "port": 4200
+    }
+  ]
+}

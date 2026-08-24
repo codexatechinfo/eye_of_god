@@ -1,59 +1,57 @@
-# OlhoDeDeus
+# Olho de Deus
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.7.
+Sistema interno de acompanhamento de leitura e releitura de medidores (livros) para
+operações de leitura urbana e rural sob contrato com a Copel. Coleta dados automaticamente
+do portal da Copel via scraping (Playwright), consolida com o banco de operação
+(`BASE_DADOS`) e expõe um dashboard de atrasos por regional, etapa e empreiteira.
 
-## Development server
+## O que não faz
 
-To start a local development server, run:
+Não emite fatura, não substitui os sistemas internos da Copel e não atende mais de um
+cliente — é uma ferramenta interna, de uso único, para a equipe de coordenação/supervisão
+de leitura.
 
-```bash
-ng serve
-```
+## Arquitetura em 10 linhas
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+- **BACKEND** (`/BACKEND`) — API Node.js/Express, Prisma como client de acesso ao Postgres
+  (schema introspectado, não gerenciado por migration), autenticação por JWT com dois
+  níveis (`ADMIN` / usuário comum), jobs agendados (`node-cron`) que disparam scraping
+  Playwright do portal Copel em ciclo contínuo das 07h às 19h.
+- **FRONTEND** (`/FRONTEND`) — SPA Angular 21, consome a API via `AuthGuard` + JWT
+  armazenado no cliente, exibe dashboard de atrasos e telas de colaboradores/massivas.
+- Banco de dados: Postgres compartilhado com o data warehouse de relatórios da operação
+  (schema `BASE_DADOS`) — o Prisma acessa tabelas que já existem fora do controle do app.
+  Detalhes em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
 
-## Code scaffolding
+## Como rodar
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
+### Backend
 
 ```bash
-ng build
+cd BACKEND
+npm install
+cp .env.example .env   # preencher com as credenciais reais
+npx prisma generate
+npm run dev
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+### Frontend
 
 ```bash
-ng test
+cd FRONTEND
+npm install
+npm start
 ```
 
-## Running end-to-end tests
+A API sobe em `http://localhost:3000` (ou `PORT` do `.env`); o frontend em
+`http://localhost:4200`.
 
-For end-to-end (e2e) testing, run:
+## Documentação
 
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- [`docs/PRD.md`](docs/PRD.md) — problema, escopo, critérios de aceite
+- [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) — diagramas (classes e fluxo crítico)
+- [`docs/RBAC.md`](docs/RBAC.md) — papéis e permissões
+- [`docs/CHECKLIST.md`](docs/CHECKLIST.md) — requisitos do padrão de projeto e status atual
+- [`docs/painel.html`](docs/painel.html) — painel de acompanhamento (abrir no navegador)
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — como contribuir
+- [`SECURITY.md`](SECURITY.md) — como reportar vulnerabilidade

@@ -1,0 +1,11 @@
+title = "gitleaks config — olho de deus"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "arquivos de exemplo, sem segredo real"
+paths = [
+  '''\.env\.example$''',
+  '''BACKEND/README$''',
+]

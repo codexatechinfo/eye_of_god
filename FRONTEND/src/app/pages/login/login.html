@@ -1,0 +1,60 @@
+<div class="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+  <div class="w-full max-w-sm">
+    <div class="bg-slate-900/70 backdrop-blur-md border border-white/10 p-10 rounded-2xl shadow-2xl">
+      <h1 class="text-center text-2xl font-bold mb-1 text-white tracking-tight">Eye of God</h1>
+      <p class="text-center text-slate-400 text-sm mb-8">Acesse sua conta</p>
+
+      <form (ngSubmit)="onSubmit()" class="space-y-5">
+        <div>
+          <label for="email" class="block text-sm font-semibold text-slate-300 mb-1.5">Email</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            [(ngModel)]="email"
+            placeholder="seu@email.com"
+            required
+            class="w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700 rounded-lg text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <label for="senha" class="block text-sm font-semibold text-slate-300 mb-1.5">Senha</label>
+          <input
+            type="password"
+            id="senha"
+            name="senha"
+            [(ngModel)]="senha"
+            placeholder="••••••••"
+            required
+            class="w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700 rounded-lg text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
+        <p *ngIf="erro()" class="text-red-400 text-sm -mt-2">{{ erro() }}</p>
+
+        <div class="flex items-center">
+          <input
+              type="checkbox"
+              id="manterConectado"
+              name="manterConectado"
+              [(ngModel)]="manterConectado"
+              class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500"
+          />
+          <label for="manterConectado" class="ml-2 text-sm text-slate-400">
+              Manter conectado
+          </label>
+          </div>
+
+        <button
+          type="submit"
+          [disabled]="carregando()"
+          class="w-full py-3 rounded-lg text-sm font-semibold text-white transition-colors"
+          [ngClass]="carregando() ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 cursor-pointer'"
+        >
+          {{ carregando() ? 'Entrando...' : 'Entrar' }}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>

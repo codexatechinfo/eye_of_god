@@ -1,0 +1,12 @@
+# FRONTEND PROJETO OLHO DE DEUS
+
+# git init
+
+# git remote remove origin
+
+# git remote add origin https://github.com/J-oao2311/extracao_f_imm.git
+# git add .
+
+# git commit -m "01/06/2026 09h15min"
+
+# git push origin master --force

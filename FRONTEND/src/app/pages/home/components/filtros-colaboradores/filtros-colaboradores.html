@@ -1,0 +1,48 @@
+<div class="flex flex-wrap items-center gap-2 py-2">
+  <select disabled class="text-xs border border-slate-200 rounded-md px-2 py-1.5 bg-slate-50 text-slate-400 cursor-not-allowed">
+    <option>Etapa · em breve</option>
+  </select>
+
+  <select
+    [ngModel]="colaboradoresService.filtroRegional()"
+    (ngModelChange)="colaboradoresService.filtroRegional.set($event); colaboradoresService.buscar()"
+    class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+  >
+    <option value="">Regional · todas</option>
+    <option *ngFor="let regional of colaboradoresService.regionais()" [value]="regional">{{ regional }}</option>
+  </select>
+
+  <input
+    type="text"
+    [ngModel]="colaboradoresService.filtroColaborador()"
+    (ngModelChange)="colaboradoresService.filtroColaborador.set($event); colaboradoresService.buscarComDebounce()"
+    placeholder="Buscar colaborador..."
+    class="text-xs border border-slate-200 rounded-md px-2 py-1.5 w-44 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+  />
+
+  <select
+    [ngModel]="colaboradoresService.filtroCargo()"
+    (ngModelChange)="colaboradoresService.filtroCargo.set($event); colaboradoresService.buscar()"
+    class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+  >
+    <option value="">Cargo · todos</option>
+    <option *ngFor="let cargo of colaboradoresService.cargos()" [value]="cargo">{{ cargo }}</option>
+  </select>
+
+  <input
+    type="date"
+    [ngModel]="colaboradoresService.filtroData()"
+    (ngModelChange)="colaboradoresService.filtroData.set($event)"
+    [min]="hoje"
+    [max]="hoje"
+    title="Por enquanto só é possível consultar o dia de hoje"
+    class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+  />
+
+  <button
+    (click)="colaboradoresService.limparFiltros()"
+    class="text-xs font-medium text-slate-400 hover:text-blue-600 cursor-pointer px-1 transition-colors"
+  >
+    Limpar
+  </button>
+</div>

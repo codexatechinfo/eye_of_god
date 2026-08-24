@@ -1,0 +1,390 @@
+<div class="h-full overflow-y-auto p-6">
+  <!-- Barra de filtros -->
+  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-3 mb-5">
+    <div class="flex flex-wrap items-center gap-2">
+      <select
+        [ngModel]="massivasService.filtroRegional()"
+        (ngModelChange)="massivasService.filtroRegional.set($event); massivasService.buscarTudo()"
+        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+      >
+        <option value="">Regional · todas</option>
+        <option *ngFor="let regional of massivasService.regionais()" [value]="regional">{{ regional }}</option>
+      </select>
+
+      <input
+        type="text"
+        [ngModel]="massivasService.filtroLivro()"
+        (ngModelChange)="massivasService.filtroLivro.set($event); massivasService.buscarComDebounce()"
+        placeholder="Buscar livro..."
+        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 w-32 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+      />
+
+      <select
+        [ngModel]="massivasService.filtroEtapa()"
+        (ngModelChange)="massivasService.filtroEtapa.set($event); massivasService.buscarTudo()"
+        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+      >
+        <option value="">Etapa · todas</option>
+        <option *ngFor="let etapa of massivasService.etapas()" [value]="etapa">Etapa {{ etapa }}</option>
+      </select>
+
+      <input
+        type="text"
+        [ngModel]="massivasService.filtroColaborador()"
+        (ngModelChange)="massivasService.filtroColaborador.set($event); massivasService.buscarComDebounce()"
+        placeholder="Buscar colaborador..."
+        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 w-44 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+      />
+
+      <select
+        [ngModel]="massivasService.filtroStatus()"
+        (ngModelChange)="massivasService.filtroStatus.set($event); onStatusChange()"
+        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+      >
+        <option value="todos">Status · todos</option>
+        <option value="pendentes">Pendentes</option>
+        <option value="atribuidas">Atribuídas</option>
+        <option value="emExecucao">Em execução</option>
+      </select>
+
+      <button
+        (click)="massivasService.limparFiltros()"
+        class="text-xs font-medium text-slate-400 hover:text-blue-600 cursor-pointer px-1 transition-colors"
+      >
+        Limpar
+      </button>
+    </div>
+  </div>
+
+  <!-- Cabeçalho dos cards + toggle -->
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+    <div>
+      <h2 class="text-sm font-bold text-slate-800">Resumo de Massivas</h2>
+      <p class="text-[11px] text-slate-400" *ngIf="massivasService.resumo() as r">
+        Dados de {{ r.dataImport }} às {{ r.horaImport }}
+      </p>
+    </div>
+
+    <button
+      type="button"
+      (click)="massivasService.alternarVisualizacao()"
+      class="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-blue-600 bg-white border border-slate-200 hover:border-blue-300 rounded-full px-3 py-1.5 transition-colors cursor-pointer"
+      title="Alternar entre contagem de livros e de leituras"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="17 1 21 5 17 9" />
+        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+        <polyline points="7 23 3 19 7 15" />
+        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+      </svg>
+      {{ massivasService.visualizacao() === 'livros' ? 'Livros' : 'Leituras' }}
+    </button>
+  </div>
+
+  <div class="text-center text-slate-400 text-sm py-10" *ngIf="massivasService.carregando()">Carregando...</div>
+  <div class="text-center text-red-500 text-sm py-10" *ngIf="massivasService.erro() && !massivasService.carregando()">
+    {{ massivasService.erro() }}
+  </div>
+
+  <!-- Cards -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6" *ngIf="!massivasService.carregando() && !massivasService.erro()">
+    <!-- Pendentes -->
+    <button
+      type="button"
+      (click)="selecionarStatus('pendentes')"
+      class="relative overflow-hidden rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
+      [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4"
+      [style.transform]="cardEmDestaque('pendentes') ? 'scale(1)' : 'scale(0.97)'"
+    >
+      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-amber-300/25 blur-xl"></div>
+      <div class="relative flex items-center justify-between mb-2.5">
+        <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 15 14" />
+          </svg>
+        </div>
+      </div>
+      <div class="relative text-2xl font-extrabold text-amber-700 tabular-nums">{{ valorCard('pendentes') }}</div>
+      <div class="relative text-[10px] font-bold uppercase tracking-wide text-amber-500 mt-0.5">Pendentes</div>
+    </button>
+
+    <!-- Atribuídas -->
+    <button
+      type="button"
+      (click)="selecionarStatus('atribuidas')"
+      class="relative overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-blue-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
+      [style.opacity]="cardEmDestaque('atribuidas') ? 1 : 0.4"
+      [style.transform]="cardEmDestaque('atribuidas') ? 'scale(1)' : 'scale(0.97)'"
+    >
+      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-blue-300/25 blur-xl"></div>
+      <div class="relative flex items-center justify-between mb-2.5">
+        <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="18" rx="2" />
+            <path d="m8.5 13 2 2 4.5-4.5" />
+          </svg>
+        </div>
+      </div>
+      <div class="relative text-2xl font-extrabold text-blue-700 tabular-nums">{{ valorCard('atribuidas') }}</div>
+      <div class="relative text-[10px] font-bold uppercase tracking-wide text-blue-500 mt-0.5">Atribuídas</div>
+    </button>
+
+    <!-- Em execução -->
+    <button
+      type="button"
+      (click)="selecionarStatus('emExecucao')"
+      class="relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
+      [style.opacity]="cardEmDestaque('emExecucao') ? 1 : 0.4"
+      [style.transform]="cardEmDestaque('emExecucao') ? 'scale(1)' : 'scale(0.97)'"
+    >
+      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-emerald-300/25 blur-xl"></div>
+      <div class="relative flex items-center justify-between mb-2.5">
+        <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 12 7 12 9 6 13 18 16 12 21 12" />
+          </svg>
+        </div>
+      </div>
+      <div class="relative text-2xl font-extrabold text-emerald-700 tabular-nums">{{ valorCard('emExecucao') }}</div>
+      <div class="relative text-[10px] font-bold uppercase tracking-wide text-emerald-500 mt-0.5">Em execução</div>
+    </button>
+
+    <!-- Total -->
+    <button
+      type="button"
+      (click)="selecionarTotal()"
+      class="relative overflow-hidden rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-violet-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
+      [style.opacity]="totalCardEmDestaque() ? 1 : 0.4"
+      [style.transform]="totalCardEmDestaque() ? 'scale(1)' : 'scale(0.97)'"
+    >
+      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-violet-300/25 blur-xl"></div>
+      <div class="relative flex items-center justify-between mb-2.5">
+        <div class="w-7 h-7 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+          </svg>
+        </div>
+      </div>
+      <div class="relative text-2xl font-extrabold text-violet-700 tabular-nums">{{ valorCard('total') }}</div>
+      <div class="relative text-[10px] font-bold uppercase tracking-wide text-violet-500 mt-0.5">Total massivas</div>
+    </button>
+
+    <!-- No prazo -->
+    <button
+      type="button"
+      (click)="selecionarPrazo('noPrazo')"
+      class="relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
+      [style.opacity]="prazoCardEmDestaque('noPrazo') ? 1 : 0.4"
+      [style.transform]="prazoCardEmDestaque('noPrazo') ? 'scale(1)' : 'scale(0.97)'"
+    >
+      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-emerald-300/25 blur-xl"></div>
+      <div class="relative flex items-center justify-between mb-2.5">
+        <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </div>
+      </div>
+      <div class="relative text-2xl font-extrabold text-emerald-700 tabular-nums">{{ valorCard('noPrazo') }}</div>
+      <div class="relative text-[10px] font-bold uppercase tracking-wide text-emerald-500 mt-0.5">No prazo</div>
+    </button>
+
+    <!-- Prazo final -->
+    <button
+      type="button"
+      (click)="selecionarPrazo('final')"
+      class="relative overflow-hidden rounded-xl border border-yellow-200 bg-gradient-to-br from-yellow-50 via-white to-yellow-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
+      [style.opacity]="prazoCardEmDestaque('final') ? 1 : 0.4"
+      [style.transform]="prazoCardEmDestaque('final') ? 'scale(1)' : 'scale(0.97)'"
+    >
+      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-yellow-300/25 blur-xl"></div>
+      <div class="relative flex items-center justify-between mb-2.5">
+        <div class="w-7 h-7 rounded-lg bg-yellow-100 text-yellow-600 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+        </div>
+      </div>
+      <div class="relative text-2xl font-extrabold text-yellow-700 tabular-nums">{{ valorCard('prazoFinal') }}</div>
+      <div class="relative text-[10px] font-bold uppercase tracking-wide text-yellow-600 mt-0.5">Prazo final</div>
+    </button>
+
+    <!-- Atraso -->
+    <button
+      type="button"
+      (click)="selecionarPrazo('atrasada')"
+      class="relative overflow-hidden rounded-xl border border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
+      [style.opacity]="prazoCardEmDestaque('atrasada') ? 1 : 0.4"
+      [style.transform]="prazoCardEmDestaque('atrasada') ? 'scale(1)' : 'scale(0.97)'"
+    >
+      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-red-300/25 blur-xl"></div>
+      <div class="relative flex items-center justify-between mb-2.5">
+        <div class="w-7 h-7 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <line x1="12" y1="8" x2="12" y2="13" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+        </div>
+      </div>
+      <div class="relative text-2xl font-extrabold text-red-700 tabular-nums">{{ valorCard('atrasadas') }}</div>
+      <div class="relative text-[10px] font-bold uppercase tracking-wide text-red-500 mt-0.5">Atraso</div>
+    </button>
+  </div>
+
+  <!-- Tabela de detalhe -->
+  <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+      <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wide">Detalhe por livro</h3>
+      <span class="text-[11px] text-slate-400" *ngIf="!massivasService.carregandoDetalhe()">
+        {{ massivasService.detalhe().length }} registro{{ massivasService.detalhe().length === 1 ? '' : 's' }}
+      </span>
+    </div>
+
+    <div class="text-center text-slate-400 text-sm py-10" *ngIf="massivasService.carregandoDetalhe()">Carregando tabela...</div>
+    <div class="text-center text-red-500 text-sm py-10" *ngIf="massivasService.erroDetalhe() && !massivasService.carregandoDetalhe()">
+      {{ massivasService.erroDetalhe() }}
+    </div>
+    <div
+      class="text-center text-slate-400 text-sm py-10"
+      *ngIf="!massivasService.carregandoDetalhe() && !massivasService.erroDetalhe() && !massivasService.detalhe().length"
+    >
+      Nenhum registro encontrado.
+    </div>
+
+    <div class="overflow-x-auto max-h-[560px] overflow-y-auto" *ngIf="!massivasService.carregandoDetalhe() && !massivasService.erroDetalhe() && massivasService.detalhe().length">
+      <table class="w-full text-xs">
+        <thead class="sticky top-0 bg-slate-50 z-10">
+          <tr class="text-left text-slate-500 border-b border-slate-200">
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('regional')">
+              Regional{{ indicadorOrdenacao('regional') }}
+            </th>
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('livro')">
+              Livro{{ indicadorOrdenacao('livro') }}
+            </th>
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('etapa')">
+              Etapa{{ indicadorOrdenacao('etapa') }}
+            </th>
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('status')">
+              Situação{{ indicadorOrdenacao('status') }}
+            </th>
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('dt_prev_limite')">
+              Data limite{{ indicadorOrdenacao('dt_prev_limite') }}
+            </th>
+            <th class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('quantidade')">
+              Executados/Pendentes{{ indicadorOrdenacao('quantidade') }}
+            </th>
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('leiturista')">
+              Leiturista{{ indicadorOrdenacao('leiturista') }}
+            </th>
+            <th class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('diasAtraso')">
+              Dias em atraso{{ indicadorOrdenacao('diasAtraso') }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            *ngFor="let linha of linhasOrdenadas()"
+            (click)="abrirHistorico(linha.livro)"
+            class="border-b border-slate-50 last:border-0 cursor-pointer transition-colors hover:brightness-95"
+            [ngClass]="{
+              'bg-emerald-50/60': corLinha(linha) === 'verde',
+              'bg-yellow-50/70': corLinha(linha) === 'amarelo',
+              'bg-red-50/70': corLinha(linha) === 'vermelho'
+            }"
+          >
+            <td class="px-3 py-1.5 text-slate-600">{{ linha.regional || '—' }}</td>
+            <td class="px-3 py-1.5 font-semibold text-slate-700">{{ linha.livro }}</td>
+            <td class="px-3 py-1.5 text-slate-600">{{ linha.etapa }}</td>
+            <td class="px-3 py-1.5 text-slate-600">{{ linha.status }}</td>
+            <td class="px-3 py-1.5 text-slate-600 tabular-nums">{{ linha.dt_prev_limite ? (linha.dt_prev_limite | date: 'dd/MM/yyyy':'UTC') : '—' }}</td>
+            <td class="px-3 py-1.5 text-right tabular-nums text-slate-600">{{ linha.digitados }}/{{ linha.nao_digitados }}</td>
+            <td class="px-3 py-1.5 text-slate-600 truncate max-w-[180px]" [title]="linha.leiturista || ''">{{ linha.leiturista || '—' }}</td>
+            <td
+              class="px-3 py-1.5 text-right tabular-nums font-semibold"
+              [ngClass]="{
+                'text-emerald-600': corLinha(linha) === 'verde',
+                'text-yellow-700': corLinha(linha) === 'amarelo',
+                'text-red-600': corLinha(linha) === 'vermelho'
+              }"
+            >
+              {{ diasAtraso(linha) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Popup de histórico do livro -->
+  <div
+    *ngIf="massivasService.livroSelecionado() as livro"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+    (click)="massivasService.fecharHistoricoLivro()"
+  >
+    <div
+      class="w-full max-w-2xl max-h-[80vh] flex flex-col rounded-xl bg-white shadow-xl overflow-hidden"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-slate-800">Histórico do livro {{ livro }}</h3>
+          <p class="text-[11px] text-slate-400">Linha do tempo completa, da primeira aparição até hoje</p>
+        </div>
+        <button
+          type="button"
+          (click)="massivasService.fecharHistoricoLivro()"
+          class="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto px-5 py-4">
+        <div class="text-center text-slate-400 text-sm py-10" *ngIf="massivasService.carregandoHistorico()">Carregando histórico...</div>
+        <div class="text-center text-red-500 text-sm py-10" *ngIf="massivasService.erroHistorico() && !massivasService.carregandoHistorico()">
+          {{ massivasService.erroHistorico() }}
+        </div>
+        <div
+          class="text-center text-slate-400 text-sm py-10"
+          *ngIf="!massivasService.carregandoHistorico() && !massivasService.erroHistorico() && !massivasService.historicoLivro().length"
+        >
+          Nenhum histórico encontrado para este livro.
+        </div>
+
+        <ol class="relative border-l-2 border-slate-100 ml-2" *ngIf="!massivasService.carregandoHistorico() && massivasService.historicoLivro().length">
+          <li class="mb-5 ml-4" *ngFor="let evento of massivasService.historicoLivro()">
+            <div class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1.5 bg-slate-300"></div>
+            <div class="flex flex-wrap items-center gap-1.5 mb-1">
+              <span class="text-[11px] font-semibold text-slate-400 tabular-nums">{{ evento.dataImport }} {{ evento.horaImport }}</span>
+              <span class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">{{ evento.status }}</span>
+              <span class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700" *ngIf="evento.primeiraAparicao">
+                Primeira aparição
+              </span>
+              <span class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700" *ngIf="evento.mudancaStatus">
+                Mudou de situação
+              </span>
+              <span class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700" *ngIf="evento.mudancaColaborador">
+                Mudou de colaborador
+              </span>
+            </div>
+            <div class="text-xs text-slate-600">
+              <span class="font-semibold text-slate-700">{{ evento.leiturista || 'Sem leiturista atribuído' }}</span>
+              · Etapa {{ evento.etapa }} · {{ evento.regional || 'Sem regional' }}
+              · {{ evento.digitados }}/{{ evento.naoDigitados }}
+              <span *ngIf="evento.dtPrevLimite"> · Prazo {{ evento.dtPrevLimite }}</span>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,9 +1,14 @@
 const cron = require('node-cron');
 const { executarColetaCopel } = require('../services/coletaCopelService');
+const { abrirContextoTenant, fecharContextoTenant } = require('../config/db');
 
 const HORA_INICIO = 7;
 const HORA_FIM = 19;
 const PAUSA_ENTRE_CICLOS_MS = 5000; // pequena folga entre um ciclo e o próximo
+
+// Job roda fora de requisição HTTP, sem token — usa a empresa configurada em
+// EMPRESA_PRINCIPAL_ID como identidade fixa (ver docs/adr/0003-rbac-multi-tenant.md).
+const EMPRESA_JOB_ID = process.env.EMPRESA_PRINCIPAL_ID;
 
 let emAndamento = false;
 let loopAtivo = false;
@@ -20,10 +25,13 @@ async function executarUmCiclo() {
   }
   emAndamento = true;
   console.log('[Coleta Acomp] ⏰ Iniciando ciclo...');
+  const client = await abrirContextoTenant({ empresaId: EMPRESA_JOB_ID, nivel: 'ADMINISTRADOR' });
   try {
-    await executarColetaCopel();
+    await executarColetaCopel(client, EMPRESA_JOB_ID);
+    await fecharContextoTenant(client, true);
   } catch (erro) {
     console.error('[Coleta Acomp] ❌ Erro na coleta:', erro);
+    await fecharContextoTenant(client, false);
   } finally {
     emAndamento = false;
   }
@@ -44,6 +52,10 @@ async function loopContinuo() {
 }
 
 function iniciarJobColeta() {
+  if (!EMPRESA_JOB_ID) {
+    console.error('[Coleta Acomp] ❌ EMPRESA_PRINCIPAL_ID não definido no .env — job não iniciado.');
+    return;
+  }
   cron.schedule('0 7 * * *', loopContinuo);
   console.log('[Coleta Acomp] 📅 Loop agendado para iniciar todo dia às 07h e rodar até 19h.');
 

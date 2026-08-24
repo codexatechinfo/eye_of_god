@@ -1,9 +1,12 @@
 const cron = require('node-cron');
 const { executarColetaMassivas } = require('../services/coletaMassivasService');
+const { abrirContextoTenant, fecharContextoTenant } = require('../config/db');
 
 const HORA_INICIO = 7;
 const HORA_FIM = 19;
 const PAUSA_ENTRE_CICLOS_MS = 5000;
+
+const EMPRESA_JOB_ID = process.env.EMPRESA_PRINCIPAL_ID;
 
 let emAndamento = false;
 let loopAtivo = false;
@@ -20,10 +23,13 @@ async function executarUmCiclo() {
   }
   emAndamento = true;
   console.log('[Massivas] ⏰ Iniciando ciclo...');
+  const client = await abrirContextoTenant({ empresaId: EMPRESA_JOB_ID, nivel: 'ADMINISTRADOR' });
   try {
-    await executarColetaMassivas();
+    await executarColetaMassivas(client, EMPRESA_JOB_ID);
+    await fecharContextoTenant(client, true);
   } catch (erro) {
     console.error('[Massivas] ❌ Erro na coleta:', erro);
+    await fecharContextoTenant(client, false);
   } finally {
     emAndamento = false;
   }
@@ -44,6 +50,10 @@ async function loopContinuo() {
 }
 
 function iniciarJobMassivas() {
+  if (!EMPRESA_JOB_ID) {
+    console.error('[Massivas] ❌ EMPRESA_PRINCIPAL_ID não definido no .env — job não iniciado.');
+    return;
+  }
   cron.schedule('0 7 * * *', loopContinuo);
   console.log('[Massivas] 📅 Loop agendado para iniciar todo dia às 07h e rodar até 19h.');
 

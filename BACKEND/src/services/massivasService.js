@@ -1,5 +1,3 @@
-const { pool } = require('../config/db');
-
 const TABELAS = {
   pendentes: { nome: 'pendentes_im', temLeiturista: false, rotulo: 'Pendente' },
   atribuidas: { nome: 'atribuidas_im', temLeiturista: true, rotulo: 'Atribuída' },
@@ -8,8 +6,8 @@ const TABELAS = {
 
 const CONTAGEM_ZERO = { livros: 0, leituras: 0 };
 
-async function obterUltimoBatch() {
-  const { rows } = await pool.query(`
+async function obterUltimoBatch(db) {
+  const { rows } = await db.query(`
     SELECT dt_import, hr_import
     FROM pendentes_im
     ORDER BY id DESC
@@ -91,7 +89,7 @@ function condicaoQuantidadeNao(coluna) {
   return `CASE WHEN ${coluna} ~ '^[0-9]+/[0-9]+$' THEN split_part(${coluna}, '/', 2)::int ELSE 0 END`;
 }
 
-async function contarTabela(chave, dataImport, horaImport, filtros) {
+async function contarTabela(db, chave, dataImport, horaImport, filtros) {
   const { nome, temLeiturista } = TABELAS[chave];
   const { semResultado, condicoes, parametros } = construirCondicoes({ ...filtros, temLeiturista });
 
@@ -115,7 +113,7 @@ async function contarTabela(chave, dataImport, horaImport, filtros) {
     ) escolhido
   `;
 
-  const { rows: [linha] } = await pool.query(sql, [dataImport, horaImport, ...parametros]);
+  const { rows: [linha] } = await db.query(sql, [dataImport, horaImport, ...parametros]);
   return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
 }
 
@@ -125,9 +123,9 @@ const PRIORIDADE_STATUS = { emExecucao: 3, atribuidas: 2, pendentes: 1 };
 // pendente, parte já em execução). Somar as 3 tabelas direto conta esse
 // livro mais de uma vez no total; aqui dedupe mantendo só a categoria mais
 // avançada (em execução > atribuída > pendente) antes de contar/somar.
-async function contarTotalDeduplicado(chaves, dataImport, horaImport, filtros) {
+async function contarTotalDeduplicado(db, chaves, dataImport, horaImport, filtros) {
   if (chaves.length === 1) {
-    return contarTabela(chaves[0], dataImport, horaImport, filtros);
+    return contarTabela(db, chaves[0], dataImport, horaImport, filtros);
   }
 
   const partes = [];
@@ -169,12 +167,12 @@ async function contarTotalDeduplicado(chaves, dataImport, horaImport, filtros) {
     ) dedup
   `;
 
-  const { rows: [linha] } = await pool.query(sql, [dataImport, horaImport, ...parametros]);
+  const { rows: [linha] } = await db.query(sql, [dataImport, horaImport, ...parametros]);
   return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
 }
 
-async function obterResumo(filtros) {
-  const ultimoBatch = await obterUltimoBatch();
+async function obterResumo(db, filtros) {
+  const ultimoBatch = await obterUltimoBatch(db);
   if (!ultimoBatch) {
     return {
       dataImport: null,
@@ -192,18 +190,18 @@ async function obterResumo(filtros) {
   const { dt_import: dataImport, hr_import: horaImport } = ultimoBatch;
 
   const [pendentes, atribuidas, emExecucao] = await Promise.all([
-    contarTabela('pendentes', dataImport, horaImport, filtros),
-    contarTabela('atribuidas', dataImport, horaImport, filtros),
-    contarTabela('emExecucao', dataImport, horaImport, filtros),
+    contarTabela(db, 'pendentes', dataImport, horaImport, filtros),
+    contarTabela(db, 'atribuidas', dataImport, horaImport, filtros),
+    contarTabela(db, 'emExecucao', dataImport, horaImport, filtros),
   ]);
 
   const chaves = chavesAtivas(filtros.status);
 
   const [total, noPrazo, prazoFinal, atrasadas] = await Promise.all([
-    contarTotalDeduplicado(chaves, dataImport, horaImport, filtros),
-    contarTotalDeduplicado(chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'noPrazo' }),
-    contarTotalDeduplicado(chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'final' }),
-    contarTotalDeduplicado(chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'atrasada' }),
+    contarTotalDeduplicado(db, chaves, dataImport, horaImport, filtros),
+    contarTotalDeduplicado(db, chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'noPrazo' }),
+    contarTotalDeduplicado(db, chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'final' }),
+    contarTotalDeduplicado(db, chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'atrasada' }),
   ]);
 
   return {
@@ -219,15 +217,15 @@ async function obterResumo(filtros) {
   };
 }
 
-async function obterOpcoesFiltro() {
-  const ultimoBatch = await obterUltimoBatch();
+async function obterOpcoesFiltro(db) {
+  const ultimoBatch = await obterUltimoBatch(db);
   if (!ultimoBatch) {
     return { regionais: [], etapas: [] };
   }
   const { dt_import: dataImport, hr_import: horaImport } = ultimoBatch;
 
   const [regionais, etapas] = await Promise.all([
-    pool.query(
+    db.query(
       `
       SELECT DISTINCT cl.regional
       FROM (
@@ -241,7 +239,7 @@ async function obterOpcoesFiltro() {
       `,
       [dataImport, horaImport],
     ),
-    pool.query(
+    db.query(
       `
       SELECT DISTINCT etapa FROM (
         SELECT etapa, dt_import, hr_import FROM pendentes_im
@@ -261,8 +259,8 @@ async function obterOpcoesFiltro() {
   };
 }
 
-async function obterDetalhe(filtros) {
-  const ultimoBatch = await obterUltimoBatch();
+async function obterDetalhe(db, filtros) {
+  const ultimoBatch = await obterUltimoBatch(db);
   if (!ultimoBatch) {
     return { dataImport: null, horaImport: null, linhas: [] };
   }
@@ -332,12 +330,12 @@ async function obterDetalhe(filtros) {
     ORDER BY dt_prev_limite ASC NULLS LAST, livro ASC
   `;
 
-  const { rows: linhas } = await pool.query(sql, [dataImport, horaImport, ...parametros]);
+  const { rows: linhas } = await db.query(sql, [dataImport, horaImport, ...parametros]);
 
   return { dataImport, horaImport, linhas };
 }
 
-async function obterHistoricoLivro(livro) {
+async function obterHistoricoLivro(db, livro) {
   const subconsultas = Object.values(TABELAS)
     .map(({ nome, temLeiturista, rotulo }) => {
       const leituristaSelect = temLeiturista ? 't.leiturista' : 'NULL::text';
@@ -369,7 +367,7 @@ async function obterHistoricoLivro(livro) {
     ORDER BY to_timestamp(u.dt_import || ' ' || u.hr_import, 'DD/MM/YYYY HH24:MI:SS') ASC
   `;
 
-  const { rows: linhas } = await pool.query(sql, [livro]);
+  const { rows: linhas } = await db.query(sql, [livro]);
 
   const eventos = [];
   let anterior = null;

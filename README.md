@@ -7,16 +7,17 @@ dashboard de atrasos por regional, etapa e empreiteira.
 
 ## O que não faz
 
-Não emite fatura, não substitui os sistemas internos da Copel e não atende mais de um
-cliente — é uma ferramenta interna, de uso único, para a equipe de coordenação/supervisão
-de leitura.
+Não emite fatura e não substitui os sistemas internos da Copel — só lê o que o portal
+expõe. SaaS multi-empresa: a Codexa opera a plataforma para várias empresas clientes,
+isoladas entre si (ver [`docs/PRD.md`](docs/PRD.md)).
 
 ## Arquitetura em 10 linhas
 
 - **BACKEND** (`/BACKEND`) — API Node.js/Express, acesso ao Postgres direto via `pg`
-  (node-postgres, sem ORM), autenticação por JWT com dois níveis (`ADMIN` / usuário
-  comum), jobs agendados (`node-cron`) que disparam scraping Playwright do portal Copel em
-  ciclo contínuo das 07h às 19h.
+  (node-postgres, sem ORM), autenticação por JWT com 4 níveis
+  (`ROOT`/`ADMINISTRADOR`/`SUPERVISOR`/`USUARIO`) e isolamento por empresa via RLS (ver
+  [`docs/RBAC.md`](docs/RBAC.md)), jobs agendados (`node-cron`) que disparam scraping
+  Playwright do portal Copel em ciclo contínuo das 07h às 19h.
 - **FRONTEND** (`/FRONTEND`) — SPA Angular 21, consome a API via `AuthGuard` + JWT
   armazenado no cliente, exibe dashboard de atrasos e telas de colaboradores/massivas.
 - Banco de dados: em desenvolvimento, **Postgres local self-hosted via Supabase** (WSL2 +
@@ -43,8 +44,12 @@ Studio (gestão visual) fica em `http://localhost:8000`; o Postgres em si, expos
 ```bash
 cd BACKEND
 npm install
-cp .env.example .env   # preencher com as credenciais reais
+cp .env.example .env   # preencher com as credenciais reais, inclusive EMPRESA_PRINCIPAL_ID
 npm run dev
+```
+
+```bash
+npm test   # prova o isolamento entre empresas (precisa do Postgres local no ar)
 ```
 
 ### Frontend
@@ -62,7 +67,8 @@ A API sobe em `http://localhost:3000` (ou `PORT` do `.env`); o frontend em
 
 - [`docs/PRD.md`](docs/PRD.md) — problema, escopo, critérios de aceite
 - [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) — diagramas (classes e fluxo crítico)
-- [`docs/RBAC.md`](docs/RBAC.md) — papéis e permissões
+- [`docs/RBAC.md`](docs/RBAC.md) — papéis, permissões e isolamento por empresa
+- [`docs/MODULOS.md`](docs/MODULOS.md) — catálogo de módulo por empresa
 - [`docs/CHECKLIST.md`](docs/CHECKLIST.md) — requisitos do padrão de projeto e status atual
 - [`docs/painel.html`](docs/painel.html) — painel de acompanhamento (abrir no navegador)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — como contribuir

@@ -4,7 +4,7 @@ const { listarAtividadeHoje } = require('../services/atividadeColaboradoresServi
 async function ativos(req, res) {
   try {
     const { colaborador, cargo, regional } = req.query;
-    const lista = await listarAtivos({ colaborador, cargo, regional });
+    const lista = await listarAtivos(req.db, { colaborador, cargo, regional });
     res.json({ sucesso: true, total: lista.length, colaboradores: lista });
   } catch (erro) {
     console.error('❌ Erro ao listar colaboradores ativos:', erro);
@@ -14,7 +14,7 @@ async function ativos(req, res) {
 
 async function opcoesFiltro(req, res) {
   try {
-    const opcoes = await listarOpcoesFiltro();
+    const opcoes = await listarOpcoesFiltro(req.db);
     res.json({ sucesso: true, ...opcoes });
   } catch (erro) {
     console.error('❌ Erro ao obter opções de filtro:', erro);
@@ -24,7 +24,7 @@ async function opcoesFiltro(req, res) {
 
 async function atividadeHoje(req, res) {
   try {
-    const dados = await listarAtividadeHoje();
+    const dados = await listarAtividadeHoje(req.db);
     res.json({ sucesso: true, ...dados });
   } catch (erro) {
     console.error('❌ Erro ao obter atividade dos colaboradores:', erro);

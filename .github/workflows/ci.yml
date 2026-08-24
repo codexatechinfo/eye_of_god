@@ -20,8 +20,11 @@ jobs:
           cache: npm
           cache-dependency-path: BACKEND/package-lock.json
       - run: npm ci
-      - run: npx prisma generate
       - run: node --check src/server.js
+      # test/isolamento_tenant.test.js precisa do Postgres local com o schema
+      # + RLS da stack Supabase self-hosted (ver docs/adr/0003) — não roda
+      # aqui ainda. Rodar localmente com `npm test` antes de qualquer PR que
+      # mexa em RLS/RBAC.
 
   frontend:
     runs-on: ubuntu-latest

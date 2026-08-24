@@ -6,9 +6,11 @@ const { iniciarJobColeta } = require('./jobs/coletaJob');
 const coletaMassivasRoutes = require('./routes/coletaMassivasRoutes');
 const { iniciarJobMassivas } = require('./jobs/coletaMassivasJob');
 const authRoutes = require('./routes/authRoutes');
+const usuariosRoutes = require('./routes/usuariosRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const colaboradoresRoutes = require('./routes/colaboradoresRoutes');
 const massivasRoutes = require('./routes/massivasRoutes');
+const { autenticarToken, anexarContextoTenant } = require('./middlewares/authMiddleware');
 
 const app = express();
 
@@ -20,6 +22,12 @@ app.get('/', (req, res) => {
   res.json({ message: 'API Olho de Deus rodando 👁️' });
 });
 
+// Toda rota de negócio daqui pra baixo exige token válido e abre o contexto
+// de tenant (empresa_id/nível) que o RLS do Postgres usa — ver
+// docs/adr/0003-rbac-multi-tenant.md.
+app.use(autenticarToken, anexarContextoTenant);
+
+app.use('/usuarios', usuariosRoutes);
 app.use('/coleta', coletaRoutes);
 app.use('/coleta/massivas', coletaMassivasRoutes);
 app.use('/dashboard', dashboardRoutes);

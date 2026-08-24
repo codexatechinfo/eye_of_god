@@ -8,6 +8,11 @@ via `pg` (node-postgres), sem ORM. O Supabase self-hosted (Studio, Auth, PostgRE
 existe como ferramenta de gestão/visualização do banco; o app não passa por ele. Ver
 [ADR 0002](adr/0002-postgres-local-via-supabase-sem-prisma.md).
 
+SaaS multi-cliente: cada empresa isolada por `empresa_id` + RLS, papel `ROOT` (Codexa) por
+cima de todas. Toda rota de negócio abre um contexto de tenant (`req.db`) a partir do JWT
+antes de tocar o banco. Ver [ADR 0003](adr/0003-rbac-multi-tenant.md) e
+[`docs/RBAC.md`](RBAC.md).
+
 ```mermaid
 classDiagram
   class FRONTEND_Angular {
@@ -25,7 +30,11 @@ classDiagram
   }
   class authMiddleware {
     +autenticarToken()
-    +exigirAdmin()
+    +anexarContextoTenant()
+    +exigirNivelMinimo()
+  }
+  class empresas {
+    <<tenant>>
   }
   class coletaJob {
     +iniciarJobColeta()
@@ -111,6 +120,10 @@ sequenceDiagram
 
 ## Decisões registradas
 
-- [ADR 0001](adr/0001-perfil-e-caminho-dados.md) — perfil `app-single-tenant`.
+- [ADR 0001](adr/0001-perfil-e-caminho-dados.md) — perfil original `app-single-tenant`
+  (superado pela ADR 0003).
 - [ADR 0002](adr/0002-postgres-local-via-supabase-sem-prisma.md) — Postgres local
   self-hosted via Supabase, acesso direto por `pg`, sem Prisma.
+- [ADR 0003](adr/0003-rbac-multi-tenant.md) — reclassificação para `saas-multi-cliente`,
+  RBAC de 4 níveis (`ROOT`/`ADMINISTRADOR`/`SUPERVISOR`/`USUARIO`), `empresa_id` + RLS em
+  ~48 tabelas de negócio.

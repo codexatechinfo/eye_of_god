@@ -1,5 +1,3 @@
-const { pool } = require('../config/db');
-
 const FILTRO_LEITURA = `
   c.data_recebimento IS NOT NULL
   AND c.data_prevista_limite IS NOT NULL
@@ -11,8 +9,8 @@ function numeroEtapa(etapaNum) {
   return Number.isNaN(valor) ? 9999 : valor;
 }
 
-async function obterUltimoBatch() {
-  const { rows } = await pool.query(`
+async function obterUltimoBatch(db) {
+  const { rows } = await db.query(`
     SELECT data_import, hora_import
     FROM contr_execucao_leitura
     ORDER BY id DESC
@@ -21,15 +19,15 @@ async function obterUltimoBatch() {
   return rows[0] || null;
 }
 
-async function calcularLeituraUrbana() {
-  const ultimoBatch = await obterUltimoBatch();
+async function calcularLeituraUrbana(db) {
+  const ultimoBatch = await obterUltimoBatch(db);
   if (!ultimoBatch) {
     return { dataImport: null, horaImport: null, etapas: [] };
   }
 
   const { data_import: dataImport, hora_import: horaImport } = ultimoBatch;
 
-  const { rows: atual } = await pool.query(
+  const { rows: atual } = await db.query(
     `
     SELECT
       substring(c.etapa from '\\d+') AS etapa_num,
@@ -55,7 +53,7 @@ async function calcularLeituraUrbana() {
     [dataImport, horaImport],
   );
 
-  const { rows: historico } = await pool.query(`
+  const { rows: historico } = await db.query(`
     SELECT DISTINCT substring(c.etapa from '\\d+') AS etapa_num, COALESCE(cl.regional, 'SEM BASE') AS base
     FROM contr_execucao_leitura c
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade

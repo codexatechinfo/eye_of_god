@@ -48,7 +48,7 @@ export class Login implements OnInit {
 
     this.authService.login(email, this.senha).subscribe({
       next: (resposta) => {
-        this.authService.salvarUsuario(resposta.usuario, this.manterConectado);
+        this.authService.salvarSessao(resposta.usuario, resposta.token, this.manterConectado);
         this.carregando.set(false);
         this.router.navigate(['/home']);
       },

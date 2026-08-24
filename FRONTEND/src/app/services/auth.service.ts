@@ -3,17 +3,24 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
+export type Nivel = 'ROOT' | 'ADMINISTRADOR' | 'SUPERVISOR' | 'USUARIO';
+
 export interface Usuario {
   id: number;
   nome: string;
   email: string;
-  nivel: string;
+  nivel: Nivel;
+  empresaId: string | null;
 }
 
 export interface LoginResponse {
   sucesso: boolean;
   usuario: Usuario;
+  token: string;
 }
+
+const CHAVE_USUARIO = 'usuario';
+const CHAVE_TOKEN = 'token';
 
 @Injectable({
   providedIn: 'root'
@@ -27,26 +34,29 @@ export class AuthService {
     return this.http.post<LoginResponse>(`${this.apiUrl}/auth/login`, { email, senha });
   }
 
-  salvarUsuario(usuario: Usuario, manterConectado: boolean): void {
-    const dados = JSON.stringify(usuario);
-    if (manterConectado) {
-      localStorage.setItem('usuario', dados);
-    } else {
-      sessionStorage.setItem('usuario', dados);
-    }
+  salvarSessao(usuario: Usuario, token: string, manterConectado: boolean): void {
+    const armazenamento = manterConectado ? localStorage : sessionStorage;
+    armazenamento.setItem(CHAVE_USUARIO, JSON.stringify(usuario));
+    armazenamento.setItem(CHAVE_TOKEN, token);
   }
 
   getUsuarioLogado(): Usuario | null {
-    const dados = localStorage.getItem('usuario') || sessionStorage.getItem('usuario');
+    const dados = localStorage.getItem(CHAVE_USUARIO) || sessionStorage.getItem(CHAVE_USUARIO);
     return dados ? JSON.parse(dados) : null;
   }
 
+  getToken(): string | null {
+    return localStorage.getItem(CHAVE_TOKEN) || sessionStorage.getItem(CHAVE_TOKEN);
+  }
+
   logout(): void {
-    localStorage.removeItem('usuario');
-    sessionStorage.removeItem('usuario');
+    localStorage.removeItem(CHAVE_USUARIO);
+    localStorage.removeItem(CHAVE_TOKEN);
+    sessionStorage.removeItem(CHAVE_USUARIO);
+    sessionStorage.removeItem(CHAVE_TOKEN);
   }
 
   estaLogado(): boolean {
-    return this.getUsuarioLogado() !== null;
+    return this.getToken() !== null;
   }
 }

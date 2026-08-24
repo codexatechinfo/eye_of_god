@@ -1,5 +1,3 @@
-const { pool } = require('../config/db');
-
 const SITUACAO_REGEX = /^(Em Execução|Atribuída)\s*\(([^)-]*)-(.*)\)$/;
 const QTD_REGEX = /^(\d+)\/(\d+)$/;
 const LIMITE_PARADO_MINUTOS = 20;
@@ -19,10 +17,10 @@ function diferencaMinutos(horaAntiga, horaRecente) {
   return Math.max(0, Math.round(paraMinutosDoDia(horaRecente) - paraMinutosDoDia(horaAntiga)));
 }
 
-async function listarAtividadeHoje() {
+async function listarAtividadeHoje(db) {
   const hoje = new Date().toLocaleDateString('pt-BR');
 
-  const { rows: linhas } = await pool.query(
+  const { rows: linhas } = await db.query(
     `
     SELECT livro, etapa, situacao, qtd_digitados_nao_digitados, hora_import
     FROM contr_execucao_leitura
@@ -150,7 +148,7 @@ async function listarAtividadeHoje() {
     });
   }
 
-  const afastamentosHoje = await obterAfastamentosHoje();
+  const afastamentosHoje = await obterAfastamentosHoje(db);
 
   return { data: hoje, ultimaHoraGeral, colaboradores, afastamentosHoje };
 }
@@ -177,11 +175,11 @@ function paraDataIso(str) {
   return null;
 }
 
-async function obterAfastamentosHoje() {
+async function obterAfastamentosHoje(db) {
   const agora = new Date();
   const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
 
-  const { rows: linhas } = await pool.query(`
+  const { rows: linhas } = await db.query(`
     SELECT colaborador, data_afastamento, data_retorno, qtd_dias_afastado, "afastado_INSS", motivo_afastamento
     FROM atestados
   `);

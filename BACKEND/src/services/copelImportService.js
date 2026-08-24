@@ -1,5 +1,3 @@
-const { pool } = require('../config/db');
-
 const CAMPOS = [
   'etapa', 'tipo_oss', 'subtipo_os', 'numero_os', 'localidade', 'livro',
   'empreiteira', 'data_recebimento', 'hora_recebimento', 'data_prevista_limite',
@@ -7,7 +5,7 @@ const CAMPOS = [
   'percentual_sem_leitura', 'qtd_fora_de_faixa_foto', 'situacao'
 ];
 
-async function importarParaPostgres(registros) {
+async function importarParaPostgres(db, registros, empresaId) {
   if (!registros.length) {
     console.log('⚠️ Nenhum registro para importar.');
     return { inseridos: 0 };
@@ -19,12 +17,13 @@ async function importarParaPostgres(registros) {
 
   console.log(`[Coleta Acomp] 📥 Inserindo ${registros.length} registros na tabela 'contr_execucao_leitura'...`);
 
-  const colunas = [...CAMPOS, 'data_import', 'hora_import'];
+  const colunas = [...CAMPOS, 'data_import', 'hora_import', 'empresa_id'];
   const linhas = registros.map(linha => {
     const obj = {};
     CAMPOS.forEach((campo, i) => { obj[campo] = linha[i] || null; });
     obj.data_import = dataImport;
     obj.hora_import = horaImport;
+    obj.empresa_id = empresaId;
     return colunas.map(campo => obj[campo]);
   });
 
@@ -36,7 +35,7 @@ async function importarParaPostgres(registros) {
   });
 
   const sql = `INSERT INTO contr_execucao_leitura (${colunas.join(', ')}) VALUES ${placeholders.join(', ')}`;
-  const { rowCount } = await pool.query(sql, valores);
+  const { rowCount } = await db.query(sql, valores);
 
   console.log(`[Coleta Acomp] ✅ ${rowCount} registros inseridos com sucesso.`);
   return { inseridos: rowCount };

@@ -69,6 +69,8 @@ A API sobe em `http://localhost:3000` (ou `PORT` do `.env`); o frontend em
 - [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) — diagramas (classes e fluxo crítico)
 - [`docs/RBAC.md`](docs/RBAC.md) — papéis, permissões e isolamento por empresa
 - [`docs/MODULOS.md`](docs/MODULOS.md) — catálogo de módulo por empresa
+- [ADR 0005](docs/adr/0005-importacao-de-planilha.md) — importação de planilha (.xlsx) por
+  tabela, aba "Importação" (`ADMINISTRADOR`/`ROOT`)
 - [`docs/CHECKLIST.md`](docs/CHECKLIST.md) — requisitos do padrão de projeto e status atual
 - [`docs/painel.html`](docs/painel.html) — painel de acompanhamento (abrir no navegador)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — como contribuir

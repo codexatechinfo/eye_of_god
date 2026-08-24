@@ -10,6 +10,7 @@ const usuariosRoutes = require('./routes/usuariosRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const colaboradoresRoutes = require('./routes/colaboradoresRoutes');
 const massivasRoutes = require('./routes/massivasRoutes');
+const importacaoRoutes = require('./routes/importacaoRoutes');
 const { autenticarToken, anexarContextoTenant } = require('./middlewares/authMiddleware');
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/coleta/massivas', coletaMassivasRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/colaboradores', colaboradoresRoutes);
 app.use('/massivas', massivasRoutes);
+app.use('/importacao', importacaoRoutes);
 
 const PORT = process.env.PORT || 3000;
 

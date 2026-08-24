@@ -32,6 +32,12 @@ O projeto virou `saas-multi-cliente` (ADR 0003): toda tabela de negócio tem `em
 RLS forçada, 4 papéis (`ROOT`/`ADMINISTRADOR`/`SUPERVISOR`/`USUARIO`), autenticação por JWT
 de verdade (antes existia o middleware mas não era usado em nenhuma rota — corrigido).
 
+## Importação de planilha
+
+`POST /importacao/:tabela` — sobe `.xlsx` pras 11 tabelas de negócio, `ADMINISTRADOR`/`ROOT`
+só, modo `substituir` ou `upsert` por chave composta conforme a tabela (ver
+[ADR 0005](adr/0005-importacao-de-planilha.md)). Aba "Importação" no FRONTEND.
+
 ## Próximos passos (na ordem do ciclo)
 
 1. **Você**: rotacionar a senha do Postgres de **produção** e a credencial do portal

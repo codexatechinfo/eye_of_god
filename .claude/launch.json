@@ -4,13 +4,13 @@
     {
       "name": "backend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "C:\\Users\\joaow\\Desktop\\FIMM_\\FIMM\\projeto_olho_de_Deus\\BACKEND", "run", "dev"],
+      "runtimeArgs": ["--prefix", "C:\\Users\\joaow\\OneDrive\\Documents\\sistemas\\eye_of_god\\BACKEND", "run", "dev"],
       "port": 3000
     },
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "C:\\Users\\joaow\\Desktop\\FIMM_\\FIMM\\projeto_olho_de_Deus\\FRONTEND", "start"],
+      "runtimeArgs": ["--prefix", "C:\\Users\\joaow\\OneDrive\\Documents\\sistemas\\eye_of_god\\FRONTEND", "start"],
       "port": 4200
     }
   ]

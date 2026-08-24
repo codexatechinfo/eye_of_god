@@ -5,7 +5,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
-### Removido
+## [0.3.0] - 2026-08-25
+
+### Adicionado
+
+- Importação de planilha (`.xlsx`) por tabela — `POST /importacao/:tabela`, restrito a
+  `ADMINISTRADOR`/`ROOT`, 11 tabelas de negócio. Modo `substituir` ou `upsert` por chave
+  composta, definido por tabela conforme pedido do usuário. Aba "Importação" nova no
+  FRONTEND. Ver [ADR 0005](docs/adr/0005-importacao-de-planilha.md).
+
+### Removido (banco local)
 
 - 43 tabelas não usadas pelo app (herdadas do `pg_dump` inteiro da produção) removidas do
   Postgres **local** — só produção lá continua com todas. Restam as 12 que o app usa de

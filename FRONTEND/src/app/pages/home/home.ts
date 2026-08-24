@@ -9,9 +9,10 @@ import { ListaColaboradores } from './components/lista-colaboradores/lista-colab
 import { LivroDetalhe } from './components/livro-detalhe/livro-detalhe';
 import { MapaBases } from './components/mapa-bases/mapa-bases';
 import { MassivasView } from './components/massivas-view/massivas-view';
+import { ImportacaoView } from './components/importacao-view/importacao-view';
 
 type StatusColeta = 'coletando' | 'parada' | 'fora-do-horario' | 'offline' | null;
-type Aba = 'monitoramento' | 'massivas';
+type Aba = 'monitoramento' | 'massivas' | 'importacao';
 
 interface StatusJob {
   ativo: boolean;
@@ -28,7 +29,7 @@ interface StatusColetaResponse {
 
 @Component({
   selector: 'app-home',
-  imports: [CommonModule, FiltrosColaboradores, ListaColaboradores, LivroDetalhe, MapaBases, MassivasView],
+  imports: [CommonModule, FiltrosColaboradores, ListaColaboradores, LivroDetalhe, MapaBases, MassivasView, ImportacaoView],
   templateUrl: './home.html',
   styleUrl: './home.css',
 })
@@ -78,6 +79,11 @@ export class Home implements OnInit, OnDestroy {
 
   selecionarAba(aba: Aba): void {
     this.abaAtiva.set(aba);
+  }
+
+  podeImportar(): boolean {
+    const nivel = this.authService.getUsuarioLogado()?.nivel;
+    return nivel === 'ADMINISTRADOR' || nivel === 'ROOT';
   }
 
   logout(): void {

@@ -29,6 +29,7 @@ o que não está explicitamente liberado).
 | `users` (próprio) | editar `foto_perfil`/`preferencias` | ✅ | ✅ | ✅ | ✅ |
 | `users` (próprio) | editar nível/empresa/senha | ✅ | — | ❌ | ❌ |
 | Dashboard / coleta / colaboradores / massivas | ler | ✅ (com `?empresaId=`) | ✅ | ✅ | ✅ |
+| Importação de planilha (`POST /importacao/:tabela`) | executar | ✅ | ✅ (só a própria empresa) | ❌ | ❌ |
 | `tenant_features` (módulos) | ler/alterar | ✅ | — (leitura só) | ❌ | ❌ |
 | `audit_log` | ler (da própria empresa) | ✅ (todas) | ✅ | ❌ | ❌ |
 
@@ -59,6 +60,12 @@ compartilhada entre empresas, não é dado de uma empresa específica) ficam de 
 propósito.
 
 Prova automatizada em `BACKEND/test/isolamento_tenant.test.js` (`npm test`).
+
+## Importação de planilha
+
+Ver [ADR 0005](adr/0005-importacao-de-planilha.md) — `POST /importacao/:tabela` (11
+tabelas, `.xlsx`), restrito a `ADMINISTRADOR`/`ROOT`, `empresa_id` sempre do token, nunca do
+arquivo ou da URL.
 
 ## Em aberto
 

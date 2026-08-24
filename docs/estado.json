@@ -2,18 +2,23 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.2.1",
+  "versao": "0.3.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-24T20:15:00.000Z",
-  "atualizado_por": "/modelo-acesso",
-  "commit": "a7aa0e7",
+  "atualizado_em": "2026-08-25T00:15:00.000Z",
+  "atualizado_por": "/projeto-novo",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
     "historico": [],
     "categorias": [],
     "criticos": [],
-    "recomendados": []
+    "recomendados": [
+      {
+        "titulo": "exceljs depende de uuid <11.1.1 (advisory moderado)",
+        "detalhe": "GHSA-w5hq-g745-h8pq — sem exploração óbvia no caminho usado aqui (só leitura de planilha via BACKEND/src/services/importacaoService.js, não os métodos de geração de UUID afetados). Corrigir exigiria downgrade do exceljs (breaking change) — avaliar na próxima auditoria."
+      }
+    ]
   },
   "requisitos": [
     {
@@ -68,7 +73,7 @@
       "id": "testes",
       "nome": "Testes",
       "status": "parcial",
-      "detalhe": "BACKEND/test/isolamento_tenant.test.js prova o isolamento entre empresas (node:test, `npm test`); resto (unit dos services, E2E, carga) ainda não — trabalho de `/testes`"
+      "detalhe": "BACKEND/test/isolamento_tenant.test.js prova o isolamento entre empresas (node:test, `npm test`); importação de planilha testada manualmente (curl + UI), sem teste automatizado ainda; resto (unit dos services, E2E, carga) também não — trabalho de `/testes`"
     },
     {
       "id": "backup",
@@ -207,6 +212,13 @@
       "skill": "/modelo-acesso",
       "evento": "Banco local podado de 56 para 15 tabelas",
       "detalhe": "Usuário definiu as 12 tabelas de negócio que o app de fato usa (atestados, ativos_inativos, atribuidas_im, calendario_leitura, cidades_localidades, contr_execucao_leitura, control_empreiteiras, em_execucao_im, pendentes_im, prazo_reg_livros, suspensao, users). Confirmado com o usuário manter também empresas/tenant_features/audit_log (base do RBAC, não fazem parte do pedido original). Confirmado por grep em todo BACKEND/src que nenhuma das 43 tabelas removidas era referenciada em código antes de dropar. Produção intocada. Ver ADR 0004."
+    },
+    {
+      "data": "2026-08-25T00:15:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Importação de planilha (.xlsx) por tabela, POST /importacao/:tabela",
+      "detalhe": "11 tabelas de negócio (fora users e as 3 de RBAC). Regra por tabela definida pelo usuário: substituir (atestados, ativos_inativos, cidades_localidades, suspensao) ou upsert por chave composta (as demais). Upsert implementado como DELETE...USING unnest() + INSERT, sem UNIQUE constraint (quebraria o insert repetido do scraper). Cabeçalho da planilha validado contra allowlist de colunas por tabela antes de qualquer query — nunca usa nome de coluna do arquivo direto em SQL. empresa_id sempre do token, nunca do arquivo/URL. Restrito a ADMINISTRADOR/ROOT. Biblioteca: exceljs no lugar de xlsx (xlsx tem 2 CVE sem correção via npm) — exceljs tem 1 advisory moderado transitivo (uuid), sem exploração óbvia no caminho usado aqui, registrado para o /seguranca revisar. Testado ponta a ponta via curl (substituir, upsert com chave repetida/nova, bloqueio de nível, bloqueio de tabela fora do allowlist) e na UI real via browser (login, aba Importação, reatividade do formulário). Aba 'Importação' nova no FRONTEND, visível só pra ADMINISTRADOR/ROOT. Ver ADR 0005."
     }
   ]
 }

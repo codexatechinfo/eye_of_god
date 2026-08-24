@@ -61,7 +61,7 @@ classDiagram
     +atribuidas_im
     +em_execucao_im
     +massivas
-    +... 56 tabelas (schema copiado, sem dado)
+    +... 15 tabelas (12 de negócio + empresas/tenant_features/audit_log — podado, ver ADR 0004)
   }
 
   FRONTEND_Angular --> BACKEND_Express : HTTP + JWT
@@ -125,5 +125,6 @@ sequenceDiagram
 - [ADR 0002](adr/0002-postgres-local-via-supabase-sem-prisma.md) — Postgres local
   self-hosted via Supabase, acesso direto por `pg`, sem Prisma.
 - [ADR 0003](adr/0003-rbac-multi-tenant.md) — reclassificação para `saas-multi-cliente`,
-  RBAC de 4 níveis (`ROOT`/`ADMINISTRADOR`/`SUPERVISOR`/`USUARIO`), `empresa_id` + RLS em
-  ~48 tabelas de negócio.
+  RBAC de 4 níveis (`ROOT`/`ADMINISTRADOR`/`SUPERVISOR`/`USUARIO`), `empresa_id` + RLS.
+- [ADR 0004](adr/0004-poda-de-tabelas-nao-usadas.md) — banco local reduzido de 56 pra 15
+  tabelas (só o que o app usa de fato).

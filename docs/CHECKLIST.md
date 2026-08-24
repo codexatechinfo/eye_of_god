@@ -10,7 +10,7 @@ Regenerar o painel visual com `node scripts/painel.mjs`.
 | 2 | UML | ✅ ok | `docs/ARQUITETURA.md` — classDiagram + fluxo crítico |
 | 3 | Repo + docs padrão | 🟡 parcial | git local ok; falta remote GitHub e proteção de branch |
 | 4 | Matriz RBAC | ✅ ok | `docs/RBAC.md` — 4 papéis, matriz recurso×ação, aplicado em rota + RLS |
-| 5 | `empresa_id` + RLS | ✅ ok | ~48 tabelas de negócio, `enable`+`force`, testado (`BACKEND/test/isolamento_tenant.test.js`) |
+| 5 | `empresa_id` + RLS | ✅ ok | 13 tabelas (`enable`+`force`), testado (`BACKEND/test/isolamento_tenant.test.js`). Banco local podado pra só 15 tabelas no total — ver ADR 0004 |
 | 6 | Segredos | 🟡 parcial | histórico varrido (sem leak), hook + CI ativos, `JWT_SECRET`/senha do Postgres local geradas; falta rotacionar senha do Postgres de **produção** e credencial Copel |
 | 7 | Módulos + flags | ✅ ok | `tenant_features` criada (`docs/MODULOS.md`), sem módulo cadastrado ainda |
 | 8 | Botão de erro | ⏳ pendente | ver `/observabilidade` |

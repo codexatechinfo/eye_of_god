@@ -5,6 +5,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Removido
+
+- 43 tabelas não usadas pelo app (herdadas do `pg_dump` inteiro da produção) removidas do
+  Postgres **local** — só produção lá continua com todas. Restam as 12 que o app usa de
+  fato mais as 3 do RBAC (`empresas`, `tenant_features`, `audit_log`). Ver
+  [ADR 0004](docs/adr/0004-poda-de-tabelas-nao-usadas.md).
+
 ## [0.2.0] - 2026-08-24
 
 ### Adicionado

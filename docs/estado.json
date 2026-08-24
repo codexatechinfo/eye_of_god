@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.2.0",
+  "versao": "0.2.1",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-24T19:30:00.000Z",
+  "atualizado_em": "2026-08-24T20:15:00.000Z",
   "atualizado_por": "/modelo-acesso",
-  "commit": "72fcbef",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -44,7 +44,7 @@
       "id": "rls",
       "nome": "tenant_id + RLS",
       "status": "ok",
-      "detalhe": "Reclassificado pra saas-multi-cliente (ADR 0003). `empresa_id` + RLS enable/force em ~48 tabelas de negócio, policy ROOT-vê-tudo/demais-só-própria-empresa, índice por empresa_id, testado em BACKEND/test/isolamento_tenant.test.js (6/6 passando)"
+      "detalhe": "Reclassificado pra saas-multi-cliente (ADR 0003). `empresa_id` + RLS enable/force, policy ROOT-vê-tudo/demais-só-própria-empresa, índice por empresa_id, testado em BACKEND/test/isolamento_tenant.test.js (6/6 passando). Banco local podado de 56 pra 15 tabelas — só o que o app usa (ADR 0004)"
     },
     {
       "id": "segredos",
@@ -147,8 +147,8 @@
   ],
   "operacional": {
     "tabelas_sem_rls": 0,
-    "tabelas_negocio": 49,
-    "indice_tenant": { "ok": 49, "total": 49 },
+    "tabelas_negocio": 13,
+    "indice_tenant": { "ok": 13, "total": 13 },
     "cobertura_testes": null
   },
   "custo": {
@@ -199,7 +199,14 @@
       "nivel": "ok",
       "skill": "/modelo-acesso",
       "evento": "Reclassificado para saas-multi-cliente, RBAC de 4 níveis e RLS por empresa implementados",
-      "detalhe": "Usuário confirmou multi-empresa isolada (root=Codexa, administrador/supervisor/usuario por empresa). Migração: tabela empresas, empresa_id NOT NULL em ~48 tabelas de negócio (backfill pra 'empresa principal' seedada — inclusive dado real que o scraper tinha gravado sem querer num teste), RLS enable+force+policy (ROOT bypassa, demais só própria empresa), tenant_features, audit_log. App: JWT passou a ser emitido de verdade (antes login não retornava token e nenhuma rota usava o middleware de auth — corrigido), authMiddleware.anexarContextoTenant abre transação com set_config(app.nivel/app.empresa_id) por request, 9 services threadeados com `db` em vez do pool global, dashboardCacheService corrigido (era uma variável global só — vazava entre empresas), POST /usuarios restrito a ADMINISTRADOR/ROOT, PATCH /usuarios/me só foto/preferências, jobs de coleta usam EMPRESA_PRINCIPAL_ID como identidade fixa. Usuário ROOT de bootstrap criado direto no banco, senha entregue uma vez no chat. Teste automatizado prova isolamento (BACKEND/test/isolamento_tenant.test.js, 6/6). FRONTEND: interceptor HTTP anexa o token, AuthService atualizado. Ver ADR 0003."
+      "detalhe": "Usuário confirmou multi-empresa isolada (root=Codexa, administrador/supervisor/usuario por empresa). Migração: tabela empresas, empresa_id NOT NULL nas tabelas de negócio (backfill pra 'empresa principal' seedada — inclusive dado real que o scraper tinha gravado sem querer num teste), RLS enable+force+policy (ROOT bypassa, demais só própria empresa), tenant_features, audit_log. App: JWT passou a ser emitido de verdade (antes login não retornava token e nenhuma rota usava o middleware de auth — corrigido), authMiddleware.anexarContextoTenant abre transação com set_config(app.nivel/app.empresa_id) por request, 9 services threadeados com `db` em vez do pool global, dashboardCacheService corrigido (era uma variável global só — vazava entre empresas), POST /usuarios restrito a ADMINISTRADOR/ROOT, PATCH /usuarios/me só foto/preferências, jobs de coleta usam EMPRESA_PRINCIPAL_ID como identidade fixa. Usuário ROOT de bootstrap criado direto no banco, senha entregue uma vez no chat. Teste automatizado prova isolamento (BACKEND/test/isolamento_tenant.test.js, 6/6). FRONTEND: interceptor HTTP anexa o token, AuthService atualizado. Ver ADR 0003."
+    },
+    {
+      "data": "2026-08-24T20:15:00.000Z",
+      "nivel": "ok",
+      "skill": "/modelo-acesso",
+      "evento": "Banco local podado de 56 para 15 tabelas",
+      "detalhe": "Usuário definiu as 12 tabelas de negócio que o app de fato usa (atestados, ativos_inativos, atribuidas_im, calendario_leitura, cidades_localidades, contr_execucao_leitura, control_empreiteiras, em_execucao_im, pendentes_im, prazo_reg_livros, suspensao, users). Confirmado com o usuário manter também empresas/tenant_features/audit_log (base do RBAC, não fazem parte do pedido original). Confirmado por grep em todo BACKEND/src que nenhuma das 43 tabelas removidas era referenciada em código antes de dropar. Produção intocada. Ver ADR 0004."
     }
   ]
 }

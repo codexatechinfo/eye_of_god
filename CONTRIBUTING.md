@@ -1,5 +1,14 @@
 # Contribuindo
 
+## Configuração inicial
+
+Depois de clonar, ative o hook de proteção contra segredo (roda `gitleaks` antes de cada
+commit — exige [gitleaks](https://github.com/gitleaks/gitleaks) instalado e no PATH):
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Branches
 
 - `main` é protegida: só recebe merge via Pull Request com CI verde.

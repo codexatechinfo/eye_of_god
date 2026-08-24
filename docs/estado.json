@@ -49,8 +49,8 @@
     {
       "id": "segredos",
       "nome": "Segredos",
-      "status": "pendente",
-      "detalhe": "`BACKEND/.env` tinha credencial de banco e do portal Copel sem `.gitignore` protegendo até agora; `JWT_SECRET` usado no código não está definido no `.env` — trabalho de `/segredos`"
+      "status": "parcial",
+      "detalhe": "Histórico do git varrido com gitleaks — sem leak. Hook pre-commit (`.githooks/pre-commit`) e CI (`security.yml`) ativos. `JWT_SECRET` gerado e adicionado ao `.env` local. Falta rotacionar a senha do Postgres e a credencial do portal Copel, que ficaram sem `.gitignore` protegendo até esta regularização — só o responsável pode revogar/gerar no painel de cada provedor"
     },
     {
       "id": "modulos",
@@ -104,9 +104,9 @@
     },
     {
       "nome": "/segredos",
-      "ultima_execucao": null,
-      "resultado": "nunca",
-      "saidas": null
+      "ultima_execucao": "2026-08-24T14:20:00.000Z",
+      "resultado": "parcial",
+      "saidas": "gitleaks instalado, histórico varrido (sem leak), hook pre-commit + CI ativos, JWT_SECRET gerado — falta o usuário rotacionar senha do Postgres e credencial Copel"
     },
     {
       "nome": "/modelo-acesso",
@@ -167,6 +167,13 @@
       "skill": "/projeto-novo",
       "evento": "Projeto existente classificado como app-single-tenant e regularizado",
       "detalhe": "Faltavam .gitignore, docs e CI. .env já existia sem .gitignore protegendo — corrigido antes de qualquer git add. Encadeando /segredos e /modelo-acesso para tratar os pendentes reais."
+    },
+    {
+      "data": "2026-08-24T14:20:00.000Z",
+      "nivel": "aviso",
+      "skill": "/segredos",
+      "evento": "Varredura de segredo concluída, sem leak no histórico do git",
+      "detalhe": "gitleaks detect --log-opts=--all sobre os 3 commits: nenhum leak. `gitleaks protect --staged` não funcionou neste ambiente (Windows/Git Bash) — hook reescrito para `git diff --cached | gitleaks detect --pipe`, testado e confirmado bloqueando. JWT_SECRET gerado. Pendente real: rotacionar senha do Postgres e credencial do portal Copel, que estiveram sem .gitignore protegendo — só o usuário pode fazer isso no painel de cada provedor."
     }
   ]
 }

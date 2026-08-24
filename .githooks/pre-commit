@@ -1,0 +1,7 @@
+#!/bin/sh
+# `gitleaks protect --staged` nao funcionou de forma confiavel neste ambiente
+# (Windows + Git Bash) — usa o diff staged via --pipe, que foi testado e bloqueia de fato.
+git diff --cached | gitleaks detect --pipe --redact --no-banner || {
+  echo "Segredo detectado no commit. Corrija antes de commitar."
+  exit 1
+}

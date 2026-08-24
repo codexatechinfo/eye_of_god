@@ -6,7 +6,7 @@
   "ambiente": "wsl-dev",
   "atualizado_em": "2026-08-24T13:54:28.791Z",
   "atualizado_por": "/projeto-novo",
-  "commit": null,
+  "commit": "6d91d01",
   "seguranca": {
     "nota": null,
     "corte": 70,

@@ -9,7 +9,7 @@ async function registrar(req, res) {
     const usuario = await criarUsuario({ nome, email, senha, nivel });
     res.status(201).json({ sucesso: true, usuario });
   } catch (erro) {
-    if (erro.code === 'P2002') {
+    if (erro.code === '23505') {
       return res.status(409).json({ sucesso: false, erro: 'Email já cadastrado' });
     }
     console.error('❌ Erro ao registrar usuário:', erro);

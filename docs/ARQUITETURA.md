@@ -2,8 +2,11 @@
 
 ## Visão geral
 
-Monorepo com dois apps independentes (sem workspace compartilhado) e um Postgres externo
-que também serve como data warehouse de relatórios da operação.
+Monorepo com dois apps independentes (sem workspace compartilhado). Em desenvolvimento, o
+Postgres é **local** — self-hosted via Supabase (WSL2 + Docker) — e o backend acessa direto
+via `pg` (node-postgres), sem ORM. O Supabase self-hosted (Studio, Auth, PostgREST etc.) só
+existe como ferramenta de gestão/visualização do banco; o app não passa por ele. Ver
+[ADR 0002](adr/0002-postgres-local-via-supabase-sem-prisma.md).
 
 ```mermaid
 classDiagram
@@ -41,24 +44,24 @@ classDiagram
   class PortalCopel {
     <<sistema externo>>
   }
-  class Postgres_BASE_DADOS {
-    <<banco compartilhado>>
+  class Postgres_Local {
+    <<self-hosted via Supabase, WSL>>
     +users
     +control_empreiteiras
     +pendentes_im
     +atribuidas_im
     +em_execucao_im
     +massivas
-    +... 50+ tabelas de relatório
+    +... 56 tabelas (schema copiado, sem dado)
   }
 
   FRONTEND_Angular --> BACKEND_Express : HTTP + JWT
   BACKEND_Express --> authMiddleware : usa
-  BACKEND_Express --> Postgres_BASE_DADOS : Prisma
+  BACKEND_Express --> Postgres_Local : pg.Pool (app_user)
   coletaJob --> copelScraperService : chama
   copelScraperService --> PortalCopel : Playwright
   copelScraperService --> copelImportService : registros
-  copelImportService --> Postgres_BASE_DADOS : grava staging
+  copelImportService --> Postgres_Local : grava staging
   coletaJob --> dashboardCacheService : atualiza cache
 ```
 
@@ -74,7 +77,7 @@ sequenceDiagram
   participant Scraper as copelScraperService
   participant Copel as Portal Copel
   participant Import as copelImportService
-  participant DB as Postgres (BASE_DADOS)
+  participant DB as Postgres local (app_user)
   participant Cache as dashboardCacheService
   participant API as dashboardController
   participant UI as Frontend
@@ -108,6 +111,6 @@ sequenceDiagram
 
 ## Decisões registradas
 
-Ver [`docs/adr/0001-perfil-e-caminho-dados.md`](adr/0001-perfil-e-caminho-dados.md) para a
-justificativa do perfil `app-single-tenant` e do caminho de dados Prisma em modo
-introspecção (sem migration).
+- [ADR 0001](adr/0001-perfil-e-caminho-dados.md) — perfil `app-single-tenant`.
+- [ADR 0002](adr/0002-postgres-local-via-supabase-sem-prisma.md) — Postgres local
+  self-hosted via Supabase, acesso direto por `pg`, sem Prisma.

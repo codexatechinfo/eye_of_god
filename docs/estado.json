@@ -4,9 +4,9 @@
   "perfil": "app-single-tenant",
   "versao": "0.1.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-24T13:54:28.791Z",
-  "atualizado_por": "/projeto-novo",
-  "commit": "6d91d01",
+  "atualizado_em": "2026-08-24T18:00:00.000Z",
+  "atualizado_por": "/infra",
+  "commit": "1888850",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -50,7 +50,7 @@
       "id": "segredos",
       "nome": "Segredos",
       "status": "parcial",
-      "detalhe": "Histórico do git varrido com gitleaks — sem leak. Hook pre-commit (`.githooks/pre-commit`) e CI (`security.yml`) ativos. `JWT_SECRET` gerado e adicionado ao `.env` local. Falta rotacionar a senha do Postgres e a credencial do portal Copel, que ficaram sem `.gitignore` protegendo até esta regularização — só o responsável pode revogar/gerar no painel de cada provedor"
+      "detalhe": "Histórico do git varrido com gitleaks — sem leak. Hook pre-commit (`.githooks/pre-commit`) e CI (`security.yml`) ativos. `JWT_SECRET` e as senhas do Postgres local geradas por `/infra` (aleatórias, não os valores padrão públicos do Supabase). Falta rotacionar a senha do Postgres de **produção** e a credencial do portal Copel, que ficaram sem `.gitignore` protegendo até esta regularização — só o responsável pode revogar/gerar no painel de cada provedor"
     },
     {
       "id": "modulos",
@@ -73,8 +73,8 @@
     {
       "id": "backup",
       "nome": "Backup",
-      "status": "pendente",
-      "detalhe": "Nenhum processo de backup identificado para o Postgres compartilhado — trabalho de `/infra`"
+      "status": "na",
+      "detalhe": "Ambiente `wsl-dev` — backup é opcional. Obrigatório se este ambiente virar `servidor-prod`"
     },
     {
       "id": "borda",
@@ -92,9 +92,9 @@
   "skills": [
     {
       "nome": "/infra",
-      "ultima_execucao": null,
-      "resultado": "nunca",
-      "saidas": null
+      "ultima_execucao": "2026-08-24T17:30:00.000Z",
+      "resultado": "ok",
+      "saidas": "Docker instalado no WSL (Ubuntu, systemd já ativo), stack Supabase self-hosted subida (11 serviços saudáveis) em ~/infra/eye-of-god, roles migrator/app_user/readonly criadas, schema copiado da produção (56 tabelas, sem dado)"
     },
     {
       "nome": "/projeto-novo",
@@ -174,6 +174,20 @@
       "skill": "/segredos",
       "evento": "Varredura de segredo concluída, sem leak no histórico do git",
       "detalhe": "gitleaks detect --log-opts=--all sobre os 3 commits: nenhum leak. `gitleaks protect --staged` não funcionou neste ambiente (Windows/Git Bash) — hook reescrito para `git diff --cached | gitleaks detect --pipe`, testado e confirmado bloqueando. JWT_SECRET gerado. Pendente real: rotacionar senha do Postgres e credencial do portal Copel, que estiveram sem .gitignore protegendo — só o usuário pode fazer isso no painel de cada provedor."
+    },
+    {
+      "data": "2026-08-24T17:30:00.000Z",
+      "nivel": "ok",
+      "skill": "/infra",
+      "evento": "Postgres local subido via Supabase self-hosted (WSL2 + Docker)",
+      "detalhe": "A pedido do usuário: parar de usar o banco de produção compartilhado (10.60.0.9/FIMM_COPEL) em desenvolvimento. Docker instalado no WSL, stack Supabase (11 serviços) saudável. Porta do db publicada em 55432 (não 5432, que já tinha um Postgres nativo do Windows ocupando; nem 5432 do pooler Supavisor, editado para 65432 pelo mesmo motivo). Schema copiado por pg_dump --schema-only da produção — 56 tabelas, sem dado, a pedido do usuário. Produção não foi alterada, só lida uma vez para o dump."
+    },
+    {
+      "data": "2026-08-24T18:00:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Prisma removido do BACKEND, acesso ao Postgres passou a ser direto via pg",
+      "detalhe": "A pedido do usuário. 9 arquivos reescritos (quase todo o código já era SQL cru via prisma.$queryRawUnsafe — a lógica das consultas não mudou, só o driver). @prisma/client, @prisma/adapter-pg e prisma saíram do package.json (140 pacotes a menos). Testado ponta a ponta: registro, login, conflito de e-mail duplicado (código de erro mudou de P2002 para 23505), dashboard e listagens com SQL complexo (dedup, joins, regex) — tudo funcionando contra o Postgres local. Ver ADR 0002."
     }
   ]
 }

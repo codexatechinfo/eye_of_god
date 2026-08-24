@@ -1,8 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+const { pool } = require('../config/db');
 
 const TABELAS = {
   pendentes: { nome: 'pendentes_im', temLeiturista: false, rotulo: 'Pendente' },
@@ -13,13 +9,13 @@ const TABELAS = {
 const CONTAGEM_ZERO = { livros: 0, leituras: 0 };
 
 async function obterUltimoBatch() {
-  const linhas = await prisma.$queryRawUnsafe(`
+  const { rows } = await pool.query(`
     SELECT dt_import, hr_import
     FROM pendentes_im
     ORDER BY id DESC
     LIMIT 1
   `);
-  return linhas[0] || null;
+  return rows[0] || null;
 }
 
 function chavesAtivas(status) {
@@ -119,7 +115,7 @@ async function contarTabela(chave, dataImport, horaImport, filtros) {
     ) escolhido
   `;
 
-  const [linha] = await prisma.$queryRawUnsafe(sql, dataImport, horaImport, ...parametros);
+  const { rows: [linha] } = await pool.query(sql, [dataImport, horaImport, ...parametros]);
   return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
 }
 
@@ -173,7 +169,7 @@ async function contarTotalDeduplicado(chaves, dataImport, horaImport, filtros) {
     ) dedup
   `;
 
-  const [linha] = await prisma.$queryRawUnsafe(sql, dataImport, horaImport, ...parametros);
+  const { rows: [linha] } = await pool.query(sql, [dataImport, horaImport, ...parametros]);
   return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
 }
 
@@ -231,7 +227,7 @@ async function obterOpcoesFiltro() {
   const { dt_import: dataImport, hr_import: horaImport } = ultimoBatch;
 
   const [regionais, etapas] = await Promise.all([
-    prisma.$queryRawUnsafe(
+    pool.query(
       `
       SELECT DISTINCT cl.regional
       FROM (
@@ -243,10 +239,9 @@ async function obterOpcoesFiltro() {
       WHERE t.dt_import = $1 AND t.hr_import = $2 AND cl.regional IS NOT NULL
       ORDER BY cl.regional
       `,
-      dataImport,
-      horaImport,
+      [dataImport, horaImport],
     ),
-    prisma.$queryRawUnsafe(
+    pool.query(
       `
       SELECT DISTINCT etapa FROM (
         SELECT etapa, dt_import, hr_import FROM pendentes_im
@@ -256,14 +251,13 @@ async function obterOpcoesFiltro() {
       WHERE t.dt_import = $1 AND t.hr_import = $2 AND etapa IS NOT NULL
       ORDER BY etapa
       `,
-      dataImport,
-      horaImport,
+      [dataImport, horaImport],
     ),
   ]);
 
   return {
-    regionais: regionais.map(r => r.regional),
-    etapas: etapas.map(e => e.etapa),
+    regionais: regionais.rows.map(r => r.regional),
+    etapas: etapas.rows.map(e => e.etapa),
   };
 }
 
@@ -338,7 +332,7 @@ async function obterDetalhe(filtros) {
     ORDER BY dt_prev_limite ASC NULLS LAST, livro ASC
   `;
 
-  const linhas = await prisma.$queryRawUnsafe(sql, dataImport, horaImport, ...parametros);
+  const { rows: linhas } = await pool.query(sql, [dataImport, horaImport, ...parametros]);
 
   return { dataImport, horaImport, linhas };
 }
@@ -375,7 +369,7 @@ async function obterHistoricoLivro(livro) {
     ORDER BY to_timestamp(u.dt_import || ' ' || u.hr_import, 'DD/MM/YYYY HH24:MI:SS') ASC
   `;
 
-  const linhas = await prisma.$queryRawUnsafe(sql, livro);
+  const { rows: linhas } = await pool.query(sql, [livro]);
 
   const eventos = [];
   let anterior = null;

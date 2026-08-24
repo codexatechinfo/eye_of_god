@@ -2,8 +2,8 @@
 
 Sistema interno de acompanhamento de leitura e releitura de medidores (livros) para
 operações de leitura urbana e rural sob contrato com a Copel. Coleta dados automaticamente
-do portal da Copel via scraping (Playwright), consolida com o banco de operação
-(`BASE_DADOS`) e expõe um dashboard de atrasos por regional, etapa e empreiteira.
+do portal da Copel via scraping (Playwright), grava no Postgres da aplicação e expõe um
+dashboard de atrasos por regional, etapa e empreiteira.
 
 ## O que não faz
 
@@ -13,17 +13,30 @@ de leitura.
 
 ## Arquitetura em 10 linhas
 
-- **BACKEND** (`/BACKEND`) — API Node.js/Express, Prisma como client de acesso ao Postgres
-  (schema introspectado, não gerenciado por migration), autenticação por JWT com dois
-  níveis (`ADMIN` / usuário comum), jobs agendados (`node-cron`) que disparam scraping
-  Playwright do portal Copel em ciclo contínuo das 07h às 19h.
+- **BACKEND** (`/BACKEND`) — API Node.js/Express, acesso ao Postgres direto via `pg`
+  (node-postgres, sem ORM), autenticação por JWT com dois níveis (`ADMIN` / usuário
+  comum), jobs agendados (`node-cron`) que disparam scraping Playwright do portal Copel em
+  ciclo contínuo das 07h às 19h.
 - **FRONTEND** (`/FRONTEND`) — SPA Angular 21, consome a API via `AuthGuard` + JWT
   armazenado no cliente, exibe dashboard de atrasos e telas de colaboradores/massivas.
-- Banco de dados: Postgres compartilhado com o data warehouse de relatórios da operação
-  (schema `BASE_DADOS`) — o Prisma acessa tabelas que já existem fora do controle do app.
-  Detalhes em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
+- Banco de dados: em desenvolvimento, **Postgres local self-hosted via Supabase** (WSL2 +
+  Docker) — o Supabase (Studio, Auth, PostgREST) só serve de ferramenta de gestão do banco;
+  o app não passa por ele, conecta direto. Schema copiado por `pg_dump --schema-only` do
+  banco de produção — sem dado. Detalhes em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) e
+  [ADR 0002](docs/adr/0002-postgres-local-via-supabase-sem-prisma.md).
 
 ## Como rodar
+
+### Pré-requisito: Postgres local
+
+O backend espera um Postgres local rodando (self-hosted via Supabase, dentro do WSL):
+
+```bash
+wsl -e bash -lc "cd ~/infra/eye-of-god && sh run.sh start"
+```
+
+Studio (gestão visual) fica em `http://localhost:8000`; o Postgres em si, exposto direto em
+`localhost:55432` (não pela porta do pooler).
 
 ### Backend
 
@@ -31,7 +44,6 @@ de leitura.
 cd BACKEND
 npm install
 cp .env.example .env   # preencher com as credenciais reais
-npx prisma generate
 npm run dev
 ```
 

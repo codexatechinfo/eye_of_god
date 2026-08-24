@@ -1,8 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+const { pool } = require('../config/db');
 
 const FILTRO_LEITURA = `
   c.data_recebimento IS NOT NULL
@@ -16,13 +12,13 @@ function numeroEtapa(etapaNum) {
 }
 
 async function obterUltimoBatch() {
-  const linhas = await prisma.$queryRawUnsafe(`
+  const { rows } = await pool.query(`
     SELECT data_import, hora_import
     FROM contr_execucao_leitura
     ORDER BY id DESC
     LIMIT 1
   `);
-  return linhas[0] || null;
+  return rows[0] || null;
 }
 
 async function calcularLeituraUrbana() {
@@ -33,7 +29,7 @@ async function calcularLeituraUrbana() {
 
   const { data_import: dataImport, hora_import: horaImport } = ultimoBatch;
 
-  const atual = await prisma.$queryRawUnsafe(
+  const { rows: atual } = await pool.query(
     `
     SELECT
       substring(c.etapa from '\\d+') AS etapa_num,
@@ -56,11 +52,10 @@ async function calcularLeituraUrbana() {
       AND substring(c.etapa from '\\d+')::int BETWEEN 1 AND 19
     GROUP BY substring(c.etapa from '\\d+'), COALESCE(cl.regional, 'SEM BASE')
     `,
-    dataImport,
-    horaImport,
+    [dataImport, horaImport],
   );
 
-  const historico = await prisma.$queryRawUnsafe(`
+  const { rows: historico } = await pool.query(`
     SELECT DISTINCT substring(c.etapa from '\\d+') AS etapa_num, COALESCE(cl.regional, 'SEM BASE') AS base
     FROM contr_execucao_leitura c
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade

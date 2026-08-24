@@ -1,8 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+const { pool } = require('../config/db');
 
 const REGIONAL_NORMALIZADA = `regexp_replace(regexp_replace(base, '^COPEL\\s+', ''), '\\s+(LEITURA|ADM)$', '')`;
 
@@ -30,13 +26,14 @@ async function listarAtivos({ colaborador, cargo, regional } = {}) {
     ORDER BY colaborador
   `;
 
-  return prisma.$queryRawUnsafe(sql, ...parametros);
+  const { rows } = await pool.query(sql, parametros);
+  return rows;
 }
 
 async function listarOpcoesFiltro() {
   const [cargos, regionais] = await Promise.all([
-    prisma.$queryRawUnsafe(`SELECT DISTINCT cargo FROM ativos_inativos WHERE situacao = 'ATIVO' AND cargo IS NOT NULL ORDER BY cargo`),
-    prisma.$queryRawUnsafe(`
+    pool.query(`SELECT DISTINCT cargo FROM ativos_inativos WHERE situacao = 'ATIVO' AND cargo IS NOT NULL ORDER BY cargo`),
+    pool.query(`
       SELECT DISTINCT ${REGIONAL_NORMALIZADA} AS regional
       FROM ativos_inativos
       WHERE situacao = 'ATIVO' AND base IS NOT NULL
@@ -45,8 +42,8 @@ async function listarOpcoesFiltro() {
   ]);
 
   return {
-    cargos: cargos.map(c => c.cargo),
-    regionais: regionais.map(r => r.regional),
+    cargos: cargos.rows.map(c => c.cargo),
+    regionais: regionais.rows.map(r => r.regional),
   };
 }
 

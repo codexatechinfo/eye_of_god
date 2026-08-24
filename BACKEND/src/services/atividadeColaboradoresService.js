@@ -1,8 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+const { pool } = require('../config/db');
 
 const SITUACAO_REGEX = /^(Em Execução|Atribuída)\s*\(([^)-]*)-(.*)\)$/;
 const QTD_REGEX = /^(\d+)\/(\d+)$/;
@@ -26,7 +22,7 @@ function diferencaMinutos(horaAntiga, horaRecente) {
 async function listarAtividadeHoje() {
   const hoje = new Date().toLocaleDateString('pt-BR');
 
-  const linhas = await prisma.$queryRawUnsafe(
+  const { rows: linhas } = await pool.query(
     `
     SELECT livro, etapa, situacao, qtd_digitados_nao_digitados, hora_import
     FROM contr_execucao_leitura
@@ -35,7 +31,7 @@ async function listarAtividadeHoje() {
       AND situacao <> 'Pendente'
     ORDER BY hora_import ASC, id ASC
     `,
-    hoje,
+    [hoje],
   );
 
   const porColaborador = new Map();
@@ -185,7 +181,7 @@ async function obterAfastamentosHoje() {
   const agora = new Date();
   const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
 
-  const linhas = await prisma.$queryRawUnsafe(`
+  const { rows: linhas } = await pool.query(`
     SELECT colaborador, data_afastamento, data_retorno, qtd_dias_afastado, "afastado_INSS", motivo_afastamento
     FROM atestados
   `);

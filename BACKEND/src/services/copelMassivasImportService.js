@@ -1,28 +1,37 @@
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
+const { pool } = require('../config/db');
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+async function inserirEmMassa(tabela, linhas) {
+  if (!linhas.length) return 0;
+
+  const colunas = Object.keys(linhas[0]);
+  const valores = [];
+  const placeholders = linhas.map((linha, i) => {
+    valores.push(...colunas.map(coluna => linha[coluna] ?? null));
+    const base = i * colunas.length;
+    return `(${colunas.map((_, j) => `$${base + j + 1}`).join(', ')})`;
+  });
+
+  const sql = `INSERT INTO ${tabela} (${colunas.join(', ')}) VALUES ${placeholders.join(', ')}`;
+  const { rowCount } = await pool.query(sql, valores);
+  return rowCount;
+}
 
 async function importarMassivas({ pendentes, atribuidas, emExecucao }) {
   const resultado = { pendentes: 0, atribuidas: 0, emExecucao: 0 };
 
   if (pendentes.length) {
-    const r = await prisma.pendentes_im.createMany({ data: pendentes });
-    resultado.pendentes = r.count;
-    console.log(`[Massivas] ${r.count} linhas importadas em 'pendentes_im'`);
+    resultado.pendentes = await inserirEmMassa('pendentes_im', pendentes);
+    console.log(`[Massivas] ${resultado.pendentes} linhas importadas em 'pendentes_im'`);
   }
 
   if (atribuidas.length) {
-    const r = await prisma.atribuidas_im.createMany({ data: atribuidas });
-    resultado.atribuidas = r.count;
-    console.log(`[Massivas] ${r.count} linhas importadas em 'atribuidas_im'`);
+    resultado.atribuidas = await inserirEmMassa('atribuidas_im', atribuidas);
+    console.log(`[Massivas] ${resultado.atribuidas} linhas importadas em 'atribuidas_im'`);
   }
 
   if (emExecucao.length) {
-    const r = await prisma.em_execucao_im.createMany({ data: emExecucao });
-    resultado.emExecucao = r.count;
-    console.log(`[Massivas] ${r.count} linhas importadas em 'em_execucao_im'`);
+    resultado.emExecucao = await inserirEmMassa('em_execucao_im', emExecucao);
+    console.log(`[Massivas] ${resultado.emExecucao} linhas importadas em 'em_execucao_im'`);
   }
 
   return resultado;

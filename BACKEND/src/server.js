@@ -1,8 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
 const coletaRoutes = require('./routes/coletaRoutes');
 const { iniciarJobColeta } = require('./jobs/coletaJob');
 const coletaMassivasRoutes = require('./routes/coletaMassivasRoutes');
@@ -13,9 +11,6 @@ const colaboradoresRoutes = require('./routes/colaboradoresRoutes');
 const massivasRoutes = require('./routes/massivasRoutes');
 
 const app = express();
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
 
 app.use(cors());
 app.use(express.json());

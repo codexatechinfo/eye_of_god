@@ -1,8 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+const { pool } = require('../config/db');
 
 const CAMPOS = [
   'etapa', 'tipo_oss', 'subtipo_os', 'numero_os', 'localidade', 'livro',
@@ -23,18 +19,27 @@ async function importarParaPostgres(registros) {
 
   console.log(`[Coleta Acomp] 📥 Inserindo ${registros.length} registros na tabela 'contr_execucao_leitura'...`);
 
-  const data = registros.map(linha => {
+  const colunas = [...CAMPOS, 'data_import', 'hora_import'];
+  const linhas = registros.map(linha => {
     const obj = {};
     CAMPOS.forEach((campo, i) => { obj[campo] = linha[i] || null; });
     obj.data_import = dataImport;
     obj.hora_import = horaImport;
-    return obj;
+    return colunas.map(campo => obj[campo]);
   });
 
-  const result = await prisma.contr_execucao_leitura.createMany({ data });
+  const valores = [];
+  const placeholders = linhas.map((linha, i) => {
+    valores.push(...linha);
+    const base = i * colunas.length;
+    return `(${colunas.map((_, j) => `$${base + j + 1}`).join(', ')})`;
+  });
 
-  console.log(`[Coleta Acomp] ✅ ${result.count} registros inseridos com sucesso.`);
-  return { inseridos: result.count };
+  const sql = `INSERT INTO contr_execucao_leitura (${colunas.join(', ')}) VALUES ${placeholders.join(', ')}`;
+  const { rowCount } = await pool.query(sql, valores);
+
+  console.log(`[Coleta Acomp] ✅ ${rowCount} registros inseridos com sucesso.`);
+  return { inseridos: rowCount };
 }
 
 module.exports = { importarParaPostgres };

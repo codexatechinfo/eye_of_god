@@ -6,7 +6,7 @@
   "ambiente": "wsl-dev",
   "atualizado_em": "2026-08-24T20:15:00.000Z",
   "atualizado_por": "/modelo-acesso",
-  "commit": null,
+  "commit": "a7aa0e7",
   "seguranca": {
     "nota": null,
     "corte": 70,

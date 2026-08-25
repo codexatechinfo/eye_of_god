@@ -75,6 +75,26 @@ convive com eles. "Total"/"No prazo"/"Prazo final" saíram de vez do template (a
 sem uso foi removida de `massivas-view.ts`; `selecionarPrazo('atrasada')` continua, é o
 único prazo que sobrou visível).
 
+## Adendo — ajustes de review
+
+Usuário apontou 3 problemas comparando com o print de referência de novo:
+
+1. **Título fora do print** ("Resumo de Massivas"/"Resumo de Leitura/Releitura" +
+   "Dados de... às..."). Removido — o toggle Livros/Leituras ficou sozinho, alinhado à
+   direita.
+2. **Layout em duas seções, não numa linha só.** A primeira versão separava
+   Agentes/Comunicação/Progresso (com `border-b`) dos contadores de status/dias, ficando
+   "numa linha abaixo" em vez de tudo junto. Unificado num único `flex flex-wrap` com um
+   divisor vertical (`w-px bg-slate-200`) entre os dois grupos, sem separação por borda
+   horizontal.
+3. **Painel estático — não atualizava sozinho, e o toggle Livros/Leituras não valia pras
+   faixas de dias.** `MassivasService` só buscava `resumo()` no `ngOnInit` e em cliques de
+   filtro; ganhou `setInterval` de 60s (mesmo padrão de `ColaboradoresService`), limpo em
+   `ngOnDestroy` (service passou a implementar `OnDestroy`). `obterFaixasDias()` só contava
+   linhas (sempre "livros"); passou a também somar `volume_de_leituras`, retornando
+   `{livros, leituras}` por faixa como as outras contagens — `valorFaixa()` no FRONTEND
+   aplica o mesmo toggle que `valorCard()` já aplicava nos outros contadores.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries

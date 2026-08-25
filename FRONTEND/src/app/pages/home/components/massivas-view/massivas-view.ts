@@ -180,6 +180,14 @@ export class MassivasView implements OnInit {
     return this.massivasService.visualizacao() === 'livros' ? contagem.livros : contagem.leituras;
   }
 
+  // Mesmo padrão do valorCard, pras faixas de dias (prazo_reg_livros) — o
+  // toggle Livros/Leituras vale aqui também.
+  valorFaixa(faixa: 'menor27' | 'igual33' | 'maior34'): number {
+    const contagem = this.massivasService.resumo()?.faixasDias[faixa];
+    if (!contagem) return 0;
+    return this.massivasService.visualizacao() === 'livros' ? contagem.livros : contagem.leituras;
+  }
+
   cardEmDestaque(status: StatusMassivas): boolean {
     const filtro = this.massivasService.filtroStatus();
     return filtro === 'todos' || filtro === status;

@@ -400,17 +400,21 @@ async function obterFaixasDias(db, filtros) {
     condicoes.push(`regional = $${parametros.length}`);
   }
 
+  // livros = 1 linha por livro (contagem direta); leituras = soma de
+  // volume_de_leituras — mesma dupla {livros, leituras} das outras contagens
+  // da tela, pro toggle "Livros/Leituras" valer aqui também.
   const sql = `
-    SELECT faixa, COUNT(*)::int AS total
+    SELECT faixa, COUNT(*)::int AS livros, COALESCE(SUM(volume_de_leituras::int), 0)::int AS leituras
     FROM (
       SELECT
         CASE
           WHEN efetivo < 27 THEN 'menor27'
           WHEN efetivo = 33 THEN 'igual33'
           WHEN efetivo >= 34 THEN 'maior34'
-        END AS faixa
+        END AS faixa,
+        volume_de_leituras
       FROM (
-        SELECT dias_finais::int + (CURRENT_DATE - to_date(prazo_calendario, 'YYYY-MM-DD')) AS efetivo
+        SELECT dias_finais::int + (CURRENT_DATE - to_date(prazo_calendario, 'YYYY-MM-DD')) AS efetivo, volume_de_leituras
         FROM prazo_reg_livros
         WHERE ${condicoes.join(' AND ')}
       ) calc
@@ -420,8 +424,12 @@ async function obterFaixasDias(db, filtros) {
   `;
 
   const { rows } = await db.query(sql, parametros);
-  const mapa = Object.fromEntries(rows.map(r => [r.faixa, r.total]));
-  return { menor27: mapa.menor27 ?? 0, igual33: mapa.igual33 ?? 0, maior34: mapa.maior34 ?? 0 };
+  const mapa = Object.fromEntries(rows.map(r => [r.faixa, { livros: r.livros, leituras: r.leituras }]));
+  return {
+    menor27: mapa.menor27 ?? { ...CONTAGEM_ZERO },
+    igual33: mapa.igual33 ?? { ...CONTAGEM_ZERO },
+    maior34: mapa.maior34 ?? { ...CONTAGEM_ZERO },
+  };
 }
 
 async function obterResumo(db, filtros) {
@@ -442,7 +450,7 @@ async function obterResumo(db, filtros) {
       noPrazo: { ...CONTAGEM_ZERO },
       prazoFinal: { ...CONTAGEM_ZERO },
       atrasadas: { ...CONTAGEM_ZERO },
-      faixasDias: { menor27: 0, igual33: 0, maior34: 0 },
+      faixasDias: { menor27: { ...CONTAGEM_ZERO }, igual33: { ...CONTAGEM_ZERO }, maior34: { ...CONTAGEM_ZERO } },
     };
   }
 

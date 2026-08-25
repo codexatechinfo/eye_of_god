@@ -69,15 +69,7 @@
     </div>
   </div>
 
-  <!-- Cabeçalho + toggle -->
-  <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-    <div>
-      <h2 class="text-sm font-bold text-slate-800">{{ escopo === 'massiva' ? 'Resumo de Massivas' : 'Resumo de Leitura/Releitura' }}</h2>
-      <p class="text-[11px] text-slate-400" *ngIf="massivasService.resumo() as r">
-        Dados de {{ r.dataImport }} às {{ r.horaImport }}
-      </p>
-    </div>
-
+  <div class="flex justify-end mb-3">
     <button
       type="button"
       (click)="massivasService.alternarVisualizacao()"
@@ -99,9 +91,11 @@
     {{ massivasService.erro() }}
   </div>
 
-  <!-- Barra de resumo operacional -->
-  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 mb-6" *ngIf="!massivasService.carregando() && !massivasService.erro() && massivasService.resumo() as r">
-    <div class="flex flex-wrap gap-x-10 gap-y-4 pb-4 mb-4 border-b border-slate-100">
+  <!-- Barra de resumo operacional — tudo numa linha só (quebra naturalmente
+       em telas estreitas via flex-wrap), atualiza sozinha a cada 60s
+       (MassivasService.iniciar()) e reage ao toggle Livros/Leituras. -->
+  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 mb-6" *ngIf="!massivasService.carregando() && !massivasService.erro()">
+    <div class="flex flex-wrap items-stretch gap-x-8 gap-y-4">
       <div>
         <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Agentes em campo</div>
         <div class="flex items-baseline gap-1">
@@ -131,9 +125,9 @@
         <div class="text-2xl font-extrabold text-slate-800 tabular-nums">{{ progressoPercent() | number: '1.1-1' }}%</div>
         <div class="text-[11px] text-slate-500 mt-1.5 tabular-nums">{{ progressoRealizadas() }} / {{ progressoTotal() }}</div>
       </div>
-    </div>
 
-    <div class="flex flex-wrap items-stretch gap-x-6 gap-y-3">
+      <span class="w-px self-stretch bg-slate-200 shrink-0"></span>
+
       <button type="button" (click)="selecionarStatus('pendentes')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4">
         <span class="w-1 self-stretch rounded-full bg-amber-400 shrink-0"></span>
         <span>
@@ -166,12 +160,12 @@
         </span>
       </button>
 
-      <!-- Faixas de dias (prazo_reg_livros.dias_finais ajustado pra hoje — ver ADR) -->
+      <!-- Faixas de dias (prazo_reg_livros.dias_finais ajustado pra hoje — ver ADR 0012) -->
       <span class="flex items-center gap-2.5" title="Livros com projeção de menos de 27 dias até o prazo regulatório">
         <span class="w-1 self-stretch rounded-full bg-emerald-500 shrink-0"></span>
         <span>
           <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">&lt; 27 dias</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ r.faixasDias.menor27 }}</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('menor27') }}</span>
         </span>
       </span>
 
@@ -179,7 +173,7 @@
         <span class="w-1 self-stretch rounded-full bg-amber-500 shrink-0"></span>
         <span>
           <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">33 dias</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ r.faixasDias.igual33 }}</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('igual33') }}</span>
         </span>
       </span>
 
@@ -187,7 +181,7 @@
         <span class="w-1 self-stretch rounded-full bg-red-600 shrink-0"></span>
         <span>
           <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">34+ dias</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ r.faixasDias.maior34 }}</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('maior34') }}</span>
         </span>
       </span>
     </div>

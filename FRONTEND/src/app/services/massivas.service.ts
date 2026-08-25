@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, OnDestroy, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 
@@ -8,9 +8,9 @@ export interface ContagemMassivas {
 }
 
 export interface FaixasDias {
-  menor27: number;
-  igual33: number;
-  maior34: number;
+  menor27: ContagemMassivas;
+  igual33: ContagemMassivas;
+  maior34: ContagemMassivas;
 }
 
 export interface ResumoMassivas {
@@ -88,7 +88,7 @@ export interface HistoricoLivroMassivas {
 // com filtro próprio, não uma só compartilhada entre as duas abas. Ver
 // providers: [MassivasService] em massivas-view.ts.
 @Injectable()
-export class MassivasService {
+export class MassivasService implements OnDestroy {
   private apiUrl = environment.apiUrl;
 
   // Setado uma vez por iniciar() e nunca mudado depois — é pra onde
@@ -124,6 +124,11 @@ export class MassivasService {
   private cacheHistorico = new Map<string, HistoricoLivroEvento[]>();
 
   private debounceId?: ReturnType<typeof setTimeout>;
+  private intervaloId?: ReturnType<typeof setInterval>;
+  // Mesmo intervalo do polling de atividade em colaboradores.service.ts —
+  // o painel (livros, %, faixas de dias) tem que acompanhar sozinho a
+  // evolução dos dados importados, não só quando o usuário mexe num filtro.
+  private readonly INTERVALO_ATUALIZACAO_MS = 60000;
 
   constructor(private http: HttpClient) {}
 
@@ -136,6 +141,12 @@ export class MassivasService {
     this.filtroTipoServico.set(escopo);
     this.carregarOpcoesFiltro();
     this.buscarTudo();
+    this.intervaloId = setInterval(() => this.buscarTudo(), this.INTERVALO_ATUALIZACAO_MS);
+  }
+
+  ngOnDestroy(): void {
+    if (this.intervaloId) clearInterval(this.intervaloId);
+    if (this.debounceId) clearTimeout(this.debounceId);
   }
 
   carregarOpcoesFiltro(): void {

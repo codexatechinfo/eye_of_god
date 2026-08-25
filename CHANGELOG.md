@@ -7,6 +7,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Barra de resumo operacional (ADR 0012): título/subtítulo ("Resumo de Massivas" / "Dados
+  de... às...") removido; Agentes em campo/Comunicação/Progresso e os contadores de
+  status/faixas de dias voltaram a ficar numa linha só, em vez de duas seções separadas.
+  Passa a se atualizar sozinha a cada 60s (`MassivasService` ganhou polling, mesmo padrão
+  já usado em `ColaboradoresService`) e o toggle Livros/Leituras agora também vale pras
+  faixas &lt;27/33/34+ dias (`obterFaixasDias` passou a somar `volume_de_leituras`, não só
+  contar linhas).
+
 - Abas Massivas e Monitoramento de Livros: os 7 cards (Pendentes/Atribuídas/Em Execução/
   Total/No Prazo/Prazo Final/Atraso) foram substituídos por uma barra de resumo
   operacional — Agentes em campo (Moto/A pé/Na base), Comunicação · 30 min, Progresso de

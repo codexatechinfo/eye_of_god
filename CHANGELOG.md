@@ -5,7 +5,21 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Adicionado
+
+- "Livros de hoje" na lista de colaboradores (aba Trilho) ganhou um badge indicando se o
+  livro é leitura ou releitura — mesma classificação da ADR 0006/0011, agora exposta em
+  `atividadeColaboradoresService.js` e `LivroAtividade.tipoServico`.
+
 ### Corrigido
+
+- Regressão da ADR 0011: comparar "dias em atraso"/cor da linha por timestamp completo
+  (em vez de por dia) fazia todo item de **massiva** com vencimento hoje aparecer vermelho
+  e "1 dia em atraso", mesmo o card "Atraso" batendo 0 — o prazo de massiva
+  (`calendario_leitura.prazo_massiva`) é sempre meia-noite, sem hora, então qualquer
+  comparação contra a hora real do scrape dava atrasado. Revertido: cor da linha e "dias em
+  atraso" voltam a comparar só por dia (igual antes da ADR 0011) pros dois tipos de fonte;
+  o cálculo hora-a-hora da releitura continua valendo nos cards (backend).
 
 - `copelImportService.js` gravava a coluna `etapa` de `contr_execucao_leitura` como veio
   do portal da Copel — texto tipo `"ETAPA 18 - (528)"` (o número entre parênteses é uma

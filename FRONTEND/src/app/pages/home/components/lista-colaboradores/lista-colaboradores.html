@@ -271,6 +271,11 @@
                     [ngClass]="livro.situacaoAtual === 'Em Execução' ? 'bg-emerald-500' : 'bg-slate-300'"
                   ></span>
                   <span class="truncate font-semibold text-slate-700">Livro {{ livro.livro }} - {{ livro.etapa }}</span>
+                  <span
+                    *ngIf="livro.tipoServico"
+                    class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-full"
+                    [ngClass]="livro.tipoServico === 'releitura' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'"
+                  >{{ livro.tipoServico }}</span>
                 </span>
                 <span class="flex items-center gap-1.5 shrink-0">
                   <span class="text-slate-400 tabular-nums">{{ livro.digitados }}/{{ livro.naoDigitados }}</span>

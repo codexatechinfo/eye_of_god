@@ -51,6 +51,9 @@ export interface LivroAtividade {
   situacaoAtual: string;
   digitados: number;
   naoDigitados: number;
+  // null = ainda sem data_recebimento, não dá pra saber se vai virar leitura
+  // ou releitura (mesma regra da ADR 0006/0011).
+  tipoServico: 'leitura' | 'releitura' | null;
   primeiraVez: string;
   ultimaVez: string;
   historico: HistoricoLivroItem[];

@@ -133,42 +133,41 @@ export class MassivasView implements OnInit {
     this.massivasService.buscarTudo();
   }
 
-  // "Agora" é o momento do último scrape (data+hora de importação), não o
-  // relógio real — mesmo padrão do backend (IMPORT_TS_CONTR_SQL em
-  // massivasService.js). Precisão de hora importa desde que releitura passou
-  // a ter prazo por hora (recebimento + 24h/48h, não mais por dia).
-  private agoraMs(): number | null {
-    const r = this.massivasService.resumo();
-    if (!r?.dataImport) return null;
-    const [d, m, a] = r.dataImport.split('/').map(Number);
-    if (!r.horaImport) return Date.UTC(a, m - 1, d);
-    const [h, mi, s] = r.horaImport.split(':').map(Number);
-    return Date.UTC(a, m - 1, d, h || 0, mi || 0, s || 0);
+  // Comparação por DIA, não por hora — de propósito. A tabela mistura massiva
+  // (dt_prev_limite = calendario_leitura.prazo_massiva, sempre meia-noite,
+  // sem componente de hora) com leitura/releitura (que desde a ADR 0011 tem
+  // hora real); comparar timestamp completo fazia todo item de massiva com
+  // vencimento HOJE aparecer "1 dia em atraso" e vermelho mesmo o card
+  // "Atraso" batendo 0 — meia-noite de hoje sempre fica no passado frente à
+  // hora real do scrape. O cálculo hora-a-hora da releitura já vale nos
+  // cards (backend, condicaoSqlPrazoContr); aqui, cor da linha e "dias em
+  // atraso" ficam em dia inteiro pros dois tipos de fonte, consistente.
+  private hojeUtcMs(): number | null {
+    const hoje = this.massivasService.resumo()?.dataImport;
+    if (!hoje) return null;
+    const [d, m, a] = hoje.split('/').map(Number);
+    return Date.UTC(a, m - 1, d);
   }
 
-  private prazoMs(dtPrevLimite: string): number {
-    return new Date(dtPrevLimite).getTime();
-  }
-
-  private diaUtc(ms: number): number {
-    const d = new Date(ms);
+  private prazoUtcMs(dtPrevLimite: string): number {
+    const d = new Date(dtPrevLimite);
     return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   }
 
   diasAtraso(linha: DetalheLinha): number {
-    const agora = this.agoraMs();
-    if (agora === null || !linha.dt_prev_limite) return 0;
-    const prazo = this.prazoMs(linha.dt_prev_limite);
-    const dias = Math.round((agora - prazo) / 86400000);
+    const hoje = this.hojeUtcMs();
+    if (hoje === null || !linha.dt_prev_limite) return 0;
+    const prazo = this.prazoUtcMs(linha.dt_prev_limite);
+    const dias = Math.round((hoje - prazo) / 86400000);
     return dias > 0 ? dias : 0;
   }
 
   corLinha(linha: DetalheLinha): CorLinha {
-    const agora = this.agoraMs();
-    if (agora === null || !linha.dt_prev_limite) return 'verde';
-    const prazo = this.prazoMs(linha.dt_prev_limite);
-    if (prazo < agora) return 'vermelho';
-    if (this.diaUtc(prazo) === this.diaUtc(agora)) return 'amarelo';
+    const hoje = this.hojeUtcMs();
+    if (hoje === null || !linha.dt_prev_limite) return 'verde';
+    const prazo = this.prazoUtcMs(linha.dt_prev_limite);
+    if (prazo < hoje) return 'vermelho';
+    if (prazo === hoje) return 'amarelo';
     return 'verde';
   }
 }

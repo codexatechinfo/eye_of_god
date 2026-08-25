@@ -17,12 +17,30 @@ function diferencaMinutos(horaAntiga, horaRecente) {
   return Math.max(0, Math.round(paraMinutosDoDia(horaRecente) - paraMinutosDoDia(horaAntiga)));
 }
 
+// "DD/MM/YYYY" -> "YYYY-MM-DD", só pra poder comparar duas datas como string.
+function paraDataOrdenavel(dataStr) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((dataStr || '').trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+// Mesma regra da ADR 0006 (massivasService.js, condicaoTipoServico): sem
+// data_recebimento ainda, não dá pra saber se vai virar leitura ou
+// releitura; recebido até o prazo é leitura, depois do prazo é releitura.
+function classificarTipoServico(dataRecebimento, dataPrevistaLimite) {
+  if (!dataRecebimento) return null;
+  const recebimento = paraDataOrdenavel(dataRecebimento);
+  const prevista = paraDataOrdenavel((dataPrevistaLimite || '').split(' ')[0]);
+  if (!recebimento || !prevista) return null;
+  return recebimento <= prevista ? 'leitura' : 'releitura';
+}
+
 async function listarAtividadeHoje(db) {
   const hoje = new Date().toLocaleDateString('pt-BR');
 
   const { rows: linhas } = await db.query(
     `
-    SELECT livro, etapa, situacao, qtd_digitados_nao_digitados, hora_import
+    SELECT livro, etapa, situacao, qtd_digitados_nao_digitados, hora_import,
+      data_recebimento, data_prevista_limite
     FROM contr_execucao_leitura
     WHERE data_import = $1
       AND situacao IS NOT NULL
@@ -51,6 +69,8 @@ async function listarAtividadeHoje(db) {
       situacao: match[1],
       digitados,
       naoDigitados,
+      dataRecebimento: linha.data_recebimento,
+      dataPrevistaLimite: linha.data_prevista_limite,
     };
 
     if (!porColaborador.has(nome)) porColaborador.set(nome, []);
@@ -106,6 +126,7 @@ async function listarAtividadeHoje(db) {
         situacaoAtual: ultima.situacao,
         digitados: ultima.digitados,
         naoDigitados: ultima.naoDigitados,
+        tipoServico: classificarTipoServico(ultima.dataRecebimento, ultima.dataPrevistaLimite),
         primeiraVez: primeira.horaImport,
         ultimaVez: ultima.horaImport,
         historico,

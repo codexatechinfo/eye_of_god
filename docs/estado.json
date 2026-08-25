@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.7",
+  "versao": "0.4.8",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T21:00:00.000Z",
+  "atualizado_em": "2026-08-25T21:20:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "bbd6263",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -282,6 +282,13 @@
       "skill": "/projeto-novo",
       "evento": "Logo A2L, painel do livro fecha ao clicar fora, balões trocados",
       "detalhe": "Três pedidos do usuário na mesma mensagem: 1) trocar o título 'A2l' pela logo oficial em SVG (fornecida inline pelo usuário) — colocada em home.html no lugar do <h1>, cores originais mantidas (#0B2E59/#F28C28/#006DFF), legível sobre o header escuro. 2) painel de detalhe do livro (livro-detalhe.ts) agora fecha ao clicar fora dele — HostListener('document:click') comparando elementRef.nativeElement.contains(target); o botão que ABRE o painel (lista-colaboradores.html) ganhou $event.stopPropagation() pra evitar que abrir/trocar de livro no mesmo clique dispare o fechamento (sem isso, trocar de livro com o painel já aberto fecharia ele no mesmo evento, já que o listener de document dispara depois do listener do botão na fase de bubble). 3) balões do painel trocados para os 8 pedidos: Leituras/min, Em Execução, Improdutivo, Km percorrido, Último sincronismo, Realizadas, A realizar, Impedimentos — verificado que Km percorrido e Impedimentos não existem em nenhuma coluna de nenhuma tabela do banco (nem rastreamento de GPS/distância, nem status de impedimento na coluna situacao, que só tem Pendente/Atribuída/Em Execução); perguntado ao usuário, que confirmou deixar os dois como placeholder 'Em breve' até existir fonte de dado real. Testado ao vivo com JWT de teste (mesma técnica do commit anterior): logo renderiza, clique no mapa fecha o painel, clicar num livro diferente com o painel já aberto troca o conteúdo sem fechar, os 8 balões aparecem na ordem certa com dado real nos 6 que têm fonte."
+    },
+    {
+      "data": "2026-08-25T21:20:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Leituras/min e Improdutivo também viraram \"Em breve\"",
+      "detalhe": "Usuário perguntou como os balões Leituras/min e Improdutivo eram calculados; expliquei que Leituras/min = digitados ÷ (última vez visto − primeira vez visto) e Improdutivo = % do tempo entre eventos do histórico do livro sem avanço de digitados, e que isso mede o LIVRO, não o colaborador (ele pode estar produtivo em outro livro no mesmo intervalo). Usuário pediu pra marcar os dois como 'em breve' também. Trocado o conteúdo dos dois cards em livro-detalhe.html pro mesmo estilo tracejado/cinza do Km percorrido e Impedimentos; removidas as funções que ficaram sem uso nenhum (mediaLeiturasPorMinuto, produtividade, formatarDuracao e os helpers paraMinutosDoDia/diferencaMinutos/interface Produtividade em colaboradores.service.ts) e os métodos wrapper em livro-detalhe.ts. Testado ao vivo (mesmo JWT de teste local): painel agora mostra 4 dos 8 balões como 'Em breve' (Leituras/min, Improdutivo, Km percorrido, Impedimentos), sem erro no console."
     }
   ]
 }

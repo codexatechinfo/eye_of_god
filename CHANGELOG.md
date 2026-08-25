@@ -15,7 +15,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   Execução, Improdutivo, Km percorrido, Último sincronismo, Realizadas, A realizar,
   Impedimentos. `Km percorrido` e `Impedimentos` aparecem como "Em breve" — não existe
   fonte de dado pra nenhum dos dois hoje (sem rastreamento de GPS/distância, e a coluna
-  `situacao` só tem Pendente/Atribuída/Em Execução).
+  `situacao` só tem Pendente/Atribuída/Em Execução). `Leituras/min` e `Improdutivo` também
+  viraram "Em breve" a pedido do usuário — o cálculo antigo media o livro (tempo total
+  visto / produtividade por intervalo do histórico), não o colaborador, e não refletia
+  corretamente o que o balão promete; funções removidas de `colaboradores.service.ts`
+  (`mediaLeiturasPorMinuto`, `produtividade`, `formatarDuracao` e helpers) por ficarem sem
+  uso.
 
 ### Corrigido
 

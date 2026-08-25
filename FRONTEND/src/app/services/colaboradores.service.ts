@@ -119,65 +119,6 @@ export interface LivroSelecionado {
   livro: LivroAtividade;
 }
 
-export interface Produtividade {
-  produtivoMin: number;
-  improdutivoMin: number;
-  percentProdutivo: number;
-}
-
-function paraMinutosDoDia(hora: string): number {
-  const [h, m, s] = (hora || '0:0:0').split(':').map(Number);
-  return h * 60 + m + (s || 0) / 60;
-}
-
-function diferencaMinutos(inicio: string, fim: string): number {
-  return Math.max(0, paraMinutosDoDia(fim) - paraMinutosDoDia(inicio));
-}
-
-export function mediaLeiturasPorMinuto(livro: LivroAtividade): number {
-  const minutos = diferencaMinutos(livro.primeiraVez, livro.ultimaVez);
-  if (minutos < 1) return 0;
-  return livro.digitados / minutos;
-}
-
-// Cada intervalo entre dois eventos do histórico é produtivo se os
-// digitados avançaram nele; senão é improdutivo. O intervalo do último
-// evento até "agora" (última vez visto) também entra como improdutivo, já
-// que nada mudou desde então.
-export function produtividade(livro: LivroAtividade): Produtividade {
-  const eventos = livro.historico;
-  let produtivoMin = 0;
-  let improdutivoMin = 0;
-
-  for (let i = 1; i < eventos.length; i++) {
-    const anterior = eventos[i - 1];
-    const atual = eventos[i];
-    const gap = diferencaMinutos(anterior.horaImport, atual.horaImport);
-    if (atual.digitados > anterior.digitados) {
-      produtivoMin += gap;
-    } else {
-      improdutivoMin += gap;
-    }
-  }
-
-  const ultimoEvento = eventos[eventos.length - 1];
-  if (ultimoEvento) {
-    improdutivoMin += diferencaMinutos(ultimoEvento.horaImport, livro.ultimaVez);
-  }
-
-  const total = produtivoMin + improdutivoMin;
-  const percentProdutivo = total > 0 ? Math.round((produtivoMin / total) * 100) : 100;
-  return { produtivoMin, improdutivoMin, percentProdutivo };
-}
-
-export function formatarDuracao(minutos: number): string {
-  const totalMin = Math.round(minutos);
-  if (totalMin < 60) return `${totalMin}min`;
-  const horas = Math.floor(totalMin / 60);
-  const resto = totalMin % 60;
-  return `${horas}h ${resto}min`;
-}
-
 @Injectable({
   providedIn: 'root',
 })

@@ -20,16 +20,17 @@
 
   <div class="flex-1 overflow-y-auto px-4 py-3">
     <div class="grid grid-cols-2 gap-1.5 mb-4">
-      <!-- Leituras/min -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-cyan-100 bg-cyan-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-cyan-100 text-cyan-600 flex items-center justify-center shrink-0">
+      <!-- Leituras/min — em revisão: o cálculo atual media pelo tempo total
+           visto no livro, não reflete corretamente o ritmo de leitura -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-cyan-500 uppercase tracking-wide truncate">Leituras/min</div>
-          <div class="text-xs font-bold text-cyan-700 tabular-nums">{{ mediaLeiturasPorMinuto(sel.livro) | number: '1.1-1' }}</div>
+          <div class="text-[8.5px] font-semibold text-slate-300 uppercase tracking-wide truncate">Leituras/min</div>
+          <div class="text-xs font-bold text-slate-300 truncate">Em breve</div>
         </div>
       </div>
 
@@ -46,24 +47,21 @@
         </div>
       </div>
 
-      <!-- Improdutivo -->
-      <ng-container *ngIf="produtividade(sel.livro) as prod">
-        <div class="flex items-center gap-1.5 rounded-lg border border-red-100 bg-red-50 px-2 py-1.5">
-          <div class="w-6 h-6 rounded-md bg-red-100 text-red-600 flex items-center justify-center shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <polyline points="12 7 12 12 15 14" />
-            </svg>
-          </div>
-          <div class="min-w-0 leading-tight">
-            <div class="text-[8.5px] font-semibold text-red-500 uppercase tracking-wide truncate">Improdutivo</div>
-            <div class="text-xs font-bold text-red-700 tabular-nums">
-              {{ 100 - prod.percentProdutivo }}%
-              <span class="font-medium text-[10px]">· {{ formatarDuracao(prod.improdutivoMin) }}</span>
-            </div>
-          </div>
+      <!-- Improdutivo — em revisão: o cálculo atual mede o livro, não o
+           colaborador (ele pode estar produtivo em outro livro no mesmo
+           intervalo) -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 15 14" />
+          </svg>
         </div>
-      </ng-container>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold text-slate-300 uppercase tracking-wide truncate">Improdutivo</div>
+          <div class="text-xs font-bold text-slate-300 truncate">Em breve</div>
+        </div>
+      </div>
 
       <!-- Km percorrido — sem fonte de dado ainda (nenhuma tabela rastreia GPS/distância) -->
       <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">

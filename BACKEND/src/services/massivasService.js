@@ -70,6 +70,9 @@ function fontesAtivas(tipoServico) {
   if (tipoServico === 'massiva') return { massiva: true, leitura: false, releitura: false };
   if (tipoServico === 'leitura') return { massiva: false, leitura: true, releitura: false };
   if (tipoServico === 'releitura') return { massiva: false, leitura: false, releitura: true };
+  // 'leiturarelitura': "todos" da aba Monitoramento de Livros — leitura + releitura,
+  // nunca massiva (essa tem aba própria, ver ADR 0010).
+  if (tipoServico === 'leiturarelitura') return { massiva: false, leitura: true, releitura: true };
   return { massiva: true, leitura: true, releitura: true }; // 'todos' ou vazio
 }
 

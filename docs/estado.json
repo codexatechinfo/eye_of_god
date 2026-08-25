@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.10",
+  "versao": "0.5.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T22:00:00.000Z",
+  "atualizado_em": "2026-08-25T23:00:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "b938832",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -303,6 +303,13 @@
       "skill": "/projeto-novo",
       "evento": "Degradê mais discreto ainda + logo A2L visível no header escuro",
       "detalhe": "Dois ajustes pedidos: 1) o degradê dos cards ficou forte demais — reduzida a opacidade do lado mais saturado pra 40% (from-{cor}-100/40 to-{cor}-50) nos 11 cards das duas sidebars, mantendo o mesmo padrão de canto superior esquerdo. 2) 3 dos 6 <path> da logo A2L (svg em home.html) usavam #0B2E59 (azul-marinho escuro), praticamente invisível contra o gradiente escuro do header (slate-900/800) — trocados pra #FFFFFF; os outros 3 (#F28C28 laranja, #006DFF azul vivo) continuam iguais, já tinham contraste. Testado ao vivo (JWT de teste local): logoFills confirma [#FFFFFF, #F28C28, #006DFF, #FFFFFF, #F28C28, #FFFFFF]; getComputedStyle do card 'Realizadas' confirma o gradiente com opacidade 0.4 no primeiro stop."
+    },
+    {
+      "data": "2026-08-25T23:00:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Aba Massivas separada de novo; Monitoramento de Livros só leitura/releitura; cards do Trilho em cor única",
+      "detalhe": "Três pedidos na mesma mensagem. 1) Nova aba 'Massivas' com o comportamento de antes da ADR 0006 (só dado de massiva, sem seletor de tipo, sem coluna Tipo na tabela). 2) Aba 'Monitoramento de Livros' restrita a leitura/releitura — massiva nunca mais aparece lá; seletor de tipo perdeu a opção Massiva. Backend: massivasService.js ganhou o valor 'leiturarelitura' em fontesAtivas() (ativa leitura+releitura, exclui massiva) sem tocar nos branches existentes. Frontend: MassivasService deixou de ser singleton (providedIn:'root') — cada aba (mesmo componente MassivasView, dois usos) precisa de filtro isolado, senão trocar de aba vazava o filtro de uma pra outra; virou providers:[MassivasService] no componente, com um novo método iniciar(escopo) chamado no ngOnInit (o fetch automático no constructor rodava antes do @Input() escopo estar disponível, sempre pegando o valor errado). Chave interna de aba renomeada em home.ts: 'massivas' (que apontava pra Monitoramento de Livros, só o rótulo tinha mudado antes) virou 'livros'; 'massivas' agora é a aba nova de verdade. 3) Cards da aba Trilho (lista de colaboradores + painel do livro) pra cor única (azul) em vez de uma cor por indicador, com o degradê ainda mais discreto (opacidade 20%, era 40%) — 11 cards trocados nos dois arquivos, mantendo os 4 placeholders 'Em breve'/'--' neutros como estavam. Testado ao vivo (JWT de teste local): aba Massivas mostra 'Resumo de Massivas' sem seletor/coluna de tipo (1313 registros só massiva); aba Monitoramento de Livros mostra 'Resumo de Leitura/Releitura', seletor com 3 opções (sem Massiva), badges da tabela só leitura/releitura; cards do Trilho confirmados via getComputedStyle com borda azul uniforme. Suíte de isolamento de tenant (12 testes) roda de novo, continua passando. Ver ADR 0010."
     }
   ]
 }

@@ -12,7 +12,10 @@ import { MassivasView } from './components/massivas-view/massivas-view';
 import { ImportacaoView } from './components/importacao-view/importacao-view';
 
 type StatusColeta = 'coletando' | 'parada' | 'fora-do-horario' | 'offline' | null;
-type Aba = 'monitoramento' | 'massivas' | 'importacao';
+// 'monitoramento' é a aba Trilho (rótulo mudou, chave não — ver ADR 0006).
+// 'livros' é Monitoramento de Livros (leitura/releitura); 'massivas' é a
+// aba nova, dedicada só a massiva (ver ADR 0010).
+type Aba = 'monitoramento' | 'livros' | 'massivas' | 'importacao';
 
 interface StatusJob {
   ativo: boolean;

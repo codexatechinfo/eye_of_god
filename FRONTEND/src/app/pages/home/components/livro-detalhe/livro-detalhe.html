@@ -35,15 +35,15 @@
       </div>
 
       <!-- Em Execução -->
-      <div class="flex items-center gap-1.5 rounded-lg border px-2 py-1.5 bg-gradient-to-br" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'border-emerald-100 from-emerald-100/40 to-emerald-50' : 'border-slate-100 from-slate-100/40 to-slate-50'">
-        <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'">
+      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 12 7 12 9 6 13 18 16 12 21 12" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold uppercase tracking-wide truncate" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'text-emerald-500' : 'text-slate-400'">Em Execução</div>
-          <div class="text-xs font-bold truncate" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'text-emerald-700' : 'text-slate-500'">{{ sel.livro.situacaoAtual === 'Em Execução' ? 'Sim' : 'Não' }}</div>
+          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Em Execução</div>
+          <div class="text-xs font-bold text-blue-700 truncate">{{ sel.livro.situacaoAtual === 'Em Execução' ? 'Sim' : 'Não' }}</div>
         </div>
       </div>
 
@@ -77,21 +77,21 @@
       </div>
 
       <!-- Último sincronismo -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-indigo-100 bg-gradient-to-br from-indigo-100/40 to-indigo-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9" />
             <polyline points="12 7 12 12 16 14" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-indigo-400 uppercase tracking-wide truncate">Último sincronismo</div>
-          <div class="text-xs font-bold text-indigo-700 tabular-nums truncate">{{ sel.livro.ultimaVez }}</div>
+          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Último sincronismo</div>
+          <div class="text-xs font-bold text-blue-700 tabular-nums truncate">{{ sel.livro.ultimaVez }}</div>
         </div>
       </div>
 
       <!-- Realizadas -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/40 to-blue-50 px-2 py-1.5">
+      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
         <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="4" width="14" height="17" rx="2" />
@@ -105,16 +105,16 @@
       </div>
 
       <!-- A realizar -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-amber-100 bg-gradient-to-br from-amber-100/40 to-amber-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="4" width="14" height="17" rx="2" />
             <path d="M9 9h6M9 13h6" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-amber-500 uppercase tracking-wide truncate">A realizar</div>
-          <div class="text-xs font-bold text-amber-700 tabular-nums">{{ sel.livro.naoDigitados }}</div>
+          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">A realizar</div>
+          <div class="text-xs font-bold text-blue-700 tabular-nums">{{ sel.livro.naoDigitados }}</div>
         </div>
       </div>
 

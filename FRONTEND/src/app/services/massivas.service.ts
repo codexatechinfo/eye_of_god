@@ -48,7 +48,12 @@ export interface DetalheMassivas {
 export type StatusMassivas = 'todos' | 'pendentes' | 'atribuidas' | 'emExecucao';
 export type VisualizacaoMassivas = 'livros' | 'leituras';
 export type PrazoMassivas = '' | 'noPrazo' | 'final' | 'atrasada';
-export type TipoServico = 'todos' | 'leitura' | 'releitura' | 'massiva';
+export type TipoServico = 'todos' | 'leitura' | 'releitura' | 'massiva' | 'leiturarelitura';
+
+// Escopo fixo da aba: "massiva" é a aba Massivas (só massiva, sem opção de
+// trocar); "leiturarelitura" é a aba Monitoramento de Livros (leitura e
+// releitura, nunca massiva — tem aba própria). Ver ADR 0010.
+export type EscopoMassivas = 'massiva' | 'leiturarelitura';
 
 export interface HistoricoLivroEvento {
   status: string;
@@ -71,11 +76,18 @@ export interface HistoricoLivroMassivas {
   eventos: HistoricoLivroEvento[];
 }
 
-@Injectable({
-  providedIn: 'root',
-})
+// Sem providedIn: 'root' de propósito — cada <app-massivas-view> (aba
+// Massivas e aba Monitoramento de Livros) precisa da sua própria instância
+// com filtro próprio, não uma só compartilhada entre as duas abas. Ver
+// providers: [MassivasService] em massivas-view.ts.
+@Injectable()
 export class MassivasService {
   private apiUrl = environment.apiUrl;
+
+  // Setado uma vez por iniciar() e nunca mudado depois — é pra onde
+  // limparFiltros()/onTipoServicoChange() voltam o filtro de tipo, nunca
+  // pro genérico 'todos' (que incluiria massiva na aba de leitura/releitura).
+  private escopo: EscopoMassivas = 'leiturarelitura';
 
   regionais = signal<string[]>([]);
   etapas = signal<string[]>([]);
@@ -86,7 +98,7 @@ export class MassivasService {
   filtroColaborador = signal('');
   filtroStatus = signal<StatusMassivas>('todos');
   filtroPrazo = signal<PrazoMassivas>('');
-  filtroTipoServico = signal<TipoServico>('todos');
+  filtroTipoServico = signal<TipoServico>('leiturarelitura');
 
   visualizacao = signal<VisualizacaoMassivas>('livros');
 
@@ -106,7 +118,15 @@ export class MassivasService {
 
   private debounceId?: ReturnType<typeof setTimeout>;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient) {}
+
+  // Chamado pelo componente no ngOnInit, uma vez, com o escopo fixo da aba
+  // (nunca muda depois). Antes disso o service não busca nada sozinho — o
+  // fetch automático no constructor rodava antes do @Input() estar
+  // disponível, então sempre pegava o valor padrão errado pra aba.
+  iniciar(escopo: EscopoMassivas): void {
+    this.escopo = escopo;
+    this.filtroTipoServico.set(escopo);
     this.carregarOpcoesFiltro();
     this.buscarTudo();
   }
@@ -184,7 +204,7 @@ export class MassivasService {
     this.filtroColaborador.set('');
     this.filtroStatus.set('todos');
     this.filtroPrazo.set('');
-    this.filtroTipoServico.set('todos');
+    this.filtroTipoServico.set(this.escopo);
     this.carregarOpcoesFiltro();
     this.buscarTudo();
   }

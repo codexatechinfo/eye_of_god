@@ -7,6 +7,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Abas reorganizadas: "Massivas" volta a ser uma aba própria (comportamento de antes da
+  ADR 0006 — só dado de massiva, sem seletor de tipo). "Monitoramento de Livros" passa a
+  mostrar só leitura/releitura — massiva não aparece mais lá. Ver
+  [ADR 0010](docs/adr/0010-aba-massivas-dedicada.md).
+- Cards da aba Trilho (lista de colaboradores + painel de detalhe do livro): cor única
+  (azul) em vez de uma cor por indicador; degradê ainda mais discreto (opacidade 20%, era
+  40%).
+
 - Cards de indicador (balões) na lista de colaboradores e no painel de detalhe do livro
   trocaram o fundo de cor sólida por um degradê discreto (canto superior esquerdo mais
   saturado, esmaecendo até o tom claro de sempre) — opacidade reduzida (40%) pra ficar

@@ -142,3 +142,7 @@ sequenceDiagram
   `cidades_localidades` e `tab_ligacao_coordenadas` deixaram de ser referência
   compartilhada e ganharam `empresa_id` + RLS — cada empresa pode ter contrato/região
   diferente. Não existe mais tabela de negócio sem dono.
+- [ADR 0010](adr/0010-aba-massivas-dedicada.md) — aba "Massivas" separada de novo (só
+  massiva, sem filtro de tipo); "Monitoramento de Livros" restrita a leitura/releitura.
+  `MassivasService` deixou de ser singleton (`providedIn: 'root'`) — cada aba tem sua
+  própria instância via `providers` no componente, pra não vazar filtro entre elas.

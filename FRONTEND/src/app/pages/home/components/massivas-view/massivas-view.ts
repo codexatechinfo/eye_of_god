@@ -1,7 +1,7 @@
-import { Component, signal } from '@angular/core';
+import { Component, Input, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DetalheLinha, MassivasService, StatusMassivas } from '../../../../services/massivas.service';
+import { DetalheLinha, EscopoMassivas, MassivasService, StatusMassivas } from '../../../../services/massivas.service';
 
 type CorLinha = 'verde' | 'amarelo' | 'vermelho';
 type ColunaOrdenavel = 'regional' | 'livro' | 'etapa' | 'status' | 'tipoServico' | 'dt_prev_limite' | 'quantidade' | 'leiturista' | 'diasAtraso';
@@ -12,9 +12,21 @@ type DirecaoOrdenacao = 'asc' | 'desc';
   imports: [CommonModule, FormsModule],
   templateUrl: './massivas-view.html',
   styleUrl: './massivas-view.css',
+  // Instância própria por aba — a de Massivas e a de Monitoramento de
+  // Livros não podem compartilhar filtro (ver massivas.service.ts).
+  providers: [MassivasService],
 })
-export class MassivasView {
+export class MassivasView implements OnInit {
+  // 'massiva': aba Massivas, comportamento de antes da ADR 0006 (só
+  // massiva, sem seletor de tipo). 'leiturarelitura': aba Monitoramento de
+  // Livros, só leitura/releitura — nunca massiva, que agora tem aba própria.
+  @Input() escopo: EscopoMassivas = 'leiturarelitura';
+
   constructor(public massivasService: MassivasService) {}
+
+  ngOnInit(): void {
+    this.massivasService.iniciar(this.escopo);
+  }
 
   colunaOrdenacao = signal<ColunaOrdenavel | null>(null);
   direcaoOrdenacao = signal<DirecaoOrdenacao>('asc');

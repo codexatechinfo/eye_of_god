@@ -85,11 +85,11 @@ const CONFIG_IMPORTACAO = {
       'faturamento_em_campo', 'status_impressao_do_comunicado', 'forma_de_entrega',
     ],
   },
-  // Referência compartilhada entre empresas (ver docs/adr/0003-rbac-multi-tenant.md)
-  // — sem empresa_id, o import afeta todo mundo. Sinalizado ao usuário na resposta.
+  // Ver ADR 0009 — deixou de ser compartilhada: cada empresa pode ter seu
+  // próprio contrato/região, logo seu próprio calendário de prazos.
   calendario_leitura: {
     modo: 'upsert',
-    temEmpresa: false,
+    temEmpresa: true,
     chave: ['mes_ref'],
     colunas: [
       'mes_ref', 'etapa', 'prazo_leitura', 'prazo_regulatorio', 'envio_releitura',
@@ -97,9 +97,10 @@ const CONFIG_IMPORTACAO = {
       'envio_leitura', 'prazo_leitura_fimm',
     ],
   },
+  // Ver ADR 0009 — mesma razão de calendario_leitura: região/contrato varia por empresa.
   cidades_localidades: {
     modo: 'substituir',
-    temEmpresa: false,
+    temEmpresa: true,
     colunas: ['regional', 'cidade', 'distrito', 'local'],
   },
   prazo_reg_livros: {
@@ -120,11 +121,10 @@ const CONFIG_IMPORTACAO = {
       'justificativa', 'observacao',
     ],
   },
-  // Referência compartilhada (coordenadas por UC) — mesma classificação de
-  // cidades_localidades/calendario_leitura, sem empresa_id.
+  // Ver ADR 0009 — idem: coordenadas de UC variam conforme a região atendida pela empresa.
   tab_ligacao_coordenadas: {
     modo: 'upsert',
-    temEmpresa: false,
+    temEmpresa: true,
     chave: ['UC'],
     colunas: ['UC', 'latitude', 'longitude'],
   },

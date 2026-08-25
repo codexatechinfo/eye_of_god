@@ -138,3 +138,7 @@ sequenceDiagram
 - [ADR 0008](adr/0008-empresa-alvo-importacao-root.md) — `ROOT` escolhe a empresa alvo do
   import (`?empresaId=`) já que não tem uma própria; `GET /empresas` novo pra alimentar o
   seletor.
+- [ADR 0009](adr/0009-empresa_id-nas-tabelas-de-referencia.md) — `calendario_leitura`,
+  `cidades_localidades` e `tab_ligacao_coordenadas` deixaram de ser referência
+  compartilhada e ganharam `empresa_id` + RLS — cada empresa pode ter contrato/região
+  diferente. Não existe mais tabela de negócio sem dono.

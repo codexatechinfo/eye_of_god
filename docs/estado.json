@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.3",
+  "versao": "0.4.4",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T15:45:00.000Z",
+  "atualizado_em": "2026-08-25T18:30:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "8b28874",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -152,8 +152,8 @@
   ],
   "operacional": {
     "tabelas_sem_rls": 0,
-    "tabelas_negocio": 13,
-    "indice_tenant": { "ok": 13, "total": 13 },
+    "tabelas_negocio": 16,
+    "indice_tenant": { "ok": 16, "total": 16 },
     "cobertura_testes": null
   },
   "custo": {
@@ -254,6 +254,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: import como ROOT quebrava com null em empresa_id",
       "detalhe": "Usuário reportou 'null value in column empresa_id of relation atestados violates not-null constraint' ao importar como ROOT. Causa: ROOT não tem empresa própria e importacaoController.js sempre usava req.usuario.empresaId direto, sem o mesmo desvio que usuariosController/coletaController/dashboardController já tinham (brecha esquecida no ADR 0005). Corrigido: ROOT informa ?empresaId= (erro 400 limpo se faltar, em vez de estourar a constraint); quem não é ROOT continua sempre com a própria empresa, nunca aceita parâmetro. GET /empresas novo (RLS filtra sozinha) alimenta o seletor no FRONTEND, visível só pra ROOT e só em tabela não-compartilhada. Testado por curl (400 sem empresaId, sucesso com) e ao vivo no browser (seletor aparece/some certo trocando de tabela). Ver ADR 0008."
+    },
+    {
+      "data": "2026-08-25T18:30:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "calendario_leitura, cidades_localidades e tab_ligacao_coordenadas deixaram de ser compartilhadas",
+      "detalhe": "Usuário questionou por que essas 3 tabelas não tinham a mesma separação por empresa das outras 13 (classificadas como referência compartilhada nas ADR 0003/0007, premissa de contrato único). Esclarecido: cada empresa cliente do SaaS pode atender contrato/região diferente, então cada uma pode ter seu próprio calendário de prazos, lista de localidades e coordenadas de UC — a premissa de referência única não vale mais. Banco local estava vazio nessas 3 tabelas e sem empresa cadastrada ainda, então não houve dado legado pra migrar. Aplicado ALTER TABLE ADD COLUMN empresa_id uuid not null references empresas(id) + índice + enable/force RLS + policy isolamento_empresa (mesma das outras 13), rodado como usuário postgres dentro do container supabase-db (app_user não é dono das tabelas, não roda DDL). CONFIG_IMPORTACAO (temEmpresa:false→true nas 3) foi a única mudança de código no backend — controller/service já eram genéricos desde a ADR 0008; FRONTEND não mudou lógica, o seletor de empresa já vinha do campo compartilhada que o backend calcula. LEFT JOIN cidades_localidades/calendario_leitura em massivasService.js/leituraUrbanaService.js não precisou mudar — roda sobre req.db (contexto de tenant), a RLS filtra sozinha. Testado: 6 casos novos em isolamento_tenant.test.js (fail-closed + isolamento cross-empresa nas 3 tabelas, suíte com 12 testes passando) e o caminho real de import (ROOT com empresaId grava só na empresa escolhida, outra empresa não enxerga) direto contra importacaoService.js. Não existe mais tabela de negócio sem dono no catálogo. Ver ADR 0009."
     }
   ]
 }

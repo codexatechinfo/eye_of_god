@@ -5,6 +5,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Alterado
+
+- `calendario_leitura`, `cidades_localidades` e `tab_ligacao_coordenadas` deixaram de ser
+  referência compartilhada entre empresas — ganharam `empresa_id` + RLS igual às demais 13
+  tabelas de negócio. Cada empresa pode atender contrato/região diferente, logo tem seu
+  próprio calendário de prazos, lista de localidades e coordenadas de UC; importar deixou de
+  afetar todo mundo de uma vez. `ROOT` agora escolhe `?empresaId=` também pra essas 3 (mesmo
+  padrão do ADR 0008). Ver [ADR 0009](docs/adr/0009-empresa_id-nas-tabelas-de-referencia.md).
+
 ### Corrigido
 
 - Importação como `ROOT` quebrava com `null value in column "empresa_id"` — `ROOT` não tem

@@ -37,7 +37,8 @@ export class ImportacaoView implements OnInit {
   }
 
   // ROOT não tem empresa própria — só precisa escolher quando a tabela não é
-  // compartilhada (ver docs/adr/0007 e a rota /importacao/:tabela).
+  // compartilhada (hoje nenhuma é, ver ADR 0009, mas o flag continua vindo do
+  // backend em vez de fixo aqui, caso surja tabela compartilhada de novo).
   precisaEscolherEmpresa(): boolean {
     const tabela = this.tabelaAtual();
     return this.ehRoot() && !!tabela && !tabela.compartilhada;

@@ -49,15 +49,18 @@ o que não está explicitamente liberado).
 
 Documento aqui é intenção; o que vale é o banco. O banco local só tem as tabelas que o app
 de fato usa (16 no total, depois da poda em [ADR 0004](adr/0004-poda-de-tabelas-nao-usadas.md)
-e da restauração pontual em [ADR 0007](adr/0007-restaura-tab-ligacao-coordenadas.md)), das
-quais 13 têm `empresa_id` `not null`, RLS `enable` + `force`, e uma policy de isolamento
-(`ROOT` vê tudo, os demais só a própria empresa) — nem `using` nem `with check` abrem
-exceção pra ausência de contexto: as 9 tabelas de negócio (`atestados`, `ativos_inativos`,
-`atribuidas_im`, `contr_execucao_leitura`, `control_empreiteiras`, `em_execucao_im`,
-`pendentes_im`, `prazo_reg_livros`, `suspensao`), `users`, e as 3 de apoio ao RBAC
-(`empresas`, `tenant_features`, `audit_log`). `calendario_leitura`, `cidades_localidades` e
-`tab_ligacao_coordenadas` (referência geográfica/calendário, compartilhada entre empresas,
-não é dado de uma empresa específica) ficam de fora de propósito.
+e da restauração pontual em [ADR 0007](adr/0007-restaura-tab-ligacao-coordenadas.md)), e
+**todas as 16** têm `empresa_id` `not null`, RLS `enable` + `force`, e a mesma policy de
+isolamento (`ROOT` vê tudo, os demais só a própria empresa) — nem `using` nem `with check`
+abrem exceção pra ausência de contexto: as 9 tabelas de negócio originais (`atestados`,
+`ativos_inativos`, `atribuidas_im`, `contr_execucao_leitura`, `control_empreiteiras`,
+`em_execucao_im`, `pendentes_im`, `prazo_reg_livros`, `suspensao`), `users`, as 3 de apoio ao
+RBAC (`empresas`, `tenant_features`, `audit_log`), e desde a
+[ADR 0009](adr/0009-empresa_id-nas-tabelas-de-referencia.md) também `calendario_leitura`,
+`cidades_localidades` e `tab_ligacao_coordenadas` — inicialmente tratadas como referência
+compartilhada, mas cada empresa pode ter contrato/região diferente, logo seu próprio
+calendário de prazos, lista de localidades e coordenadas de UC. Não existe mais tabela de
+negócio sem dono no catálogo.
 
 Prova automatizada em `BACKEND/test/isolamento_tenant.test.js` (`npm test`).
 
@@ -66,9 +69,10 @@ Prova automatizada em `BACKEND/test/isolamento_tenant.test.js` (`npm test`).
 Ver [ADR 0005](adr/0005-importacao-de-planilha.md) — `POST /importacao/:tabela` (12
 tabelas, `.xlsx`), restrito a `ADMINISTRADOR`/`ROOT`. Pra quem não é `ROOT`, `empresa_id`
 sempre do token, nunca do arquivo ou da URL. `ROOT` não tem empresa própria — precisa
-escolher via `?empresaId=` nas tabelas que não são compartilhadas (ver
-[ADR 0008](adr/0008-empresa-alvo-importacao-root.md)); `GET /empresas` (RLS filtra sozinha)
-alimenta esse seletor no FRONTEND.
+escolher via `?empresaId=` (ver [ADR 0008](adr/0008-empresa-alvo-importacao-root.md));
+`GET /empresas` (RLS filtra sozinha) alimenta esse seletor no FRONTEND. Desde a
+[ADR 0009](adr/0009-empresa_id-nas-tabelas-de-referencia.md), as 12 tabelas exigem
+`empresaId` — não há mais tabela compartilhada no catálogo.
 
 ## Em aberto
 

@@ -7,6 +7,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- `copelImportService.js` gravava a coluna `etapa` de `contr_execucao_leitura` como veio
+  do portal da Copel — texto tipo `"ETAPA 18 - (528)"` (o número entre parênteses é uma
+  contagem que muda a cada ciclo, não é parte da etapa). Agora limpa pro mesmo formato do
+  resto do banco (`"18"`, `"09"` — sempre 2 dígitos) antes de inserir.
+
 - Prazo/atraso de leitura e releitura na aba "Monitoramento de Livros" estava usando
   `data_prevista_limite` da própria linha, comparado por dia — não era a regra real.
   Agora: leitura usa `calendario_leitura.prazo_leitura` por etapa (01–19 urbana, 21–38

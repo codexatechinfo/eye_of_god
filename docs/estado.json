@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.5.1",
+  "versao": "0.5.2",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T23:45:00.000Z",
+  "atualizado_em": "2026-08-25T23:55:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "49cdfbc",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -317,6 +317,13 @@
       "skill": "/projeto-novo",
       "evento": "Prazo real de leitura/releitura implementado (calendário + SLA de releitura por hora)",
       "detalhe": "Usuário perguntou se o atraso já usava calendario_leitura por etapa+mês e um SLA de 24h/48h sobre data_recebimento — não usava (conferido no código: vinha de data_prevista_limite da própria linha, comparado por dia). Confirmado e implementado: leitura usa calendario_leitura.prazo_leitura por etapa (etapa extraída via regex, já que contr_execucao_leitura.etapa vem sempre sujo tipo 'ETAPA 18 - (528)' — conferido que 100% das ~317 mil linhas estão nesse formato); releitura usa data_recebimento+hora_recebimento + 24h (etapa urbana 01-19) ou 48h (etapa rural 21-38, sem etapa 20, confirmado contra o calendário). Como contr_execucao_leitura não tem coluna mes_ref própria, o mês pro join com calendario_leitura é inferido do mês de data_prevista_limite — conferido contra o banco que bate exatamente com prazo_leitura pra linhas de leitura. Bug real pego durante o teste: to_timestamp() do Postgres devolve timestamptz, e o driver pg converte timestamp sem timezone pro fuso horário do PROCESSO NODE (não UTC) — um valor tipo '2026-08-13 23:59:59' virava '2026-08-14T02:59:59.000Z' no JSON (+3h, fuso de Brasília). Só apareceu testando o VALOR real contra cálculo manual, não bastava a query rodar sem erro. Corrigido com ::timestamp explícito nas expressões e formatando a saída com to_char(...'Z') em vez de deixar o driver serializar o timestamp cru. FRONTEND (massivas-view.ts) também precisou de ajuste: diasAtraso()/corLinha() comparavam só por dia (consistente com o prazo antigo), agora incoerente já que releitura tem prazo por hora — reescrito pra comparar timestamp completo (agoraMs() usa data_import+hora_import do resumo, que já existia mas não era usado nesse cálculo) pro vermelho/atrasada, mantendo comparação por dia só pro amarelo/vence-hoje. Testado contra o banco real: releitura do livro 033330 bate exatamente com cálculo manual em SQL puro (recebido 21/08 17:55 urbana → prazo 22/08 17:55); leitura das etapas 29/31/32 batendo com calendario_leitura.prazo_leitura (13/08, 16/08, 17/08); resumo com filtro leiturarelitura soma certo (638 no prazo + 503 prazo final + 195 atraso = 1577 total). Testado ao vivo no browser: card Atraso filtra e colore linhas de vermelho corretamente, popup de histórico sem deslocamento de fuso. Suíte de isolamento de tenant (12 testes) continua passando. Ver ADR 0011."
+    },
+    {
+      "data": "2026-08-25T23:55:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Etapa suja na origem: copelImportService.js limpa antes de gravar",
+      "detalhe": "Usuário perguntou se era falha da API o formato 'ETAPA 18 - (528)' aparecer em contr_execucao_leitura.etapa, e pediu pra sempre limpar pro formato '09' na importação. Confirmado: não é falha, é o texto literal do link clicável no portal da Copel (o número entre parênteses é uma contagem de itens visíveis naquele momento, muda a cada ciclo de coleta) — o scraper (copelScraperService.js) lê esse texto como veio, e copelImportService.js gravava direto, sem limpar. Adicionada limparEtapa(valor) em copelImportService.js: extrai só o número via regex e normaliza pra 2 dígitos (padStart), aplicada em obj.etapa antes do INSERT — mesma convenção que calendario_leitura.etapa já usa. Testado com os casos reais e de borda: 'ETAPA 18 - (528)' -> '18', 'ETAPA 09 - (66)' -> '09', 'ETAPA 9 - (1)' -> '09' (sem zero à esquerda na origem, ainda assim normaliza), já limpo passa direto, null/undefined/vazio vira null sem quebrar. Não fiz backfill das ~317 mil linhas já gravadas sujas — as queries de prazo (ADR 0011) já extraem o número via regex no SQL (ETAPA_NUM_CONTR_SQL) e funcionam com os dois formatos, então o dado sujo antigo não quebra nada, só fica cosmeticamente inconsistente até ser naturalmente substituído pelos próximos ciclos de coleta. Sinalizado ao usuário que um UPDATE retroativo é possível se ele quiser, mas não é necessário funcionalmente."
     }
   ]
 }

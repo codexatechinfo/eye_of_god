@@ -5,6 +5,17 @@ const CAMPOS = [
   'percentual_sem_leitura', 'qtd_fora_de_faixa_foto', 'situacao'
 ];
 
+// O portal da Copel mostra a etapa como link "ETAPA 18 - (528)" — o número
+// entre parênteses é a contagem de itens visíveis naquele momento (muda a
+// cada ciclo de coleta, não é parte da etapa) e o scraper lê esse texto como
+// veio. Sem limpar aqui, a coluna fica inconsistente com o resto do banco
+// (calendario_leitura.etapa é sempre só o número, "09", "18" etc.) e quebra
+// qualquer JOIN por etapa. Extrai só o número e normaliza pra 2 dígitos.
+function limparEtapa(valor) {
+  const numero = String(valor ?? '').match(/\d+/)?.[0];
+  return numero ? numero.padStart(2, '0') : (valor || null);
+}
+
 async function importarParaPostgres(db, registros, empresaId) {
   if (!registros.length) {
     console.log('⚠️ Nenhum registro para importar.');
@@ -21,6 +32,7 @@ async function importarParaPostgres(db, registros, empresaId) {
   const linhas = registros.map(linha => {
     const obj = {};
     CAMPOS.forEach((campo, i) => { obj[campo] = linha[i] || null; });
+    obj.etapa = limparEtapa(obj.etapa);
     obj.data_import = dataImport;
     obj.hora_import = horaImport;
     obj.empresa_id = empresaId;

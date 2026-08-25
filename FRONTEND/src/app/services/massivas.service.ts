@@ -43,6 +43,10 @@ export interface DetalheLinha {
   digitados: number;
   nao_digitados: number;
   leiturista: string | null;
+  // Dias efetivos frente ao prazo regulatório (prazo_reg_livros — ver ADR
+  // 0012 Adendo 4). Só vem preenchido pra leitura/releitura; livro de
+  // massiva ou sem correspondência na planilha vem null.
+  dias_prazo_regulatorio: number | null;
 }
 
 export interface DetalheMassivas {

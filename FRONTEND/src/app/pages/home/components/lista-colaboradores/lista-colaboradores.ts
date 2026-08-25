@@ -2,12 +2,16 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
+  AtividadeColaborador,
   CategoriaAtividade,
   ColaboradoresService,
   LivroAtividade,
   normalizarRegional,
   OPCOES_CATEGORIA,
+  percentualExecucao,
 } from '../../../../services/colaboradores.service';
+
+type CorBarra = 'verde' | 'amarelo' | 'vermelho';
 
 @Component({
   selector: 'app-lista-colaboradores',
@@ -42,5 +46,18 @@ export class ListaColaboradores {
 
   abrirLivro(colaboradorNome: string, livro: LivroAtividade): void {
     this.colaboradoresService.abrirLivro(colaboradorNome, livro);
+  }
+
+  // Barra de progresso abaixo do nome — mesmo % que agora também ordena a
+  // lista (pontuacaoDestaque em colaboradores.service.ts).
+  percentual(nome: string): number {
+    return percentualExecucao(this.colaboradoresService.atividadeDe(nome));
+  }
+
+  corBarra(atividade: AtividadeColaborador | null): CorBarra {
+    const pct = percentualExecucao(atividade);
+    if (pct >= 70) return 'verde';
+    if (pct >= 30) return 'amarelo';
+    return 'vermelho';
   }
 }

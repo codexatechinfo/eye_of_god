@@ -34,6 +34,42 @@ function classificarTipoServico(dataRecebimento, dataPrevistaLimite) {
   return recebimento <= prevista ? 'leitura' : 'releitura';
 }
 
+// "Dias do prazo regulatório" por livro — mesma fonte/fórmula de
+// obterFaixasDias/EFETIVO_PRAZO_REG_SQL em massivasService.js (ADR 0012
+// Adendo 4), só que calculada aqui em JS em vez de SQL: como "hoje" (o valor
+// de data_import) é constante pra toda a consulta de listarAtividadeHoje, um
+// mapa livro->efetivo buscado uma vez só é mais simples e mais barato que
+// juntar prazo_reg_livros numa query que já processa todas as linhas cruas
+// do dia. prazo_reg_livros é só consulta (nunca fonte de linha, mesma regra
+// da ADR 0012) — livro sem correspondência no mapa fica null, "não
+// avaliado", nunca 0. Só vale pra leitura/releitura (livro de massiva não
+// tem essa correspondência — nunca fez sentido pra esse escopo).
+async function obterMapaPrazoRegulatorio(db) {
+  const { rows } = await db.query(`
+    SELECT livro, dias_finais, prazo_calendario
+    FROM prazo_reg_livros
+    WHERE mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
+  `);
+  const mapa = new Map();
+  for (const linha of rows) {
+    const chave = Number(linha.livro);
+    if (Number.isFinite(chave)) {
+      mapa.set(chave, { diasFinais: Number(linha.dias_finais), prazoCalendario: linha.prazo_calendario });
+    }
+  }
+  return mapa;
+}
+
+// hoje: "DD/MM/YYYY" (mesmo formato de data_import); prazoCalendario: "YYYY-MM-DD".
+function calcularDiasPrazoRegulatorio(hoje, prazoCalendario, diasFinais) {
+  const [d, m, a] = hoje.split('/').map(Number);
+  const hojeMs = Date.UTC(a, m - 1, d);
+  const [pa, pm, pd] = prazoCalendario.split('-').map(Number);
+  const prazoMs = Date.UTC(pa, pm - 1, pd);
+  const diffDias = Math.round((hojeMs - prazoMs) / 86400000);
+  return diasFinais + diffDias;
+}
+
 // Só atribuidas_im/em_execucao_im têm leiturista (pendentes_im não tem
 // ninguém atribuído ainda, então não entra aqui — ver TABELAS_MASSIVA em
 // massivasService.js). Pega sempre o batch mais recente de cada tabela.
@@ -88,6 +124,7 @@ async function listarColaboradoresMassivaHoje(db) {
       digitados,
       naoDigitados,
       tipoServico: 'massiva',
+      diasPrazoRegulatorio: null,
       primeiraVez: linha.hr_import,
       ultimaVez: linha.hr_import,
       historico: [{ horaImport: linha.hr_import, situacao: linha.situacao, digitados, naoDigitados }],
@@ -100,18 +137,21 @@ async function listarColaboradoresMassivaHoje(db) {
 async function listarAtividadeHoje(db) {
   const hoje = new Date().toLocaleDateString('pt-BR');
 
-  const { rows: linhas } = await db.query(
-    `
-    SELECT livro, etapa, situacao, qtd_digitados_nao_digitados, hora_import,
-      data_recebimento, data_prevista_limite
-    FROM contr_execucao_leitura
-    WHERE data_import = $1
-      AND situacao IS NOT NULL
-      AND situacao <> 'Pendente'
-    ORDER BY hora_import ASC, id ASC
-    `,
-    [hoje],
-  );
+  const [{ rows: linhas }, mapaPrazoRegulatorio] = await Promise.all([
+    db.query(
+      `
+      SELECT livro, etapa, situacao, qtd_digitados_nao_digitados, hora_import,
+        data_recebimento, data_prevista_limite
+      FROM contr_execucao_leitura
+      WHERE data_import = $1
+        AND situacao IS NOT NULL
+        AND situacao <> 'Pendente'
+      ORDER BY hora_import ASC, id ASC
+      `,
+      [hoje],
+    ),
+    obterMapaPrazoRegulatorio(db),
+  ]);
 
   const porColaborador = new Map();
   let ultimaHoraGeral = null;
@@ -183,6 +223,8 @@ async function listarAtividadeHoje(db) {
         ultimaMudancaColaborador = ultimaMudancaLivro;
       }
 
+      const prazoRegulatorio = mapaPrazoRegulatorio.get(Number(livro));
+
       livros.push({
         livro,
         etapa: ultima.etapa,
@@ -190,6 +232,9 @@ async function listarAtividadeHoje(db) {
         digitados: ultima.digitados,
         naoDigitados: ultima.naoDigitados,
         tipoServico: classificarTipoServico(ultima.dataRecebimento, ultima.dataPrevistaLimite),
+        diasPrazoRegulatorio: prazoRegulatorio
+          ? calcularDiasPrazoRegulatorio(hoje, prazoRegulatorio.prazoCalendario, prazoRegulatorio.diasFinais)
+          : null,
         primeiraVez: primeira.horaImport,
         ultimaVez: ultima.horaImport,
         historico,

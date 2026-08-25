@@ -55,6 +55,10 @@ export interface LivroAtividade {
   // ou releitura (mesma regra da ADR 0006/0011); 'massiva' = livro vindo das
   // tabelas de massiva (atribuidas_im/em_execucao_im), não de contr_execucao_leitura.
   tipoServico: 'leitura' | 'releitura' | 'massiva' | null;
+  // Dias efetivos frente ao prazo regulatório (prazo_reg_livros — ver ADR
+  // 0012 Adendo 4). null = livro sem correspondência na planilha (não
+  // avaliado) ou de massiva (nunca teve essa correspondência).
+  diasPrazoRegulatorio: number | null;
   primeiraVez: string;
   ultimaVez: string;
   historico: HistoricoLivroItem[];
@@ -90,14 +94,28 @@ export interface AtividadeHojeResponse {
   afastamentosHoje: Record<string, AfastamentoInfo>;
 }
 
+// % de execução do dia = digitados / (digitados + pendentes). 0 quando não
+// há nenhuma atividade registrada ainda (parado, ou sem atividade nenhuma) —
+// não é "sem dado", é "0% feito até agora", que é exatamente o que a barra
+// deve mostrar.
+export function percentualExecucao(atividade: AtividadeColaborador | undefined | null): number {
+  if (!atividade) return 0;
+  const total = atividade.totalRealizadas + atividade.totalPendentes;
+  return total > 0 ? (atividade.totalRealizadas / total) * 100 : 0;
+}
+
 // Ordem de gravidade: sem sincronismo > sem serviço (nenhuma atividade hoje)
-// > parado > ativo. Dentro do mesmo destaque, quanto mais tempo sem
-// mudança, maior a pontuação.
+// > parado > ativo. Dentro de sem sincronismo/parado, quanto mais tempo sem
+// mudança, maior a pontuação (minutosParado) — critério já validado, não
+// mexido. Dentro de "ativo" (quem está executando de verdade), a pontuação
+// passou a ser pelo percentual de execução: quanto MENOR o % concluído,
+// mais crítico, e por isso aparece primeiro na lista (pedido do usuário).
+// minutosParado ainda desempata dentro da mesma faixa de %.
 function pontuacaoDestaque(atividade: AtividadeColaborador | undefined): number {
   if (!atividade) return 1_500_000;
   if (atividade.semSincronismo) return 2_000_000 + atividade.minutosParado;
   if (atividade.parado) return 1_000_000 + atividade.minutosParado;
-  return atividade.minutosParado;
+  return (100 - percentualExecucao(atividade)) * 1000 + atividade.minutosParado;
 }
 
 // As quatro categorias dos toggles. "semServico" é quem não tem nenhum

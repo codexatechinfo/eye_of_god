@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T05:25:00.000Z",
+  "atualizado_em": "2026-08-26T06:00:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "e923755",
   "seguranca": {
@@ -422,6 +422,13 @@
       "skill": "/projeto-novo",
       "evento": "Coluna Situação da tabela Detalhe por livro ganhou badge colorido",
       "detalhe": "Usuário pediu destaque de cor na coluna Situação, mesma paleta dos badges de status já usados na barra de resumo (âmbar/Pendentes, azul/Atribuídos, verde/Em Execução). Célula linha.status trocada de texto simples pra um badge arredondado (mesmo padrão visual já usado na coluna Tipo, que já tinha bg-blue-100/bg-amber-100), condicionado por [ngClass] nos 3 valores literais que o backend já envia (ROTULO_STATUS em massivasService.js: 'Pendente'/'Atribuída'/'Em Execução') — sem mudança de backend. Testado ao vivo nas duas abas, filtrando por cada status pra confirmar as 3 cores: Pendente com bg-amber-100/text-amber-700, Atribuída com bg-blue-100/text-blue-700, Em Execução com bg-emerald-100/text-emerald-700. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só de template."
+    },
+    {
+      "data": "2026-08-26T06:00:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Percentual de execução e dias do prazo regulatório por colaborador/livro",
+      "detalhe": "Três pedidos na mesma mensagem. 1) Barra de % de execução abaixo do nome de cada colaborador na lista do Trilho, e reordenar a lista pelos mais críticos. 2) Coluna de percentual nas tabelas de detalhe (Massivas e Monitoramento de Livros). 3) Dias do prazo regulatório por livro, na lista Livros de hoje do Trilho e nas tabelas. Percentual (itens 1/2) não precisou de backend novo — digitados/(digitados+pendentes) já estava disponível em toda linha/colaborador; colaboradores.service.ts ganhou percentualExecucao() exportada, massivas-view.ts ganhou percentualLinha()/corPercentual() e a coluna Progresso (barra+%) nas duas abas. pontuacaoDestaque() (ordenação do Trilho): os tiers sem sincronismo/parado (já validados em sessões anteriores) não foram mexidos; só o tier 'ativo' passou a ordenar por percentual ascendente (menor % primeiro = mais crítico), com minutosParado como desempate secundário — percentual não diferenciaria parado (sempre 0% por definição) e sem sincronismo já reflete um problema mais grave que não deveria ser mascarado por %. Dias do prazo regulatório (item 3) precisou de backend: reaproveitada a fórmula de obterFaixasDias (ADR 0012 Adendo 4) mas expondo o valor bruto por livro em vez de só contar buckets. detalheContr() (massivasService.js) passou a sempre incluir EFETIVO_PRAZO_REG_SQL e sempre fazer joinPrazoRegLivros() (antes só entrava com o filtro faixaDias ativo) — testado 1638 linhas em 0.24s, sem impacto perceptível. listarAtividadeHoje() (atividadeColaboradoresService.js): como essa query processa todas as linhas cruas do dia (não deduplicada por livro), um JOIN por linha seria caro; implementado como uma segunda consulta pequena (obterMapaPrazoRegulatorio) buscando livro->{diasFinais,prazoCalendario} do mês corrente uma vez só, virando um Map, com o cálculo em JS (calcularDiasPrazoRegulatorio) na hora de montar cada livro — testado 292 colaboradores/~1600 livros com correspondência em 1.7s. Só vale pra leitura/releitura (massiva sempre null, mesma decisão de todas as ADRs anteriores sobre esse assunto). FRONTEND: badge 'Nd' colorido por faixa na lista Livros de hoje do Trilho; coluna 'Prazo regulatório' só na tabela de Monitoramento de Livros (ausente em Massivas). Testado ao vivo (JWT de teste): filtro 'Ativo' do Trilho mostrando ordem crescente de % (0/0/0/5/7/8/8/9...), barra vermelha confirmada em 5%; colaborador GUSTAVO FOGACA DOS SANTOS expandido com badges 33d/32d nos livros de leitura e nenhum badge nos de massiva; tabela de Monitoramento de Livros com as duas colunas novas (43% em âmbar batendo com 111/(111+145)); aba Massivas com Progresso mas sem Prazo regulatório. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver ADR 0015."
     }
   ]
 }

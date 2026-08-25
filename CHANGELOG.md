@@ -7,6 +7,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Barra de % de execução abaixo do nome de cada colaborador na lista do Trilho; a lista
+  passa a ordenar quem está "ativo" pelos mais críticos (menor % primeiro). Coluna
+  "Progresso" (barra + %) nova na tabela "Detalhe por livro" das duas abas. Coluna "Prazo
+  regulatório" (dias efetivos frente a `prazo_reg_livros`) nova na tabela de Monitoramento de
+  Livros e badge "Nd" na lista "Livros de hoje" do Trilho. Ver
+  [ADR 0015](docs/adr/0015-percentual-execucao-e-prazo-regulatorio-por-livro.md).
 - Coluna "Situação" da tabela "Detalhe por livro" ganhou badge colorido (âmbar/Pendente,
   azul/Atribuída, verde/Em Execução) — mesmas cores já usadas nos badges de status da barra
   de resumo, nas duas abas.

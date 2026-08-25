@@ -735,8 +735,9 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
   if (condicaoPrazoExterna) condicoesExtras.push(condicaoPrazoExterna);
 
   // Filtro clicável das faixas <27/33/34+ dias (mesma fórmula de
-  // obterFaixasDias) — join só entra quando o filtro está ativo, pra não
-  // pesar a consulta padrão sem esse filtro.
+  // obterFaixasDias). O join com prazo_reg_livros sempre entra agora (não só
+  // quando o filtro está ativo) porque dias_prazo_regulatorio também é
+  // exposto como coluna pro FRONTEND mostrar o valor bruto na tabela.
   const condicaoFaixa = condicaoFaixaDias(filtros.faixaDias);
   if (condicaoFaixa) condicoesExtras.push(condicaoFaixa);
 
@@ -747,18 +748,19 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
   }
 
   const sql = `
-    SELECT status_calc AS status, tipo_calc AS tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista_calc AS leiturista
+    SELECT status_calc AS status, tipo_calc AS tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista_calc AS leiturista, dias_prazo_regulatorio
     FROM (
       SELECT DISTINCT ON (c.livro) c.livro, c.etapa, cl.regional,
         to_char(${PRAZO_CONTR_SQL}, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS dt_prev_limite,
         ${digitados} AS digitados, ${naoDigitados} AS nao_digitados,
         ${STATUS_CONTR_SQL} AS status_calc,
         ${LEITURISTA_CONTR_SQL} AS leiturista_calc,
-        ${TIPO_SERVICO_CONTR_SQL} AS tipo_calc
+        ${TIPO_SERVICO_CONTR_SQL} AS tipo_calc,
+        ${EFETIVO_PRAZO_REG_SQL} AS dias_prazo_regulatorio
       FROM contr_execucao_leitura c
       LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
       ${joinCalendarioContr()}
-      ${filtros.faixaDias ? joinPrazoRegLivros() : ''}
+      ${joinPrazoRegLivros()}
       WHERE c.data_import = $1 AND c.hora_import = $2
         ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
       ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC

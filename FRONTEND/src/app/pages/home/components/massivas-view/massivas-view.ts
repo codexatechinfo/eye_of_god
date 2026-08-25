@@ -5,7 +5,18 @@ import { DetalheLinha, EscopoMassivas, MassivasService, StatusMassivas } from '.
 import { ColaboradoresService } from '../../../../services/colaboradores.service';
 
 type CorLinha = 'verde' | 'amarelo' | 'vermelho';
-type ColunaOrdenavel = 'regional' | 'livro' | 'etapa' | 'status' | 'tipoServico' | 'dt_prev_limite' | 'quantidade' | 'leiturista' | 'diasAtraso';
+type ColunaOrdenavel =
+  | 'regional'
+  | 'livro'
+  | 'etapa'
+  | 'status'
+  | 'tipoServico'
+  | 'dt_prev_limite'
+  | 'quantidade'
+  | 'leiturista'
+  | 'diasAtraso'
+  | 'percentual'
+  | 'diasPrazoRegulatorio';
 type DirecaoOrdenacao = 'asc' | 'desc';
 
 // Limite pra "comunicação" na barra de resumo (anexo2 do usuário) — diferente
@@ -159,6 +170,10 @@ export class MassivasView implements OnInit {
         return linha.leiturista ?? '';
       case 'diasAtraso':
         return this.diasAtraso(linha);
+      case 'percentual':
+        return this.percentualLinha(linha);
+      case 'diasPrazoRegulatorio':
+        return linha.dias_prazo_regulatorio ?? -Infinity;
     }
   }
 
@@ -337,5 +352,18 @@ export class MassivasView implements OnInit {
     if (prazo < hoje) return 'vermelho';
     if (prazo === hoje) return 'amarelo';
     return 'verde';
+  }
+
+  // % de execução do livro (digitados/total) — mesma conta usada no card
+  // "Progresso de atividades" da barra de resumo, só que por linha.
+  percentualLinha(linha: DetalheLinha): number {
+    const total = linha.digitados + linha.nao_digitados;
+    return total > 0 ? (linha.digitados / total) * 100 : 0;
+  }
+
+  corPercentual(pct: number): CorLinha {
+    if (pct >= 70) return 'verde';
+    if (pct >= 30) return 'amarelo';
+    return 'vermelho';
   }
 }

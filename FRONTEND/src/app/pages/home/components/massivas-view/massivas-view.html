@@ -316,8 +316,14 @@
             <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('dt_prev_limite')">
               Data limite{{ indicadorOrdenacao('dt_prev_limite') }}
             </th>
+            <th *ngIf="escopo === 'leiturarelitura'" class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('diasPrazoRegulatorio')" title="Dias efetivos frente ao prazo regulatório (prazo_reg_livros) — '—' quando o livro não tem correspondência na planilha do mês">
+              Prazo regulatório{{ indicadorOrdenacao('diasPrazoRegulatorio') }}
+            </th>
             <th class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('quantidade')">
               Executados/Pendentes{{ indicadorOrdenacao('quantidade') }}
+            </th>
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('percentual')">
+              Progresso{{ indicadorOrdenacao('percentual') }}
             </th>
             <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('leiturista')">
               Leiturista{{ indicadorOrdenacao('leiturista') }}
@@ -361,7 +367,26 @@
               >{{ linha.tipo_servico }}</span>
             </td>
             <td class="px-3 py-1.5 text-slate-600 tabular-nums">{{ linha.dt_prev_limite ? (linha.dt_prev_limite | date: 'dd/MM/yyyy':'UTC') : '—' }}</td>
+            <td *ngIf="escopo === 'leiturarelitura'" class="px-3 py-1.5 text-right tabular-nums text-slate-600">
+              {{ linha.dias_prazo_regulatorio !== null ? (linha.dias_prazo_regulatorio + ' dias') : '—' }}
+            </td>
             <td class="px-3 py-1.5 text-right tabular-nums text-slate-600">{{ linha.digitados }}/{{ linha.nao_digitados }}</td>
+            <td class="px-3 py-1.5">
+              <div class="flex items-center gap-1.5 w-24">
+                <span class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <span
+                    class="block h-full rounded-full"
+                    [style.width.%]="percentualLinha(linha)"
+                    [ngClass]="{
+                      'bg-emerald-500': corPercentual(percentualLinha(linha)) === 'verde',
+                      'bg-yellow-500': corPercentual(percentualLinha(linha)) === 'amarelo',
+                      'bg-red-500': corPercentual(percentualLinha(linha)) === 'vermelho'
+                    }"
+                  ></span>
+                </span>
+                <span class="text-[10.5px] tabular-nums text-slate-500 w-8 text-right">{{ percentualLinha(linha) | number: '1.0-0' }}%</span>
+              </div>
+            </td>
             <td class="px-3 py-1.5 text-slate-600 truncate max-w-[180px]" [title]="linha.leiturista || ''">{{ linha.leiturista || '—' }}</td>
             <td
               class="px-3 py-1.5 text-right tabular-nums font-semibold"

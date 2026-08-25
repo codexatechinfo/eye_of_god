@@ -182,6 +182,45 @@ export class MassivasView implements OnInit {
     });
   }
 
+  // Paginação client-side — o detalhe inteiro já vem numa resposta só, então
+  // paginar aqui em vez de ir ao backend a cada página. OPCOES_ITENS_POR_PAGINA
+  // fica exposto pro template montar o <select>.
+  readonly OPCOES_ITENS_POR_PAGINA = [25, 50, 100, 200];
+
+  totalPaginas(): number {
+    return Math.max(1, Math.ceil(this.linhasOrdenadas().length / this.massivasService.itensPorPagina()));
+  }
+
+  // Corrige sozinho quando um filtro reduz o resultado e a página guardada
+  // ficou além do novo total (em vez de mostrar uma página vazia).
+  paginaEfetiva(): number {
+    return Math.min(Math.max(1, this.massivasService.paginaAtual()), this.totalPaginas());
+  }
+
+  linhasPaginadas(): DetalheLinha[] {
+    const porPagina = this.massivasService.itensPorPagina();
+    const inicio = (this.paginaEfetiva() - 1) * porPagina;
+    return this.linhasOrdenadas().slice(inicio, inicio + porPagina);
+  }
+
+  irParaPagina(pagina: number): void {
+    this.massivasService.paginaAtual.set(Math.min(Math.max(1, pagina), this.totalPaginas()));
+  }
+
+  alterarItensPorPagina(qtd: number): void {
+    this.massivasService.itensPorPagina.set(Number(qtd));
+    this.massivasService.paginaAtual.set(1);
+  }
+
+  intervaloExibido(): string {
+    const total = this.linhasOrdenadas().length;
+    if (!total) return '0 registros';
+    const porPagina = this.massivasService.itensPorPagina();
+    const inicio = (this.paginaEfetiva() - 1) * porPagina + 1;
+    const fim = Math.min(inicio + porPagina - 1, total);
+    return `${inicio}–${fim} de ${total} registro${total === 1 ? '' : 's'}`;
+  }
+
   valorCard(status: 'pendentes' | 'atribuidas' | 'emExecucao' | 'total' | 'noPrazo' | 'prazoFinal' | 'atrasadas'): number {
     const resumo = this.massivasService.resumo();
     if (!resumo) return 0;

@@ -122,6 +122,14 @@ export class MassivasService implements OnDestroy {
   carregandoDetalhe = signal(true);
   erroDetalhe = signal<string | null>(null);
 
+  // Paginação da tabela "Detalhe por livro" — client-side (o detalhe inteiro
+  // já vem numa única resposta). Fica no service (não no componente) pra
+  // resetar de forma centralizada em buscarTudo(), e porque cada aba já tem
+  // sua própria instância de MassivasService (ADR 0010), então a página fica
+  // isolada por aba do mesmo jeito que os outros filtros já ficam.
+  paginaAtual = signal(1);
+  itensPorPagina = signal(50);
+
   livroSelecionado = signal<string | null>(null);
   historicoLivro = signal<HistoricoLivroEvento[]>([]);
   carregandoHistorico = signal(false);
@@ -146,7 +154,10 @@ export class MassivasService implements OnDestroy {
     this.filtroTipoServico.set(escopo);
     this.carregarOpcoesFiltro();
     this.buscarTudo();
-    this.intervaloId = setInterval(() => this.buscarTudo(), this.INTERVALO_ATUALIZACAO_MS);
+    // resetarPagina: false — o polling só atualiza os números, não deve
+    // chutar o usuário de volta pra página 1 a cada 60s enquanto ele
+    // navega a tabela.
+    this.intervaloId = setInterval(() => this.buscarTudo(false), this.INTERVALO_ATUALIZACAO_MS);
   }
 
   ngOnDestroy(): void {
@@ -179,7 +190,8 @@ export class MassivasService implements OnDestroy {
     return params;
   }
 
-  buscarTudo(): void {
+  buscarTudo(resetarPagina = true): void {
+    if (resetarPagina) this.paginaAtual.set(1);
     this.buscarResumo();
     this.buscarDetalhe();
   }

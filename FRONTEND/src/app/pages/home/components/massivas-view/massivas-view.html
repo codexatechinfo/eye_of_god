@@ -279,7 +279,7 @@
     <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
       <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wide">Detalhe por livro</h3>
       <span class="text-[11px] text-slate-400" *ngIf="!massivasService.carregandoDetalhe()">
-        {{ massivasService.detalhe().length }} registro{{ massivasService.detalhe().length === 1 ? '' : 's' }}
+        {{ intervaloExibido() }}
       </span>
     </div>
 
@@ -329,7 +329,7 @@
         </thead>
         <tbody>
           <tr
-            *ngFor="let linha of linhasOrdenadas()"
+            *ngFor="let linha of linhasPaginadas()"
             (click)="abrirHistorico(linha.livro)"
             class="border-b border-slate-50 last:border-0 cursor-pointer transition-colors hover:brightness-95"
             [ngClass]="{
@@ -367,6 +367,61 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Paginação — client-side, o detalhe inteiro já veio numa resposta só. -->
+    <div
+      class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-t border-slate-100"
+      *ngIf="!massivasService.carregandoDetalhe() && !massivasService.erroDetalhe() && massivasService.detalhe().length"
+    >
+      <div class="flex items-center gap-2 text-[11px] text-slate-500">
+        <span>Linhas por página</span>
+        <select
+          [ngModel]="massivasService.itensPorPagina()"
+          (ngModelChange)="alterarItensPorPagina($event)"
+          class="text-xs border border-slate-200 rounded-md px-1.5 py-1 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+        >
+          <option *ngFor="let opcao of OPCOES_ITENS_POR_PAGINA" [value]="opcao">{{ opcao }}</option>
+        </select>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          (click)="irParaPagina(1)"
+          [disabled]="paginaEfetiva() === 1"
+          class="text-[11px] font-medium text-slate-500 hover:text-blue-600 disabled:text-slate-300 disabled:cursor-not-allowed cursor-pointer px-2 py-1 rounded transition-colors"
+        >
+          « Primeira
+        </button>
+        <button
+          type="button"
+          (click)="irParaPagina(paginaEfetiva() - 1)"
+          [disabled]="paginaEfetiva() === 1"
+          class="text-[11px] font-medium text-slate-500 hover:text-blue-600 disabled:text-slate-300 disabled:cursor-not-allowed cursor-pointer px-2 py-1 rounded transition-colors"
+        >
+          ‹ Anterior
+        </button>
+        <span class="text-[11px] text-slate-500 tabular-nums px-1.5">
+          Página {{ paginaEfetiva() }} de {{ totalPaginas() }}
+        </span>
+        <button
+          type="button"
+          (click)="irParaPagina(paginaEfetiva() + 1)"
+          [disabled]="paginaEfetiva() === totalPaginas()"
+          class="text-[11px] font-medium text-slate-500 hover:text-blue-600 disabled:text-slate-300 disabled:cursor-not-allowed cursor-pointer px-2 py-1 rounded transition-colors"
+        >
+          Próxima ›
+        </button>
+        <button
+          type="button"
+          (click)="irParaPagina(totalPaginas())"
+          [disabled]="paginaEfetiva() === totalPaginas()"
+          class="text-[11px] font-medium text-slate-500 hover:text-blue-600 disabled:text-slate-300 disabled:cursor-not-allowed cursor-pointer px-2 py-1 rounded transition-colors"
+        >
+          Última »
+        </button>
+      </div>
     </div>
   </div>
 

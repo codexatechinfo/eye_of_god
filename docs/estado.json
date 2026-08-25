@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T04:35:00.000Z",
+  "atualizado_em": "2026-08-26T05:00:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "f7ce839",
   "seguranca": {
@@ -401,6 +401,13 @@
       "skill": "/projeto-novo",
       "evento": "Dropdown de prazo regulatório removido da aba Massivas",
       "detalhe": "Usuário pediu pra remover o filtro (dropdown 'Prazo regulatório') adicionado no ciclo anterior à barra de filtros da aba Massivas. Removido o <select *ngIf=\"escopo === 'massiva'\"> de massivas-view.html; o dropdown equivalente em Monitoramento de Livros (faixas <27/33/34+ dias) não foi tocado, o pedido mencionou só Massivas. Os badges clicáveis No prazo/Prazo final/Atraso na barra de resumo (que já existiam desde a decisão original da ADR 0012, reconfirmados no ciclo do adendo 5) continuam funcionando normalmente — só o controle redundante na barra de filtros de topo saiu; filtroPrazo (o signal por trás) não mudou. Testado ao vivo: barra de filtros da aba Massivas voltou a ter só Regional/Etapa/Status; badges de prazo continuam clicáveis e filtrando a tabela; aba Monitoramento de Livros com o dropdown de faixas de dias intacto. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só de template, nenhum backend tocado. Ver adendo 7 da ADR 0012."
+    },
+    {
+      "data": "2026-08-26T05:00:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Paginação na tabela Detalhe por livro (Massivas e Monitoramento de Livros)",
+      "detalhe": "Usuário pediu paginação com escolha de linhas por página na tabela 'Detalhe por livro' das duas abas (mesmo componente MassivasView, ADR 0010, então uma implementação cobre as duas). Decisão: client-side, não uma nova consulta ao backend por página — o detalhe inteiro já vem numa resposta HTTP só e o volume (milhares de linhas, não milhões) é pequeno o bastante pra recortar no array já carregado. MassivasService ganhou paginaAtual/itensPorPagina (padrão 50; opções 25/50/100/200), no service (não no componente) pelo mesmo motivo dos outros filtros — cada aba isolada. MassivasView ganhou linhasPaginadas()/totalPaginas()/paginaEfetiva() (clamp entre 1 e o total — corrige sozinho se um filtro reduzir o resultado e a página guardada ficar além do novo total)/irParaPagina()/alterarItensPorPagina()/intervaloExibido() (texto 'X–Y de Z registros' no cabeçalho). Problema real descoberto ao planejar: a tela já tem polling de 60s (ADR 0012) que rebusca os dados sozinho — se a página resetasse a cada busca, o usuário navegando na página 5 seria chutado de volta pra página 1 a cada minuto. Resolvido com buscarTudo(resetarPagina = true): todo ponto que já reage a filtro continua chamando buscarTudo() sem argumento (reseta normalmente), só o setInterval do polling passou a chamar buscarTudo(false) explicitamente — sem precisar tocar em cada call site de filtro individualmente. Testado ao vivo (JWT de teste): '51–100 de 1638 registros'/'Página 2 de 33' navegando com Próxima; trocar 50 pra 200 itens por página recalculou pra 9 páginas e voltou pra página 1; clicar num filtro de status na página 2 voltou sozinho pra página 1 com o novo total (5 páginas); aba Massivas com paginação independente (1122 registros, 23 páginas), confirmando isolamento por instância de MassivasService. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só de FRONTEND. Ver ADR 0014."
     }
   ]
 }

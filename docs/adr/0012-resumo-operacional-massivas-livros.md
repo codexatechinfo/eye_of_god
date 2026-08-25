@@ -141,6 +141,64 @@ a aba é aberta, e depois disso fica viva — só escondida — pelo resto da se
 ao vivo: filtro Regional=Cascavel setado em Monitoramento de Livros sobrevive a uma
 passagem pela aba Massivas e volta.
 
+## Adendo 4 — faixas de dias contavam linha "órfã" de `prazo_reg_livros`; correção pra exigir correspondência real
+
+Usuário pediu exemplo concreto de cada faixa (`<27`/`33`/`34+`) pra conferir se o cálculo
+tinha sido entendido certo. Os três exemplos trazidos (livros `32407`, `22792`, `35164`)
+não apareciam na busca "Buscar livro..." da própria tela — investigado e a causa raiz era
+dupla: (1) `prazo_reg_livros.livro` é gravado **sem** zero à esquerda (`"24188"`, 5 dígitos),
+enquanto `contr_execucao_leitura.livro` (fonte da tabela de detalhe) usa sempre 6 dígitos
+com zero à esquerda (`"041481"`) — formatos incompatíveis pra busca direta; (2) mesmo
+corrigindo o formato manualmente, 2 dos 3 exemplos (`032407`, `035164`) **não existiam** em
+`contr_execucao_leitura` de jeito nenhum — a implementação original consultava
+`prazo_reg_livros` sozinha (`obterFaixasDias` fazia `SELECT ... FROM prazo_reg_livros WHERE
+mes_ref = ...`), contando **toda** linha da planilha do mês, sem checar se aquele livro
+tinha alguma atividade viva no scraping.
+
+Usuário esclareceu a regra correta: "prazo_reg_livros é apenas pra ser consultada, ela não
+pode aparecer como resultado no painel — o livro em contr_execucao_leitura que vai ser
+comparado com o livro de prazo_reg_livros e se encontrar correspondência que vai fazer o
+que já lhe foi informado [a fórmula de dias_efetivos]". Ou seja: `prazo_reg_livros` é uma
+tabela de **lookup**, nunca fonte de linhas por conta própria — o ponto de partida tem que
+ser sempre o livro vivo em `contr_execucao_leitura` (o mesmo "último lote" usado no resto da
+tela), e só entra em alguma faixa quando esse livro **também** tem uma linha correspondente
+em `prazo_reg_livros` do mês corrente. Livro sem correspondência não conta como "0 dias" —
+simplesmente não é avaliado, fica de fora de qualquer faixa.
+
+`obterFaixasDias` reescrita: de `FROM prazo_reg_livros` solto para `FROM
+contr_execucao_leitura c ... JOIN prazo_reg_livros p ON p.livro::int = c.livro::int AND
+p.mes_ref = ...` (INNER JOIN, não LEFT — livro sem par simplesmente cai fora), com o mesmo
+dedup por livro (`DISTINCT ON`, menor quantidade restante) e mesmo filtro de regional (via
+`cidades_localidades`) que as outras contagens dessa tela já usam. `p.livro::int =
+c.livro::int` em vez de comparar string, pra ignorar a diferença de zero à esquerda — os
+dois lados são sempre numéricos, conferido contra as ~410 mil linhas das duas tabelas antes
+de assumir isso (`livro !~ '^[0-9]+$'` = 0 em ambas). "Hoje" no cálculo de `dias_efetivos`
+passou de `CURRENT_DATE` pra `c.data_import` (data do próprio lote de
+`contr_execucao_leitura`) — mesmo princípio já usado em `IMPORT_TS_CONTR_SQL`/
+`PRAZO_CONTR_SQL` no resto do arquivo: o "agora" do app é o momento do último scrape, não o
+relógio real. `obterResumo` só chama `obterFaixasDias` quando há lote de leitura/releitura
+(`ultimoBatchLeitura`) — faixas de dias nunca fez sentido pra escopo `massiva`, que já não
+usa esse card no FRONTEND desde o Adendo 3.
+
+Bug pego no processo: primeira versão do filtro de regional usou o offset de parâmetro
+errado (`$3` fixo em vez de `$${parametros.length + 2}`, o mesmo padrão já usado em
+`contarFonteContr`) — `?regional=CASCAVEL` quebrava com "could not determine data type of
+parameter $3" no primeiro teste ao vivo. Corrigido pro mesmo padrão de offset do resto do
+arquivo.
+
+Números mudaram bastante com a correção: sem filtro, as faixas foram de 161/663/10680 (total
+11.504 — contando toda a planilha do mês, órfã ou não) para 14/143/56 (total 213 — só livros
+com atividade viva hoje E correspondência na planilha). A ressalva registrada nas
+Consequências originais deste ADR ("34+ chega a 10.680, bem mais que o print de referência")
+já apontava nessa direção — hoje fica confirmado: o excesso era de fato linha de
+`prazo_reg_livros` sem contrapartida no scraping ativo, como a ressalva especulou.
+
+Testado ao vivo (JWT de teste): sem filtro, API retornou 14/143/56 (a query isolada direto
+no banco deu 14/144/57 — diferença de 1 esperada, job de coleta roda em paralelo em segundo
+plano); com `regional=CASCAVEL`, 7/17/6, um subconjunto plausível do total. Confirmado
+visualmente na aba Monitoramento de Livros. Suíte de isolamento de tenant (12 testes)
+continua passando.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries

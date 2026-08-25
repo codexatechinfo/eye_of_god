@@ -45,6 +45,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Faixas &lt;27/33/34+ dias (barra de resumo, ADR 0012) contavam **toda** linha de
+  `prazo_reg_livros` do mês, mesmo livro sem nenhuma correspondência viva em
+  `contr_execucao_leitura` — `prazo_reg_livros` é só uma tabela de consulta, não deve gerar
+  linha por conta própria. Reescrito pra partir do livro de `contr_execucao_leitura` e só
+  contar quando há correspondência real (`p.livro::int = c.livro::int`, os dois lados
+  gravam o número em formatos diferentes — com/sem zero à esquerda). Sem filtro, os totais
+  caíram de 161/663/10680 pra 14/143/56. Ver Adendo 4 da
+  [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
 - "Progresso de atividades" (barra de resumo, ADR 0012) somava leitura+releitura+massiva
   juntos em ambas as abas — efeito colateral de mesclar massiva na atividade do colaborador
   (ADR 0013). Aba Massivas chegou a mostrar 94526/206649 (um total incompatível com só

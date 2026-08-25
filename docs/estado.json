@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T03:20:00.000Z",
+  "atualizado_em": "2026-08-26T03:45:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "8f74d34",
   "seguranca": {
@@ -373,6 +373,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: 'Progresso de atividades' misturava leitura+releitura+massiva nas duas abas",
       "detalhe": "Usuário reportou (print) o card 'Progresso de atividades' na aba Massivas mostrando 94526/206649 (45.7%) — número incompatível com só massiva. Causa: MassivasView.progressoContagens() somava atividade.totalRealizadas/totalPendentes (os totais já agregados do colaborador), e esses totais passaram a incluir leitura+releitura+massiva juntos desde que a ADR 0013 mesclou atividade de massiva na mesma lista — contaminando o card nas DUAS abas (Massivas via de mais, Livros perdia a diferença sem perceber). Corrigido somando livro a livro (atividade.livros[]), filtrando por livro.tipoServico === 'massiva' (aba Massivas) ou !== 'massiva' (aba Livros) antes de somar digitados/naoDigitados; Agentes em campo/Comunicação continuam globais, de propósito (métrica de colaborador, não de aba, ver ADR 0012). Testado ao vivo (JWT de teste): Massivas caiu de 94526/206649 pra 0/2859; Livros ficou em 94526/203790 — a soma das duas (203790+2859=206649) bate exatamente com o número contaminado de antes, confirmando que a separação está certa sem perda nem duplicação. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando (mudança só em FRONTEND). Ver adendo da ADR 0013."
+    },
+    {
+      "data": "2026-08-26T03:45:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Corrigido: faixas <27/33/34+ dias contavam linha órfã de prazo_reg_livros",
+      "detalhe": "Usuário pediu exemplo concreto de cada faixa pra conferir o entendimento (3 livros trazidos: 32407, 22792, 35164) e reportou que nenhum aparecia na busca 'Buscar livro...' da própria tela. Investigado: (1) prazo_reg_livros.livro é gravado sem zero à esquerda (5 dígitos), enquanto contr_execucao_leitura.livro usa 6 dígitos com zero à esquerda — formatos incompatíveis pra busca direta; (2) mesmo corrigindo o formato, 2 dos 3 exemplos (032407, 035164) não existiam de jeito nenhum em contr_execucao_leitura — a implementação original consultava prazo_reg_livros sozinha, contando toda linha da planilha do mês sem checar se aquele livro tinha atividade viva no scraping. Usuário esclareceu a regra correta: prazo_reg_livros é só pra ser CONSULTADA, nunca pode aparecer como resultado — o livro de contr_execucao_leitura é comparado contra prazo_reg_livros, e só quando encontra correspondência aplica a fórmula de dias_efetivos. obterFaixasDias (massivasService.js) reescrita: de 'FROM prazo_reg_livros' solto para 'FROM contr_execucao_leitura c JOIN prazo_reg_livros p ON p.livro::int = c.livro::int' (INNER JOIN — livro sem par cai fora, não conta como zero), mesmo dedup por livro e mesmo filtro de regional que as outras contagens da tela já usam; 'hoje' no cálculo passou de CURRENT_DATE pra c.data_import (data do próprio lote), mesmo princípio já usado em IMPORT_TS_CONTR_SQL/PRAZO_CONTR_SQL no resto do arquivo. Bug pego no teste ao vivo: offset de parâmetro errado no filtro de regional ($3 fixo em vez do índice calculado, o padrão já usado em contarFonteContr) quebrava com 'could not determine data type of parameter $3' — corrigido pro mesmo padrão do resto do arquivo. Números mudaram bastante: sem filtro, de 161/663/10680 (total 11.504, contando toda a planilha) pra 14/143/56 (total 213, só livro vivo hoje com correspondência) — confirma a ressalva que já constava nas Consequências originais da ADR 0012 sobre esse excesso. Testado ao vivo (JWT de teste): API sem filtro deu 14/143/56 (query isolada direto no banco: 14/144/57, diferença de 1 esperada por causa do job de coleta em paralelo); com regional=CASCAVEL, 7/17/6. Suíte de isolamento de tenant (12 testes) continua passando. Ver adendo 4 da ADR 0012."
     }
   ]
 }

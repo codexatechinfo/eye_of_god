@@ -383,28 +383,41 @@ async function contarTotalMassivaDeduplicado(db, chaves, dataImport, horaImport,
   return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
 }
 
-// Faixas de "dias efetivos" por livro, a partir de prazo_reg_livros — tabela
-// separada das outras fontes (massiva/leitura/releitura), sem relação com
-// tipoServico. Regra dada pelo usuário: dias_finais é o nº de dias entre a
-// primeira leitura e o prazo regulatório (prazo_calendario) — um valor fixo
-// por livro, não "dias em atraso ao vivo". Pra saber o atraso de hoje, ajusta
-// esse valor pela diferença entre hoje e prazo_calendario: cada dia depois
-// do prazo soma 1, cada dia antes subtrai 1. Ex.: dias_finais=33,
-// prazo_calendario ontem → hoje conta 34; prazo_calendario daqui 6 dias →
-// hoje conta 27.
-async function obterFaixasDias(db, filtros) {
-  const condicoes = [`mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')`];
+// Faixas de "dias efetivos" por livro. prazo_reg_livros é só uma tabela de
+// CONSULTA (confirmado com o usuário) — nunca fonte de linhas por si só. O
+// ponto de partida é sempre o livro de contr_execucao_leitura (mesmo "último
+// lote" usado no resto da tela); só entra na contagem quando esse livro TEM
+// correspondência em prazo_reg_livros (INNER JOIN por número do livro — os
+// dois lados são sempre numéricos, mas prazo_reg_livros grava sem zero à
+// esquerda enquanto contr_execucao_leitura usa 6 dígitos, daí o ::int em vez
+// de comparar as strings). Livro sem linha correspondente em prazo_reg_livros
+// simplesmente não aparece em nenhuma faixa — não é "zero", é "não avaliado".
+//
+// dias_finais é o nº de dias entre a primeira leitura e o prazo regulatório
+// (prazo_calendario) — um valor fixo por livro, não "dias em atraso ao
+// vivo". Pra saber a situação de hoje, ajusta esse valor pela diferença
+// entre "hoje" e prazo_calendario: cada dia depois do prazo soma 1, cada dia
+// antes subtrai 1. "Hoje" aqui é o dia do último lote importado
+// (c.data_import), não CURRENT_DATE — mesmo princípio já usado em
+// IMPORT_TS_CONTR_SQL/PRAZO_CONTR_SQL: o "agora" do app é o momento do
+// último scrape, não o relógio real.
+async function obterFaixasDias(db, dataImport, horaImport, filtros) {
+  const condicoesExtras = [];
   const parametros = [];
   if (filtros.regional) {
     parametros.push(filtros.regional);
-    condicoes.push(`regional = $${parametros.length}`);
+    condicoesExtras.push(`cl.regional = $${parametros.length + 2}`);
   }
 
+  const digitados = condicaoQuantidade('c.qtd_digitados_nao_digitados');
+  const naoDigitados = condicaoQuantidadeNao('c.qtd_digitados_nao_digitados');
+
   // livros = 1 linha por livro (contagem direta); leituras = soma de
-  // volume_de_leituras — mesma dupla {livros, leituras} das outras contagens
-  // da tela, pro toggle "Livros/Leituras" valer aqui também.
+  // digitados+não digitados do próprio livro — mesma dupla {livros,
+  // leituras} das outras contagens da tela, pro toggle Livros/Leituras
+  // valer aqui também.
   const sql = `
-    SELECT faixa, COUNT(*)::int AS livros, COALESCE(SUM(volume_de_leituras::int), 0)::int AS leituras
+    SELECT faixa, COUNT(*)::int AS livros, COALESCE(SUM(leituras), 0)::int AS leituras
     FROM (
       SELECT
         CASE
@@ -412,18 +425,27 @@ async function obterFaixasDias(db, filtros) {
           WHEN efetivo = 33 THEN 'igual33'
           WHEN efetivo >= 34 THEN 'maior34'
         END AS faixa,
-        volume_de_leituras
+        leituras
       FROM (
-        SELECT dias_finais::int + (CURRENT_DATE - to_date(prazo_calendario, 'YYYY-MM-DD')) AS efetivo, volume_de_leituras
-        FROM prazo_reg_livros
-        WHERE ${condicoes.join(' AND ')}
-      ) calc
+        SELECT DISTINCT ON (c.livro)
+          c.livro,
+          (${digitados} + ${naoDigitados}) AS leituras,
+          p.dias_finais::int + (to_date(c.data_import, 'DD/MM/YYYY') - to_date(p.prazo_calendario, 'YYYY-MM-DD')) AS efetivo
+        FROM contr_execucao_leitura c
+        LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+        JOIN prazo_reg_livros p
+          ON p.livro::int = c.livro::int
+          AND p.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
+        WHERE c.data_import = $1 AND c.hora_import = $2
+          ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
+        ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
+      ) x
     ) classificado
     WHERE faixa IS NOT NULL
     GROUP BY faixa
   `;
 
-  const { rows } = await db.query(sql, parametros);
+  const { rows } = await db.query(sql, [dataImport, horaImport, ...parametros]);
   const mapa = Object.fromEntries(rows.map(r => [r.faixa, { livros: r.livros, leituras: r.leituras }]));
   return {
     menor27: mapa.menor27 ?? { ...CONTAGEM_ZERO },
@@ -481,6 +503,14 @@ async function obterResumo(db, filtros) {
     return somarContagens(...(await Promise.all(partes)));
   }
 
+  // Faixas de dias só fazem sentido pro livro de leitura/releitura (é o que
+  // tem correspondência possível em prazo_reg_livros) — sem esse lote, não
+  // há o que comparar.
+  const faixasDiasPromise =
+    (fontes.leitura || fontes.releitura) && ultimoBatchLeitura
+      ? obterFaixasDias(db, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros)
+      : Promise.resolve({ menor27: { ...CONTAGEM_ZERO }, igual33: { ...CONTAGEM_ZERO }, maior34: { ...CONTAGEM_ZERO } });
+
   const [pendentes, atribuidas, emExecucao, total, noPrazo, prazoFinal, atrasadas, faixasDias] = await Promise.all([
     contarStatus('pendentes'),
     contarStatus('atribuidas'),
@@ -489,7 +519,7 @@ async function obterResumo(db, filtros) {
     contarTotal({ condicaoPrazo: 'noPrazo' }),
     contarTotal({ condicaoPrazo: 'final' }),
     contarTotal({ condicaoPrazo: 'atrasada' }),
-    obterFaixasDias(db, filtros),
+    faixasDiasPromise,
   ]);
 
   return {

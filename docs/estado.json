@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.5.0",
+  "versao": "0.5.1",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T23:00:00.000Z",
+  "atualizado_em": "2026-08-25T23:45:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "9ac232c",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -310,6 +310,13 @@
       "skill": "/projeto-novo",
       "evento": "Aba Massivas separada de novo; Monitoramento de Livros só leitura/releitura; cards do Trilho em cor única",
       "detalhe": "Três pedidos na mesma mensagem. 1) Nova aba 'Massivas' com o comportamento de antes da ADR 0006 (só dado de massiva, sem seletor de tipo, sem coluna Tipo na tabela). 2) Aba 'Monitoramento de Livros' restrita a leitura/releitura — massiva nunca mais aparece lá; seletor de tipo perdeu a opção Massiva. Backend: massivasService.js ganhou o valor 'leiturarelitura' em fontesAtivas() (ativa leitura+releitura, exclui massiva) sem tocar nos branches existentes. Frontend: MassivasService deixou de ser singleton (providedIn:'root') — cada aba (mesmo componente MassivasView, dois usos) precisa de filtro isolado, senão trocar de aba vazava o filtro de uma pra outra; virou providers:[MassivasService] no componente, com um novo método iniciar(escopo) chamado no ngOnInit (o fetch automático no constructor rodava antes do @Input() escopo estar disponível, sempre pegando o valor errado). Chave interna de aba renomeada em home.ts: 'massivas' (que apontava pra Monitoramento de Livros, só o rótulo tinha mudado antes) virou 'livros'; 'massivas' agora é a aba nova de verdade. 3) Cards da aba Trilho (lista de colaboradores + painel do livro) pra cor única (azul) em vez de uma cor por indicador, com o degradê ainda mais discreto (opacidade 20%, era 40%) — 11 cards trocados nos dois arquivos, mantendo os 4 placeholders 'Em breve'/'--' neutros como estavam. Testado ao vivo (JWT de teste local): aba Massivas mostra 'Resumo de Massivas' sem seletor/coluna de tipo (1313 registros só massiva); aba Monitoramento de Livros mostra 'Resumo de Leitura/Releitura', seletor com 3 opções (sem Massiva), badges da tabela só leitura/releitura; cards do Trilho confirmados via getComputedStyle com borda azul uniforme. Suíte de isolamento de tenant (12 testes) roda de novo, continua passando. Ver ADR 0010."
+    },
+    {
+      "data": "2026-08-25T23:45:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Prazo real de leitura/releitura implementado (calendário + SLA de releitura por hora)",
+      "detalhe": "Usuário perguntou se o atraso já usava calendario_leitura por etapa+mês e um SLA de 24h/48h sobre data_recebimento — não usava (conferido no código: vinha de data_prevista_limite da própria linha, comparado por dia). Confirmado e implementado: leitura usa calendario_leitura.prazo_leitura por etapa (etapa extraída via regex, já que contr_execucao_leitura.etapa vem sempre sujo tipo 'ETAPA 18 - (528)' — conferido que 100% das ~317 mil linhas estão nesse formato); releitura usa data_recebimento+hora_recebimento + 24h (etapa urbana 01-19) ou 48h (etapa rural 21-38, sem etapa 20, confirmado contra o calendário). Como contr_execucao_leitura não tem coluna mes_ref própria, o mês pro join com calendario_leitura é inferido do mês de data_prevista_limite — conferido contra o banco que bate exatamente com prazo_leitura pra linhas de leitura. Bug real pego durante o teste: to_timestamp() do Postgres devolve timestamptz, e o driver pg converte timestamp sem timezone pro fuso horário do PROCESSO NODE (não UTC) — um valor tipo '2026-08-13 23:59:59' virava '2026-08-14T02:59:59.000Z' no JSON (+3h, fuso de Brasília). Só apareceu testando o VALOR real contra cálculo manual, não bastava a query rodar sem erro. Corrigido com ::timestamp explícito nas expressões e formatando a saída com to_char(...'Z') em vez de deixar o driver serializar o timestamp cru. FRONTEND (massivas-view.ts) também precisou de ajuste: diasAtraso()/corLinha() comparavam só por dia (consistente com o prazo antigo), agora incoerente já que releitura tem prazo por hora — reescrito pra comparar timestamp completo (agoraMs() usa data_import+hora_import do resumo, que já existia mas não era usado nesse cálculo) pro vermelho/atrasada, mantendo comparação por dia só pro amarelo/vence-hoje. Testado contra o banco real: releitura do livro 033330 bate exatamente com cálculo manual em SQL puro (recebido 21/08 17:55 urbana → prazo 22/08 17:55); leitura das etapas 29/31/32 batendo com calendario_leitura.prazo_leitura (13/08, 16/08, 17/08); resumo com filtro leiturarelitura soma certo (638 no prazo + 503 prazo final + 195 atraso = 1577 total). Testado ao vivo no browser: card Atraso filtra e colore linhas de vermelho corretamente, popup de histórico sem deslocamento de fuso. Suíte de isolamento de tenant (12 testes) continua passando. Ver ADR 0011."
     }
   ]
 }

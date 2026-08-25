@@ -133,32 +133,42 @@ export class MassivasView implements OnInit {
     this.massivasService.buscarTudo();
   }
 
-  private hojeUtcMs(): number | null {
-    const hoje = this.massivasService.resumo()?.dataImport;
-    if (!hoje) return null;
-    const [d, m, a] = hoje.split('/').map(Number);
-    return Date.UTC(a, m - 1, d);
+  // "Agora" é o momento do último scrape (data+hora de importação), não o
+  // relógio real — mesmo padrão do backend (IMPORT_TS_CONTR_SQL em
+  // massivasService.js). Precisão de hora importa desde que releitura passou
+  // a ter prazo por hora (recebimento + 24h/48h, não mais por dia).
+  private agoraMs(): number | null {
+    const r = this.massivasService.resumo();
+    if (!r?.dataImport) return null;
+    const [d, m, a] = r.dataImport.split('/').map(Number);
+    if (!r.horaImport) return Date.UTC(a, m - 1, d);
+    const [h, mi, s] = r.horaImport.split(':').map(Number);
+    return Date.UTC(a, m - 1, d, h || 0, mi || 0, s || 0);
   }
 
-  private prazoUtcMs(dtPrevLimite: string): number {
-    const d = new Date(dtPrevLimite);
+  private prazoMs(dtPrevLimite: string): number {
+    return new Date(dtPrevLimite).getTime();
+  }
+
+  private diaUtc(ms: number): number {
+    const d = new Date(ms);
     return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   }
 
   diasAtraso(linha: DetalheLinha): number {
-    const hoje = this.hojeUtcMs();
-    if (hoje === null || !linha.dt_prev_limite) return 0;
-    const prazo = this.prazoUtcMs(linha.dt_prev_limite);
-    const dias = Math.round((hoje - prazo) / 86400000);
+    const agora = this.agoraMs();
+    if (agora === null || !linha.dt_prev_limite) return 0;
+    const prazo = this.prazoMs(linha.dt_prev_limite);
+    const dias = Math.round((agora - prazo) / 86400000);
     return dias > 0 ? dias : 0;
   }
 
   corLinha(linha: DetalheLinha): CorLinha {
-    const hoje = this.hojeUtcMs();
-    if (hoje === null || !linha.dt_prev_limite) return 'verde';
-    const prazo = this.prazoUtcMs(linha.dt_prev_limite);
-    if (prazo < hoje) return 'vermelho';
-    if (prazo === hoje) return 'amarelo';
+    const agora = this.agoraMs();
+    if (agora === null || !linha.dt_prev_limite) return 'verde';
+    const prazo = this.prazoMs(linha.dt_prev_limite);
+    if (prazo < agora) return 'vermelho';
+    if (this.diaUtc(prazo) === this.diaUtc(agora)) return 'amarelo';
     return 'verde';
   }
 }

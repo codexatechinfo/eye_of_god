@@ -5,6 +5,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Corrigido
+
+- Prazo/atraso de leitura e releitura na aba "Monitoramento de Livros" estava usando
+  `data_prevista_limite` da própria linha, comparado por dia — não era a regra real.
+  Agora: leitura usa `calendario_leitura.prazo_leitura` por etapa (01–19 urbana, 21–38
+  rural); releitura usa `data_recebimento` + 24h (urbana) ou 48h (rural), por hora. De
+  quebra, corrigido um bug de fuso horário do driver `pg` (`timestamp` sem timezone virava
+  +3h no JSON) achado ao testar o valor real, não só se a query rodava. Ver
+  [ADR 0011](docs/adr/0011-prazo-real-leitura-releitura.md).
+
 ### Alterado
 
 - Abas reorganizadas: "Massivas" volta a ser uma aba própria (comportamento de antes da

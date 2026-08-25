@@ -146,3 +146,7 @@ sequenceDiagram
   massiva, sem filtro de tipo); "Monitoramento de Livros" restrita a leitura/releitura.
   `MassivasService` deixou de ser singleton (`providedIn: 'root'`) — cada aba tem sua
   própria instância via `providers` no componente, pra não vazar filtro entre elas.
+- [ADR 0011](adr/0011-prazo-real-leitura-releitura.md) — prazo de leitura vem de
+  `calendario_leitura.prazo_leitura` por etapa (01–19 urbana, 21–38 rural); prazo de
+  releitura é `data_recebimento` + 24h/48h. De quebra, corrigido um bug de fuso horário do
+  driver `pg` com `timestamp` sem timezone.

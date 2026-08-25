@@ -41,6 +41,75 @@ function condicaoTipoServico(tipo) {
   return null;
 }
 
+// Mesma regra de condicaoTipoServico, como expressão reaproveitável (o
+// prazo de cada linha também depende do tipo — ver PRAZO_CONTR_SQL).
+const TIPO_SERVICO_CONTR_SQL = `
+  CASE
+    WHEN c.data_recebimento IS NULL THEN NULL
+    WHEN to_date(c.data_recebimento, 'DD/MM/YYYY') <= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') THEN 'leitura'
+    ELSE 'releitura'
+  END
+`;
+
+// contr_execucao_leitura.etapa não vem limpo — o scraper grava "ETAPA 18 -
+// (528)" (o número entre parênteses é uma contagem que varia a cada ciclo,
+// não faz parte da etapa). Extrai só o número, mesma ideia do regex já usado
+// em atividadeColaboradoresService.js pro mesmo problema.
+const ETAPA_NUM_CONTR_SQL = `substring(c.etapa from '[0-9]+')::int`;
+
+// Confirmado com o usuário: etapas 01–19 são urbanas, 21–38 são rurais (não
+// existe etapa 20). Decide o SLA de releitura (24h/48h) e, por tabela, qual
+// linha de calendario_leitura vale.
+const ETAPA_URBANA_CONTR_SQL = `${ETAPA_NUM_CONTR_SQL} BETWEEN 1 AND 19`;
+
+// calendario_leitura não tem uma FK direta em contr_execucao_leitura (não
+// existe coluna mes_ref lá) — o mês é inferido a partir do mês de
+// data_prevista_limite, que na prática já é o mesmo prazo de
+// calendario_leitura.prazo_leitura pra linhas de leitura (conferido contra o
+// banco: etapa 18/mês 2026-08 bate 26/08/2026 nos dois lugares).
+function joinCalendarioContr() {
+  return `LEFT JOIN calendario_leitura cal
+    ON cal.etapa::int = ${ETAPA_NUM_CONTR_SQL}
+    AND to_date(cal.mes_ref, 'YYYY-MM-DD') = date_trunc('month', to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY'))`;
+}
+
+// Prazo de releitura: hora exata do recebimento + 24h (urbana) ou 48h
+// (rural) — SLA por horas, não por dia de calendário. to_timestamp() devolve
+// timestamptz; ::timestamp descarta o timezone da sessão pra tratar tudo
+// como hora local "crua" (mesmo padrão de to_date, sem timezone) — sem o
+// cast, misturar com PRAZO_LEITURA_SQL (timestamp sem tz) no mesmo CASE
+// arriscaria deslocar a hora dependendo do timezone configurado na conexão.
+const PRAZO_RELEITURA_SQL = `
+  (to_timestamp(c.data_recebimento || ' ' || COALESCE(c.hora_recebimento, '00:00'), 'DD/MM/YYYY HH24:MI')::timestamp
+    + CASE WHEN ${ETAPA_URBANA_CONTR_SQL} THEN INTERVAL '24 hours' ELSE INTERVAL '48 hours' END)
+`;
+
+// Prazo de leitura (e de linha ainda pendente, sem data_recebimento): a data
+// limite da etapa no calendário, fim do dia (pra "hoje ainda no prazo" valer
+// até 23:59:59, não expirar à meia-noite).
+const PRAZO_LEITURA_SQL = `(to_date(cal.prazo_leitura, 'YYYY-MM-DD') + INTERVAL '23:59:59')`;
+
+// Prazo efetivo da linha — depende do tipo calculado (ver TIPO_SERVICO_CONTR_SQL).
+//
+// Nunca devolver isso cru (tipo timestamp) pro node: o driver `pg` converte
+// `timestamp without time zone` pro fuso horário do PROCESSO NODE, não UTC —
+// resultado: "2026-08-13 23:59:59" (hora de parede, sem fuso real) virava
+// "2026-08-14T02:59:59.000Z" no JSON (+3h, fuso de Brasília do host). Bug
+// pego só porque testei o valor de verdade, não só se a query rodava sem
+// erro. Todo consumidor deste valor formata com to_char(...'"Z"') em vez de
+// deixar o driver serializar — ver detalheContr/historicoContrLivro.
+const PRAZO_CONTR_SQL = `
+  CASE WHEN ${TIPO_SERVICO_CONTR_SQL} = 'releitura' THEN ${PRAZO_RELEITURA_SQL}
+       ELSE ${PRAZO_LEITURA_SQL}
+  END
+`;
+
+// "Agora" pro cálculo de atraso é o momento do último scrape (data_import +
+// hora_import), não o relógio real — mesmo padrão já usado em todo o resto
+// do app (dt_import/hr_import da massiva, hojeUtcMs() no FRONTEND). ::timestamp
+// pelo mesmo motivo do PRAZO_RELEITURA_SQL (comparado direto com ele).
+const IMPORT_TS_CONTR_SQL = `to_timestamp(c.data_import || ' ' || c.hora_import, 'DD/MM/YYYY HH24:MI:SS')::timestamp`;
+
 async function obterUltimoBatchMassiva(db) {
   const { rows } = await db.query(`
     SELECT dt_import, hr_import
@@ -93,17 +162,21 @@ function condicaoSqlPrazo(tipo) {
   return null;
 }
 
-// Equivalente ao condicaoSqlPrazo, mas pro dado de leitura/releitura, cujo
-// prazo já vem direto em data_prevista_limite — não precisa de JOIN.
+// Equivalente ao condicaoSqlPrazo, mas pro dado de leitura/releitura.
+// PRAZO_CONTR_SQL já é hora-a-hora pra releitura (recebimento + 24h/48h) e
+// fim-do-dia pra leitura/pendente (calendário) — "atrasada" por isso compara
+// timestamp cheio contra IMPORT_TS_CONTR_SQL, não só a data. "final"/"noPrazo"
+// continuam por dia (mesmo dia do prazo / depois do prazo), pra bater com o
+// resto do app (cards e cores da tabela).
 function condicaoSqlPrazoContr(tipo) {
   if (tipo === 'final') {
-    return `to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') = to_date(c.data_import, 'DD/MM/YYYY')`;
+    return `date_trunc('day', ${PRAZO_CONTR_SQL}) = date_trunc('day', ${IMPORT_TS_CONTR_SQL}) AND ${PRAZO_CONTR_SQL} >= ${IMPORT_TS_CONTR_SQL}`;
   }
   if (tipo === 'atrasada') {
-    return `to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') < to_date(c.data_import, 'DD/MM/YYYY')`;
+    return `${PRAZO_CONTR_SQL} < ${IMPORT_TS_CONTR_SQL}`;
   }
   if (tipo === 'noPrazo') {
-    return `to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') > to_date(c.data_import, 'DD/MM/YYYY')`;
+    return `date_trunc('day', ${PRAZO_CONTR_SQL}) > date_trunc('day', ${IMPORT_TS_CONTR_SQL})`;
   }
   return null;
 }
@@ -232,6 +305,7 @@ async function contarFonteContr(db, statusChave, tipoServico, dataImport, horaIm
         ${LEITURISTA_CONTR_SQL} AS leiturista_calc
       FROM contr_execucao_leitura c
       LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+      ${joinCalendarioContr()}
       WHERE c.data_import = $1 AND c.hora_import = $2
         ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
       ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
@@ -569,17 +643,14 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
     SELECT status_calc AS status, tipo_calc AS tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista_calc AS leiturista
     FROM (
       SELECT DISTINCT ON (c.livro) c.livro, c.etapa, cl.regional,
-        to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') AS dt_prev_limite,
+        to_char(${PRAZO_CONTR_SQL}, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS dt_prev_limite,
         ${digitados} AS digitados, ${naoDigitados} AS nao_digitados,
         ${STATUS_CONTR_SQL} AS status_calc,
         ${LEITURISTA_CONTR_SQL} AS leiturista_calc,
-        CASE
-          WHEN c.data_recebimento IS NULL THEN NULL
-          WHEN to_date(c.data_recebimento, 'DD/MM/YYYY') <= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') THEN 'leitura'
-          ELSE 'releitura'
-        END AS tipo_calc
+        ${TIPO_SERVICO_CONTR_SQL} AS tipo_calc
       FROM contr_execucao_leitura c
       LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+      ${joinCalendarioContr()}
       WHERE c.data_import = $1 AND c.hora_import = $2
         ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
       ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
@@ -696,18 +767,15 @@ async function historicoContrLivro(db, livro) {
 
   const sql = `
     SELECT ${STATUS_CONTR_SQL} AS status,
-      CASE
-        WHEN c.data_recebimento IS NULL THEN NULL
-        WHEN to_date(c.data_recebimento, 'DD/MM/YYYY') <= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') THEN 'leitura'
-        ELSE 'releitura'
-      END AS tipo_servico,
+      ${TIPO_SERVICO_CONTR_SQL} AS tipo_servico,
       c.etapa, cl.regional, c.data_import, c.hora_import,
-      to_char(to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY'), 'YYYY-MM-DD') AS dt_prev_limite,
+      to_char(${PRAZO_CONTR_SQL}, 'YYYY-MM-DD') AS dt_prev_limite,
       SUM(${digitados})::int AS digitados,
       SUM(${naoDigitados})::int AS nao_digitados,
       STRING_AGG(DISTINCT ${LEITURISTA_CONTR_SQL}, ', ' ORDER BY ${LEITURISTA_CONTR_SQL}) AS leiturista
     FROM contr_execucao_leitura c
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+    ${joinCalendarioContr()}
     WHERE c.livro = $1
     GROUP BY status, tipo_servico, c.etapa, cl.regional, c.data_import, c.hora_import, dt_prev_limite
   `;

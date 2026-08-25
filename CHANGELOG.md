@@ -7,6 +7,9 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- `tab_ligacao_coordenadas` restaurada no banco local (referência compartilhada, sem
+  `empresa_id`) e habilitada na importação por planilha — upsert por `UC`. Ver
+  [ADR 0007](docs/adr/0007-restaura-tab-ligacao-coordenadas.md).
 - Filtro "Tipo · leitura/releitura/massiva" em Monitoramento de Livros — leitura/releitura
   vêm de `contr_execucao_leitura` (data_recebimento vs data_prevista_limite decide qual é
   qual), status vem da coluna `situacao`. Coluna "Tipo" nova na tabela de detalhe. Ver

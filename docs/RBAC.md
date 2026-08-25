@@ -47,17 +47,17 @@ o que não está explicitamente liberado).
 
 ## RLS — onde a garantia de verdade mora
 
-Documento aqui é intenção; o que vale é o banco. Depois da poda em
-[ADR 0004](adr/0004-poda-de-tabelas-nao-usadas.md) (o banco local só tem as tabelas que o
-app de fato usa — 15 no total), 13 delas têm `empresa_id` `not null`, RLS `enable` +
-`force`, e uma policy de isolamento (`ROOT` vê tudo, os demais só a própria empresa) — nem
-`using` nem `with check` abrem exceção pra ausência de contexto: as 9 tabelas de negócio
-(`atestados`, `ativos_inativos`, `atribuidas_im`, `contr_execucao_leitura`,
-`control_empreiteiras`, `em_execucao_im`, `pendentes_im`, `prazo_reg_livros`, `suspensao`),
-`users`, e as 3 de apoio ao RBAC (`empresas`, `tenant_features`, `audit_log`).
-`calendario_leitura` e `cidades_localidades` (referência geográfica/calendário,
-compartilhada entre empresas, não é dado de uma empresa específica) ficam de fora de
-propósito.
+Documento aqui é intenção; o que vale é o banco. O banco local só tem as tabelas que o app
+de fato usa (16 no total, depois da poda em [ADR 0004](adr/0004-poda-de-tabelas-nao-usadas.md)
+e da restauração pontual em [ADR 0007](adr/0007-restaura-tab-ligacao-coordenadas.md)), das
+quais 13 têm `empresa_id` `not null`, RLS `enable` + `force`, e uma policy de isolamento
+(`ROOT` vê tudo, os demais só a própria empresa) — nem `using` nem `with check` abrem
+exceção pra ausência de contexto: as 9 tabelas de negócio (`atestados`, `ativos_inativos`,
+`atribuidas_im`, `contr_execucao_leitura`, `control_empreiteiras`, `em_execucao_im`,
+`pendentes_im`, `prazo_reg_livros`, `suspensao`), `users`, e as 3 de apoio ao RBAC
+(`empresas`, `tenant_features`, `audit_log`). `calendario_leitura`, `cidades_localidades` e
+`tab_ligacao_coordenadas` (referência geográfica/calendário, compartilhada entre empresas,
+não é dado de uma empresa específica) ficam de fora de propósito.
 
 Prova automatizada em `BACKEND/test/isolamento_tenant.test.js` (`npm test`).
 

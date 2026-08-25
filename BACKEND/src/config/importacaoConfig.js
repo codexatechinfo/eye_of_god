@@ -120,6 +120,14 @@ const CONFIG_IMPORTACAO = {
       'justificativa', 'observacao',
     ],
   },
+  // Referência compartilhada (coordenadas por UC) — mesma classificação de
+  // cidades_localidades/calendario_leitura, sem empresa_id.
+  tab_ligacao_coordenadas: {
+    modo: 'upsert',
+    temEmpresa: false,
+    chave: ['UC'],
+    colunas: ['UC', 'latitude', 'longitude'],
+  },
 };
 
 module.exports = { CONFIG_IMPORTACAO };

@@ -132,3 +132,6 @@ sequenceDiagram
   tabela, `ADMINISTRADOR`/`ROOT`.
 - [ADR 0006](adr/0006-filtro-tipo-servico-leitura-releitura.md) — filtro leitura/releitura
   (via `contr_execucao_leitura`) somado à massiva em Monitoramento de Livros.
+- [ADR 0007](adr/0007-restaura-tab-ligacao-coordenadas.md) — `tab_ligacao_coordenadas`
+  restaurada (referência compartilhada, sem `empresa_id`) e habilitada pra importação por
+  UC.

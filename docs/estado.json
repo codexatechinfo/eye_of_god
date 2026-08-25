@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.0",
+  "versao": "0.4.1",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T14:30:00.000Z",
+  "atualizado_em": "2026-08-25T15:00:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "98e7b40",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -233,6 +233,13 @@
       "skill": "/projeto-novo",
       "evento": "Filtro 'tipo de serviço' (leitura/releitura/massiva) em Monitoramento de Livros",
       "detalhe": "A pedido do usuário: leitura/releitura vêm de contr_execucao_leitura (data_recebimento <= data_prevista_limite é leitura, > é releitura — dimensão independente do status, que vem da coluna situacao). massivasService.js reescrito com fonte massiva (3 tabelas de sempre) + fonte contr_execucao_leitura, cada uma com seu próprio 'último lote', somadas em JS em vez de UNION SQL único (mais fácil de auditar). Bug real encontrado e corrigido durante o teste: dtPrevLimite no histórico do livro aparecia como 'Thu' (Date do Postgres virando string errada em JS) — corrigido com to_char no SQL. Validado por curl (908 massiva + 1703 leitura + 469 releitura = 3080 'todos', bate exato) e ao vivo no browser (filtro muda etapas disponíveis, contagem, badge de tipo na tabela). Coluna 'Tipo' nova na tabela de detalhe. Ver ADR 0006."
+    },
+    {
+      "data": "2026-08-25T15:00:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "tab_ligacao_coordenadas restaurada e habilitada pra importação por UC",
+      "detalhe": "A pedido do usuário: tabela removida na poda (ADR 0004) trazida de volta via pg_dump --schema-only -t tab_ligacao_coordenadas da produção (mesma técnica da ADR 0002). Sem empresa_id — mesma classificação de referência compartilhada que calendario_leitura/cidades_localidades. Adicionada em importacaoConfig.js: modo upsert, chave UC — mecanismo genérico de importacaoService.js já suportava esse caso (chave de uma coluna, temEmpresa:false), sem mudança de código. Testado ponta a ponta: UC repetida substitui, UC nova acrescenta, UC não mencionada fica intocada. Banco local com 16 tabelas agora. Ver ADR 0007."
     }
   ]
 }

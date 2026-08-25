@@ -7,6 +7,9 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Coluna "Situação" da tabela "Detalhe por livro" ganhou badge colorido (âmbar/Pendente,
+  azul/Atribuída, verde/Em Execução) — mesmas cores já usadas nos badges de status da barra
+  de resumo, nas duas abas.
 - Paginação na tabela "Detalhe por livro" (Massivas e Monitoramento de Livros), com campo
   livre pra escolher linhas por página (até 250) e atalhos rápidos (25/50/100/250).
   Client-side, isolada por aba; reseta pra página 1 ao trocar filtro, mas não no polling

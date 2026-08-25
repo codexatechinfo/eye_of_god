@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T05:15:00.000Z",
+  "atualizado_em": "2026-08-26T05:25:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "f194523",
   "seguranca": {
@@ -415,6 +415,13 @@
       "skill": "/projeto-novo",
       "evento": "Campo livre de linhas por página (até 250) no lugar do select de opções fixas",
       "detalhe": "Usuário apontou que faltava a opção de escolher livremente quantas linhas por página, com teto de 250 — a implementação anterior só tinha um select com 4 opções fixas (25/50/100/200), sem chegar a 250 e sem aceitar outro valor. Trocado por um input type=number (min=1, max=250) que aceita qualquer valor digitado, mais os mesmos atalhos rápidos como botões ao lado (25/50/100/250, agora com 250 no lugar de 200). alterarItensPorPagina() valida e limita: número inválido ou <= 0 mantém o valor atual; número válido é limitado a MAX_ITENS_POR_PAGINA = 250. Bug pego no teste ao vivo: quando o valor digitado era rejeitado (ex. 0 com 250 já selecionado), o campo ficava mostrando 0 na tela mesmo a tabela continuando correta com 250 linhas — o [value] do Angular só se atualiza quando o SIGNAL muda, e como 0 não mudava o signal (mantinha 250), o binding não tinha motivo pra corrigir o DOM. Corrigido passando o próprio <input> pro método e setando elemento.value diretamente com o valor final, garantindo que o campo sempre reflete o valor válido de verdade. Testado ao vivo: digitar 137 mostrou '1-137 de 1638 registros'; digitar 9999 foi limitado a 250 (campo também corrigido pra '250'); digitar 0 manteve 250 linhas na tabela E corrigiu o campo de volta pra '250' imediatamente (antes da correção, ficava mostrando '0'). Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver o adendo da ADR 0014."
+    },
+    {
+      "data": "2026-08-26T05:25:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Coluna Situação da tabela Detalhe por livro ganhou badge colorido",
+      "detalhe": "Usuário pediu destaque de cor na coluna Situação, mesma paleta dos badges de status já usados na barra de resumo (âmbar/Pendentes, azul/Atribuídos, verde/Em Execução). Célula linha.status trocada de texto simples pra um badge arredondado (mesmo padrão visual já usado na coluna Tipo, que já tinha bg-blue-100/bg-amber-100), condicionado por [ngClass] nos 3 valores literais que o backend já envia (ROTULO_STATUS em massivasService.js: 'Pendente'/'Atribuída'/'Em Execução') — sem mudança de backend. Testado ao vivo nas duas abas, filtrando por cada status pra confirmar as 3 cores: Pendente com bg-amber-100/text-amber-700, Atribuída com bg-blue-100/text-blue-700, Em Execução com bg-emerald-100/text-emerald-700. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só de template."
     }
   ]
 }

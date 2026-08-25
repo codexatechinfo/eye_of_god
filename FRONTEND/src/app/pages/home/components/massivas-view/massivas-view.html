@@ -341,7 +341,16 @@
             <td class="px-3 py-1.5 text-slate-600">{{ linha.regional || '—' }}</td>
             <td class="px-3 py-1.5 font-semibold text-slate-700">{{ linha.livro }}</td>
             <td class="px-3 py-1.5 text-slate-600">{{ linha.etapa }}</td>
-            <td class="px-3 py-1.5 text-slate-600">{{ linha.status }}</td>
+            <td class="px-3 py-1.5">
+              <span
+                class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                [ngClass]="{
+                  'bg-amber-100 text-amber-700': linha.status === 'Pendente',
+                  'bg-blue-100 text-blue-700': linha.status === 'Atribuída',
+                  'bg-emerald-100 text-emerald-700': linha.status === 'Em Execução'
+                }"
+              >{{ linha.status }}</span>
+            </td>
             <td *ngIf="escopo === 'leiturarelitura'" class="px-3 py-1.5">
               <span
                 class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"

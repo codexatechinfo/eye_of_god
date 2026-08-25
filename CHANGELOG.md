@@ -7,6 +7,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Mapa de bases regionais (aba "Trilho") tinha um respiro de 16px (`p-4`) ao redor —
+  aparecia como uma borda clara enquadrando o mapa em vez de ocupar toda a área
+  disponível. Removido; o mapa agora vai de ponta a ponta, igual ao painel de
+  detalhe do livro que já ficava sem essa folga.
 - Import de planilha com muitas linhas (~1.600, ex: `prazo_reg_livros`) quebrava com
   `bind message has N parameter formats but 0 parameters` — bug conhecido do driver `pg`
   (node-postgres [#2579](https://github.com/brianc/node-postgres/issues/2579)) que corrompe

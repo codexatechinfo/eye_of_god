@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.5",
+  "versao": "0.4.6",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T19:15:00.000Z",
+  "atualizado_em": "2026-08-25T20:00:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "24003ce",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -268,6 +268,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: import de planilha grande quebrava com erro de bind do driver pg",
       "detalhe": "Usuário tentou importar prazo_reg_livros.xlsx (~1.600 linhas) e recebeu 'bind message has 25472 parameter formats but 0 parameters' na tela. Investigado: bug conhecido e não corrigido do node-postgres (issue #2579 no GitHub) em INSERT multi-linha com muitos parâmetros de bind — a mensagem Bind sai corrompida a partir de certa combinação de quantidade/conteúdo dos parâmetros; relatos da comunidade variam de ~1.100 a ~50.000 parâmetros pro mesmo erro, então o limiar não é previsível e depende do conteúdo real, não só da contagem. Reproduzido com dado sintético equivalente (1592 linhas x 16 colunas = 25472 parâmetros) direto contra o Postgres local. Corrigido fatiando o INSERT em lotes de 300 linhas em importacaoService.js (LOTE_MAX_LINHAS), em vez de tentar prever o limiar exato do bug. Testado: reimportação de 1592 linhas sintéticas em prazo_reg_livros sem erro, resultado conferido no banco e limpo depois; suíte de isolamento (12 testes) continua passando."
+    },
+    {
+      "data": "2026-08-25T20:00:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Corrigido: borda visual ao redor do mapa (aba Trilho)",
+      "detalhe": "Usuário reportou 'border do mapa' limitando o mapa a um tamanho específico, com print mostrando uma moldura clara ao redor. Sem senha do ROOT pra ver a tela ao vivo, gerei um JWT de teste localmente (mesma chave/mecanismo que authService.js usa no login, sem tocar em nenhuma credencial real) só pra inspecionar o DOM renderizado. Medindo o layout, a matemática do flexbox já batia certo (mapa preenchia 100% do container pai) — a 'borda' era o padding p-4 (16px) do <div class=\"relative flex-1 min-h-0 p-4\"> em home.html:195, que deixava o fundo bg-slate-50 da página aparecer como moldura ao redor do mapa; o painel de detalhe do livro (livro-detalhe, position:absolute) já ignorava esse padding e ficava rente à borda, por isso só o mapa parecia 'preso' numa caixa menor. Removido o p-4; mapa agora vai de ponta a ponta, confirmado via medição do DOM (896x621, igual ao container pai, antes era 864x589 com a folga de 32px). Print/screenshot da ferramenta de browser não funcionou neste ambiente (pane não compositava frame) — validação feita por leitura de getBoundingClientRect()/getComputedStyle() antes e depois da mudança."
     }
   ]
 }

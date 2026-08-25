@@ -242,6 +242,25 @@ livro" pra exatamente 54 registros; via API, o filtro com valor `menor27` retorn
 entre o momento do card e o da consulta detalhada), `maior34` 54 (card 56). Suíte de
 isolamento de tenant (12 testes) e build do Angular continuam passando.
 
+## Adendo 6 — prazo regulatório também como dropdown na barra de filtros
+
+Usuário pediu pra levar os mesmos filtros do Adendo 5 (badges clicáveis) também pra dentro
+da barra de filtros no topo da tela (junto de Regional/Etapa/Status/Tipo), em cada aba.
+
+Implementado como dois `<select>` novos, condicionados por `escopo` (mesmo padrão do select
+"Tipo", que já só aparece em `leiturarelitura`): um "Prazo regulatório" com `&lt;27 dias/33
+dias/34+ dias` pra Monitoramento de Livros, outro com `No prazo/Prazo final/Atraso` pra
+Massivas. Os dois ligam **no mesmo signal** que os badges clicáveis já usam
+(`filtroFaixaDias`/`filtroPrazo`) — dropdown e badge ficam sincronizados sozinhos, sem
+estado duplicado nem lógica nova: escolher no dropdown reflete no destaque do badge
+correspondente (opacidade 1) e vice-versa, exatamente como Status já se comporta.
+
+Testado ao vivo: selecionar "34+ dias" no dropdown (Livros) filtrou a tabela pra 53
+registros e destacou o badge "34+ dias" (opacidade 1, os outros em 0.4); selecionar "Prazo
+final" no dropdown (Massivas) filtrou pra 21 registros com o mesmo destaque no badge
+correspondente. Suíte de isolamento de tenant (12 testes) e build do Angular continuam
+passando — mudança só de template (FRONTEND), nenhum backend tocado.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries

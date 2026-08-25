@@ -7,6 +7,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Filtro "Prazo regulatório" na barra de filtros (topo da tela) de cada aba — &lt;27/33/34+
+  dias em Monitoramento de Livros, No prazo/Prazo final/Atraso em Massivas. Liga no mesmo
+  signal dos badges clicáveis da barra de resumo, então dropdown e badge ficam sempre
+  sincronizados. Ver Adendo 6 da [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
 - Faixas &lt;27/33/34+ dias (aba Monitoramento de Livros) agora são clicáveis e filtram a
   tabela de detalhe abaixo, igual aos outros badges da barra de resumo — antes eram só
   display. Aba Massivas já tinha o equivalente (No Prazo/Prazo Final/Atraso), reconfirmado

@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T04:10:00.000Z",
+  "atualizado_em": "2026-08-26T04:25:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "bbe466a",
   "seguranca": {
@@ -387,6 +387,13 @@
       "skill": "/projeto-novo",
       "evento": "Faixas <27/33/34+ dias viram filtro clicável; No Prazo/Prazo Final/Atraso da aba Massivas reconfirmados",
       "detalhe": "Usuário pediu: 1) adicionar na aba Monitoramento de Livros um filtro por prazo regulatório que filtra os três casos das faixas de dias (<27/33/34+); 2) o mesmo na aba Massivas, para os casos dela (No Prazo/Prazo Final/Atraso). Conferido antes de implementar: o item 2 já existia — os badges No Prazo/Prazo Final/Atraso da aba Massivas já eram clicáveis e já filtravam a tabela desde a decisão original da ADR 0012 (selecionarPrazo/prazoCardEmDestaque); só reconfirmado ao vivo (clique em Prazo Final levou a tabela de 1068 para 21 registros, batendo com o card), sem mudança de código nesse ponto. O item 1 era novo: as faixas de dias eram só display (valorFaixa(), sem onclick). Implementado o equivalente: extraídos EFETIVO_PRAZO_REG_SQL/joinPrazoRegLivros()/condicaoFaixaDias(faixa) como helpers reutilizáveis em massivasService.js (mesma fórmula de obterFaixasDias, adendo 4, mas com LEFT JOIN em vez de INNER — o filtro aqui é opcional, então sem faixaDias selecionada o join não pode excluir nenhum livro); detalheContr() ganhou a condição via filtros.faixaDias, com o join só entrando na query quando o filtro está presente; rota GET /massivas/detalhe e o controller passaram a aceitar o parâmetro faixaDias, valendo menor27, igual33 ou maior34. FRONTEND: MassivasService ganhou filtroFaixaDias (signal) em montarParams()/limparFiltros(); MassivasView ganhou selecionarFaixa()/faixaEmDestaque() (mesmo padrão de selecionarPrazo(), mas sem zerar os outros filtros — faixa de dias é dimensão independente de status/prazo, não mutuamente exclusiva); os três <span> das faixas viraram <button> clicáveis com opacidade reduzida quando outra faixa está selecionada. Testado ao vivo: clique em '34+ dias' (card 54) filtrou a tabela pra exatamente 54 registros; via API, o filtro com valor menor27 retornou 14 linhas, igual33 140 (card 143, diferença de 3 esperada pelo job de coleta em paralelo), maior34 54 (card 56). Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver adendo 5 da ADR 0012."
+    },
+    {
+      "data": "2026-08-26T04:25:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Prazo regulatório também disponível como dropdown na barra de filtros",
+      "detalhe": "Usuário pediu pra levar os mesmos filtros do ciclo anterior (badges clicáveis das faixas de dias/prazo) também pra dentro da barra de filtros do topo, em cada aba. Implementado como dois <select> novos condicionados por escopo (mesmo padrão do select Tipo, que já só aparecia em leiturarelitura): 'Prazo regulatório' com as opções <27 dias/33 dias/34+ dias em Monitoramento de Livros, e com No prazo/Prazo final/Atraso em Massivas. Os dois ligam no MESMO signal que os badges clicáveis já usavam (filtroFaixaDias/filtroPrazo) — dropdown e badge ficam sincronizados sozinhos, sem estado duplicado nem lógica nova. Testado ao vivo: selecionar '34+ dias' no dropdown (Livros) filtrou a tabela pra 53 registros e destacou o badge correspondente (opacidade 1, outros em 0.4); selecionar 'Prazo final' no dropdown (Massivas) filtrou pra 21 registros com o mesmo destaque sincronizado. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só de template, nenhum backend tocado. Ver adendo 6 da ADR 0012."
     }
   ]
 }

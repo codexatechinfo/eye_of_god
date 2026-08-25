@@ -184,8 +184,10 @@ export class MassivasView implements OnInit {
 
   // Paginação client-side — o detalhe inteiro já vem numa resposta só, então
   // paginar aqui em vez de ir ao backend a cada página. OPCOES_ITENS_POR_PAGINA
-  // fica exposto pro template montar o <select>.
-  readonly OPCOES_ITENS_POR_PAGINA = [25, 50, 100, 200];
+  // vira atalhos rápidos ao lado do campo numérico livre (que aceita
+  // qualquer valor até o teto).
+  readonly OPCOES_ITENS_POR_PAGINA = [25, 50, 100, 250];
+  readonly MAX_ITENS_POR_PAGINA = 250;
 
   totalPaginas(): number {
     return Math.max(1, Math.ceil(this.linhasOrdenadas().length / this.massivasService.itensPorPagina()));
@@ -207,9 +209,18 @@ export class MassivasView implements OnInit {
     this.massivasService.paginaAtual.set(Math.min(Math.max(1, pagina), this.totalPaginas()));
   }
 
-  alterarItensPorPagina(qtd: number): void {
-    this.massivasService.itensPorPagina.set(Number(qtd));
+  // `input` opcional: quando o valor digitado é inválido/fora do teto e o
+  // signal acaba não mudando (ex.: usuário digita "0" com 250 já selecionado),
+  // o binding [value] do Angular não teria motivo pra re-renderizar o campo —
+  // ele ficaria mostrando "0" enquanto a tabela continua com 250 linhas.
+  // Setar input.value direto garante que o campo sempre reflete o valor
+  // válido de verdade, independente de o signal ter mudado ou não.
+  alterarItensPorPagina(qtd: number | string, input?: HTMLInputElement): void {
+    const numero = Math.trunc(Number(qtd));
+    const limitado = Number.isFinite(numero) && numero > 0 ? Math.min(numero, this.MAX_ITENS_POR_PAGINA) : this.massivasService.itensPorPagina();
+    this.massivasService.itensPorPagina.set(limitado);
     this.massivasService.paginaAtual.set(1);
+    if (input) input.value = String(limitado);
   }
 
   intervaloExibido(): string {

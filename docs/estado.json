@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T05:00:00.000Z",
+  "atualizado_em": "2026-08-26T05:15:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "1b01933",
   "seguranca": {
@@ -408,6 +408,13 @@
       "skill": "/projeto-novo",
       "evento": "Paginação na tabela Detalhe por livro (Massivas e Monitoramento de Livros)",
       "detalhe": "Usuário pediu paginação com escolha de linhas por página na tabela 'Detalhe por livro' das duas abas (mesmo componente MassivasView, ADR 0010, então uma implementação cobre as duas). Decisão: client-side, não uma nova consulta ao backend por página — o detalhe inteiro já vem numa resposta HTTP só e o volume (milhares de linhas, não milhões) é pequeno o bastante pra recortar no array já carregado. MassivasService ganhou paginaAtual/itensPorPagina (padrão 50; opções 25/50/100/200), no service (não no componente) pelo mesmo motivo dos outros filtros — cada aba isolada. MassivasView ganhou linhasPaginadas()/totalPaginas()/paginaEfetiva() (clamp entre 1 e o total — corrige sozinho se um filtro reduzir o resultado e a página guardada ficar além do novo total)/irParaPagina()/alterarItensPorPagina()/intervaloExibido() (texto 'X–Y de Z registros' no cabeçalho). Problema real descoberto ao planejar: a tela já tem polling de 60s (ADR 0012) que rebusca os dados sozinho — se a página resetasse a cada busca, o usuário navegando na página 5 seria chutado de volta pra página 1 a cada minuto. Resolvido com buscarTudo(resetarPagina = true): todo ponto que já reage a filtro continua chamando buscarTudo() sem argumento (reseta normalmente), só o setInterval do polling passou a chamar buscarTudo(false) explicitamente — sem precisar tocar em cada call site de filtro individualmente. Testado ao vivo (JWT de teste): '51–100 de 1638 registros'/'Página 2 de 33' navegando com Próxima; trocar 50 pra 200 itens por página recalculou pra 9 páginas e voltou pra página 1; clicar num filtro de status na página 2 voltou sozinho pra página 1 com o novo total (5 páginas); aba Massivas com paginação independente (1122 registros, 23 páginas), confirmando isolamento por instância de MassivasService. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só de FRONTEND. Ver ADR 0014."
+    },
+    {
+      "data": "2026-08-26T05:15:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Campo livre de linhas por página (até 250) no lugar do select de opções fixas",
+      "detalhe": "Usuário apontou que faltava a opção de escolher livremente quantas linhas por página, com teto de 250 — a implementação anterior só tinha um select com 4 opções fixas (25/50/100/200), sem chegar a 250 e sem aceitar outro valor. Trocado por um input type=number (min=1, max=250) que aceita qualquer valor digitado, mais os mesmos atalhos rápidos como botões ao lado (25/50/100/250, agora com 250 no lugar de 200). alterarItensPorPagina() valida e limita: número inválido ou <= 0 mantém o valor atual; número válido é limitado a MAX_ITENS_POR_PAGINA = 250. Bug pego no teste ao vivo: quando o valor digitado era rejeitado (ex. 0 com 250 já selecionado), o campo ficava mostrando 0 na tela mesmo a tabela continuando correta com 250 linhas — o [value] do Angular só se atualiza quando o SIGNAL muda, e como 0 não mudava o signal (mantinha 250), o binding não tinha motivo pra corrigir o DOM. Corrigido passando o próprio <input> pro método e setando elemento.value diretamente com o valor final, garantindo que o campo sempre reflete o valor válido de verdade. Testado ao vivo: digitar 137 mostrou '1-137 de 1638 registros'; digitar 9999 foi limitado a 250 (campo também corrigido pra '250'); digitar 0 manteve 250 linhas na tabela E corrigiu o campo de volta pra '250' imediatamente (antes da correção, ficava mostrando '0'). Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver o adendo da ADR 0014."
     }
   ]
 }

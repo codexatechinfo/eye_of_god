@@ -7,10 +7,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
-- Paginação na tabela "Detalhe por livro" (Massivas e Monitoramento de Livros), com escolha
-  de linhas por página (25/50/100/200). Client-side, isolada por aba; reseta pra página 1 ao
-  trocar filtro, mas não no polling automático de 60s. Ver
-  [ADR 0014](docs/adr/0014-paginacao-tabela-detalhe.md).
+- Paginação na tabela "Detalhe por livro" (Massivas e Monitoramento de Livros), com campo
+  livre pra escolher linhas por página (até 250) e atalhos rápidos (25/50/100/250).
+  Client-side, isolada por aba; reseta pra página 1 ao trocar filtro, mas não no polling
+  automático de 60s. Ver [ADR 0014](docs/adr/0014-paginacao-tabela-detalhe.md).
 - Filtro "Prazo regulatório" na barra de filtros (topo da tela) de Monitoramento de Livros —
   &lt;27/33/34+ dias. Liga no mesmo signal do badge clicável da barra de resumo, então
   dropdown e badge ficam sempre sincronizados. (Chegou a existir um equivalente na aba

@@ -375,14 +375,28 @@
       *ngIf="!massivasService.carregandoDetalhe() && !massivasService.erroDetalhe() && massivasService.detalhe().length"
     >
       <div class="flex items-center gap-2 text-[11px] text-slate-500">
-        <span>Linhas por página</span>
-        <select
-          [ngModel]="massivasService.itensPorPagina()"
-          (ngModelChange)="alterarItensPorPagina($event)"
-          class="text-xs border border-slate-200 rounded-md px-1.5 py-1 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+        <span>Linhas por página (máx. 250)</span>
+        <input
+          type="number"
+          min="1"
+          max="250"
+          [value]="massivasService.itensPorPagina()"
+          (change)="alterarItensPorPagina($any($event.target).value, $any($event.target))"
+          class="text-xs border border-slate-200 rounded-md px-1.5 py-1 w-16 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+        />
+        <button
+          type="button"
+          *ngFor="let opcao of OPCOES_ITENS_POR_PAGINA"
+          (click)="alterarItensPorPagina(opcao)"
+          class="text-[10.5px] font-medium px-1.5 py-0.5 rounded border cursor-pointer transition-colors"
+          [ngClass]="
+            massivasService.itensPorPagina() === opcao
+              ? 'bg-blue-50 text-blue-600 border-blue-200'
+              : 'text-slate-400 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+          "
         >
-          <option *ngFor="let opcao of OPCOES_ITENS_POR_PAGINA" [value]="opcao">{{ opcao }}</option>
-        </select>
+          {{ opcao }}
+        </button>
       </div>
 
       <div class="flex items-center gap-1">

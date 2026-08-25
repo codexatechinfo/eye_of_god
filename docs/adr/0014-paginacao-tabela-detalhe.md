@@ -49,6 +49,31 @@ infinite scroll ou virtual scroll — mais simples de implementar sobre o array 
 e dá ao usuário noção clara de quantos registros existem no total, que é justamente o que a
 pergunta original queria resolver (volume grande demais pra rolar numa lista só).
 
+## Adendo — campo livre (até 250) no lugar do select de opções fixas
+
+Usuário apontou que faltava a opção de escolher livremente quantas linhas por página, com
+teto de 250 — a decisão original só tinha um `<select>` com 4 opções fixas (25/50/100/200),
+sem chegar a 250 e sem aceitar qualquer outro valor.
+
+Trocado por um `<input type="number" min="1" max="250">` que aceita qualquer valor digitado,
+mais os mesmos atalhos rápidos como botões ao lado (25/50/100/250, agora com 250 no lugar de
+200). `alterarItensPorPagina()` valida e limita: número inválido ou ≤ 0 mantém o valor atual
+inalterado; número válido é limitado (`Math.min`) a `MAX_ITENS_POR_PAGINA = 250`.
+
+Bug pego no teste ao vivo: quando o valor digitado era rejeitado (ex.: `0` com 250 já
+selecionado), o `[value]` do Angular só se atualiza quando o **signal** muda — como `0` não
+mudava o signal (o método mantinha 250), o campo ficava mostrando `0` na tela mesmo a tabela
+continuando correta com 250 linhas, uma divergência visual entre o campo e o resultado real.
+Corrigido passando o próprio `<input>` pro método (`alterarItensPorPagina(valor, elemento)`)
+e setando `elemento.value` diretamente com o valor final — garante que o campo sempre
+reflete o valor válido de verdade, independente do signal ter mudado ou não.
+
+Testado ao vivo: digitar `137` mostrou "1–137 de 1638 registros"; digitar `9999` foi
+limitado a 250 ("1–250 de 1638 registros", campo também corrigido pra "250"); digitar `0`
+manteve 250 linhas na tabela E corrigiu o campo de volta pra "250" imediatamente (antes da
+correção, ficava mostrando "0"). Suíte de isolamento de tenant (12 testes) e build do
+Angular continuam passando.
+
 ## Consequências
 
 - Testado ao vivo (JWT de teste) nas duas abas: "51–100 de 1638 registros" / "Página 2 de

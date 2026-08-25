@@ -5,6 +5,19 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Adicionado
+
+- Filtro "Tipo · leitura/releitura/massiva" em Monitoramento de Livros — leitura/releitura
+  vêm de `contr_execucao_leitura` (data_recebimento vs data_prevista_limite decide qual é
+  qual), status vem da coluna `situacao`. Coluna "Tipo" nova na tabela de detalhe. Ver
+  [ADR 0006](docs/adr/0006-filtro-tipo-servico-leitura-releitura.md).
+
+### Corrigido
+
+- `dtPrevLimite` no histórico do livro aparecia como "Thu" (um `Date` do Postgres virando
+  string errada no JS) quando a linha vinha de leitura/releitura — corrigido formatando a
+  data no Postgres (`to_char`) em vez de no Node.
+
 ### Alterado
 
 - Título do painel: "Painel de Monitoramento / Olho de Deus · FIMM" → "A2l" (placeholder até

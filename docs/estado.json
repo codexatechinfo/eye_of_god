@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.3.1",
+  "versao": "0.4.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T13:00:00.000Z",
+  "atualizado_em": "2026-08-25T14:30:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "cb7b9ca",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -226,6 +226,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: token expirado fazia o FRONTEND mostrar 'API Offline' por engano",
       "detalhe": "Usuário reportou dashboard/massivas vazios com 'API offline' apesar do backend estar rodando. Diagnóstico: token JWT de 12h vencido, e qualquer 401/403 numa rota autenticada caía no mesmo tratamento de erro de rede do HttpClient, sem distinção. authInterceptor agora detecta 401/403, limpa a sessão e redireciona pra /login (?motivo=sessao-expirada). Confirmado ao vivo pelo browser: com token novo, dashboard e massivas carregam dado real (943 registros) — a API nunca esteve offline de fato."
+    },
+    {
+      "data": "2026-08-25T14:30:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Filtro 'tipo de serviço' (leitura/releitura/massiva) em Monitoramento de Livros",
+      "detalhe": "A pedido do usuário: leitura/releitura vêm de contr_execucao_leitura (data_recebimento <= data_prevista_limite é leitura, > é releitura — dimensão independente do status, que vem da coluna situacao). massivasService.js reescrito com fonte massiva (3 tabelas de sempre) + fonte contr_execucao_leitura, cada uma com seu próprio 'último lote', somadas em JS em vez de UNION SQL único (mais fácil de auditar). Bug real encontrado e corrigido durante o teste: dtPrevLimite no histórico do livro aparecia como 'Thu' (Date do Postgres virando string errada em JS) — corrigido com to_char no SQL. Validado por curl (908 massiva + 1703 leitura + 469 releitura = 3080 'todos', bate exato) e ao vivo no browser (filtro muda etapas disponíveis, contagem, badge de tipo na tabela). Coluna 'Tipo' nova na tabela de detalhe. Ver ADR 0006."
     }
   ]
 }

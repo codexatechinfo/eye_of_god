@@ -128,3 +128,7 @@ sequenceDiagram
   RBAC de 4 níveis (`ROOT`/`ADMINISTRADOR`/`SUPERVISOR`/`USUARIO`), `empresa_id` + RLS.
 - [ADR 0004](adr/0004-poda-de-tabelas-nao-usadas.md) — banco local reduzido de 56 pra 15
   tabelas (só o que o app usa de fato).
+- [ADR 0005](adr/0005-importacao-de-planilha.md) — importação de planilha (.xlsx) por
+  tabela, `ADMINISTRADOR`/`ROOT`.
+- [ADR 0006](adr/0006-filtro-tipo-servico-leitura-releitura.md) — filtro leitura/releitura
+  (via `contr_execucao_leitura`) somado à massiva em Monitoramento de Livros.

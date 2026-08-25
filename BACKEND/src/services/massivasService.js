@@ -1,12 +1,47 @@
-const TABELAS = {
+// ── fontes "massiva" (tabelas de staging do scraper de massivas) ──
+const TABELAS_MASSIVA = {
   pendentes: { nome: 'pendentes_im', temLeiturista: false, rotulo: 'Pendente' },
   atribuidas: { nome: 'atribuidas_im', temLeiturista: true, rotulo: 'Atribuída' },
   emExecucao: { nome: 'em_execucao_im', temLeiturista: true, rotulo: 'Em Execução' },
 };
 
 const CONTAGEM_ZERO = { livros: 0, leituras: 0 };
+const ROTULO_STATUS = { pendentes: 'Pendente', atribuidas: 'Atribuída', emExecucao: 'Em Execução' };
 
-async function obterUltimoBatch(db) {
+// ── status/leiturista de leitura/releitura vêm da coluna situacao de
+// contr_execucao_leitura, não de qual tabela a linha está — mesmo formato
+// "Em Execução (X - NOME)" / "Atribuída (X - NOME)" já usado em
+// atividadeColaboradoresService.js, só que calculado em SQL aqui.
+const STATUS_CONTR_SQL = `
+  CASE
+    WHEN c.situacao ~ '^Em Execução' THEN 'Em Execução'
+    WHEN c.situacao ~ '^Atribuída' THEN 'Atribuída'
+    ELSE 'Pendente'
+  END
+`;
+const LEITURISTA_CONTR_SQL = `
+  CASE
+    WHEN c.situacao ~ '^(Em Execução|Atribuída)'
+    THEN trim(regexp_replace(c.situacao, '^(?:Em Execução|Atribuída)\\s*\\([^-]*-(.*)\\)$', '\\1'))
+    ELSE NULL
+  END
+`;
+
+// ── leitura vs releitura: só a data manda, independente da situação ──
+// tudo que foi recebido até o prazo é leitura; depois do prazo é releitura;
+// sem data_recebimento ainda (situação em aberto) não bate em nenhum dos
+// dois quando o filtro pede um tipo específico — só aparece em "todos".
+function condicaoTipoServico(tipo) {
+  if (tipo === 'leitura') {
+    return `c.data_recebimento IS NOT NULL AND to_date(c.data_recebimento, 'DD/MM/YYYY') <= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')`;
+  }
+  if (tipo === 'releitura') {
+    return `c.data_recebimento IS NOT NULL AND to_date(c.data_recebimento, 'DD/MM/YYYY') > to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')`;
+  }
+  return null;
+}
+
+async function obterUltimoBatchMassiva(db) {
   const { rows } = await db.query(`
     SELECT dt_import, hr_import
     FROM pendentes_im
@@ -16,8 +51,26 @@ async function obterUltimoBatch(db) {
   return rows[0] || null;
 }
 
+async function obterUltimoBatchLeitura(db) {
+  const { rows } = await db.query(`
+    SELECT data_import, hora_import
+    FROM contr_execucao_leitura
+    ORDER BY id DESC
+    LIMIT 1
+  `);
+  return rows[0] || null;
+}
+
 function chavesAtivas(status) {
   return status && status !== 'todos' ? [status] : ['pendentes', 'atribuidas', 'emExecucao'];
+}
+
+// tipoServico ativo(s) a partir do filtro escolhido na tela.
+function fontesAtivas(tipoServico) {
+  if (tipoServico === 'massiva') return { massiva: true, leitura: false, releitura: false };
+  if (tipoServico === 'leitura') return { massiva: false, leitura: true, releitura: false };
+  if (tipoServico === 'releitura') return { massiva: false, leitura: false, releitura: true };
+  return { massiva: true, leitura: true, releitura: true }; // 'todos' ou vazio
 }
 
 // O prazo oficial da massiva não vem do dado raspado (dt_prev_limite, por
@@ -33,6 +86,21 @@ function condicaoSqlPrazo(tipo) {
   }
   if (tipo === 'noPrazo') {
     return `to_date(cal.prazo_massiva, 'YYYY-MM-DD') > to_date(t.dt_import, 'DD/MM/YYYY')`;
+  }
+  return null;
+}
+
+// Equivalente ao condicaoSqlPrazo, mas pro dado de leitura/releitura, cujo
+// prazo já vem direto em data_prevista_limite — não precisa de JOIN.
+function condicaoSqlPrazoContr(tipo) {
+  if (tipo === 'final') {
+    return `to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') = to_date(c.data_import, 'DD/MM/YYYY')`;
+  }
+  if (tipo === 'atrasada') {
+    return `to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') < to_date(c.data_import, 'DD/MM/YYYY')`;
+  }
+  if (tipo === 'noPrazo') {
+    return `to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') > to_date(c.data_import, 'DD/MM/YYYY')`;
   }
   return null;
 }
@@ -90,7 +158,7 @@ function condicaoQuantidadeNao(coluna) {
 }
 
 async function contarTabela(db, chave, dataImport, horaImport, filtros) {
-  const { nome, temLeiturista } = TABELAS[chave];
+  const { nome, temLeiturista } = TABELAS_MASSIVA[chave];
   const { semResultado, condicoes, parametros } = construirCondicoes({ ...filtros, temLeiturista });
 
   if (semResultado) {
@@ -117,13 +185,80 @@ async function contarTabela(db, chave, dataImport, horaImport, filtros) {
   return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
 }
 
+// Contagem da fonte leitura/releitura (contr_execucao_leitura) — uma linha
+// por livro já basta (não tem "tabela por status" pra deduplicar entre si
+// como na massiva; status vem todo da coluna situacao).
+async function contarFonteContr(db, statusChave, tipoServico, dataImport, horaImport, filtros) {
+  const rotulo = statusChave ? ROTULO_STATUS[statusChave] : null;
+  const temLeiturista = statusChave !== 'pendentes'; // "Pendente" nunca tem leiturista
+  if (filtros.colaborador && !temLeiturista) {
+    return { ...CONTAGEM_ZERO };
+  }
+
+  const condicoesExtras = [];
+  const parametros = [];
+
+  if (filtros.regional) {
+    parametros.push(filtros.regional);
+    condicoesExtras.push(`cl.regional = $${parametros.length + 2}`);
+  }
+  if (filtros.livro) {
+    parametros.push(`%${filtros.livro}%`);
+    condicoesExtras.push(`c.livro ILIKE $${parametros.length + 2}`);
+  }
+  if (filtros.etapa) {
+    parametros.push(filtros.etapa);
+    condicoesExtras.push(`c.etapa = $${parametros.length + 2}`);
+  }
+
+  const condicaoTipo = condicaoTipoServico(tipoServico);
+  if (condicaoTipo) condicoesExtras.push(condicaoTipo);
+  const condicaoPrazoExterna = condicaoSqlPrazoContr(filtros.prazo);
+  if (condicaoPrazoExterna) condicoesExtras.push(condicaoPrazoExterna);
+  const condicaoPrazoInterna = condicaoSqlPrazoContr(filtros.condicaoPrazo);
+  if (condicaoPrazoInterna) condicoesExtras.push(condicaoPrazoInterna);
+
+  const digitados = condicaoQuantidade('c.qtd_digitados_nao_digitados');
+  const naoDigitados = condicaoQuantidadeNao('c.qtd_digitados_nao_digitados');
+
+  const sql = `
+    SELECT COUNT(*)::int AS livros, COALESCE(SUM(digitados) + SUM(nao_digitados), 0)::int AS leituras
+    FROM (
+      SELECT DISTINCT ON (c.livro) c.livro, ${digitados} AS digitados, ${naoDigitados} AS nao_digitados,
+        ${STATUS_CONTR_SQL} AS status_calc,
+        ${LEITURISTA_CONTR_SQL} AS leiturista_calc
+      FROM contr_execucao_leitura c
+      LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+      WHERE c.data_import = $1 AND c.hora_import = $2
+        ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
+      ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
+    ) escolhido
+    WHERE 1 = 1
+      ${rotulo ? `AND status_calc = '${rotulo}'` : ''}
+      ${filtros.colaborador ? `AND leiturista_calc ILIKE $${parametros.length + 3}` : ''}
+  `;
+  if (filtros.colaborador) parametros.push(`%${filtros.colaborador}%`);
+
+  const { rows: [linha] } = await db.query(sql, [dataImport, horaImport, ...parametros]);
+  return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
+}
+
+function somarContagens(...contagens) {
+  return contagens.reduce(
+    (soma, c) => ({ livros: soma.livros + c.livros, leituras: soma.leituras + c.leituras }),
+    { ...CONTAGEM_ZERO },
+  );
+}
+
 const PRIORIDADE_STATUS = { emExecucao: 3, atribuidas: 2, pendentes: 1 };
 
 // Um livro pode aparecer em mais de uma categoria ao mesmo tempo (ex.: parte
 // pendente, parte já em execução). Somar as 3 tabelas direto conta esse
 // livro mais de uma vez no total; aqui dedupe mantendo só a categoria mais
-// avançada (em execução > atribuída > pendente) antes de contar/somar.
-async function contarTotalDeduplicado(db, chaves, dataImport, horaImport, filtros) {
+// avançada (em execução > atribuída > pendente) antes de contar/somar. Só
+// vale pra fonte massiva — a de leitura/releitura já tem uma linha só por
+// livro (contarFonteContr sem `statusChave` já dá o total sem duplicar).
+async function contarTotalMassivaDeduplicado(db, chaves, dataImport, horaImport, filtros) {
   if (chaves.length === 1) {
     return contarTabela(db, chaves[0], dataImport, horaImport, filtros);
   }
@@ -132,7 +267,7 @@ async function contarTotalDeduplicado(db, chaves, dataImport, horaImport, filtro
   const parametros = [];
 
   for (const chave of chaves) {
-    const { nome, temLeiturista } = TABELAS[chave];
+    const { nome, temLeiturista } = TABELAS_MASSIVA[chave];
     const { semResultado, condicoes, parametros: paramsTabela } = construirCondicoes({ ...filtros, temLeiturista });
     if (semResultado) continue;
 
@@ -172,8 +307,13 @@ async function contarTotalDeduplicado(db, chaves, dataImport, horaImport, filtro
 }
 
 async function obterResumo(db, filtros) {
-  const ultimoBatch = await obterUltimoBatch(db);
-  if (!ultimoBatch) {
+  const fontes = fontesAtivas(filtros.tipoServico);
+  const [ultimoBatchMassiva, ultimoBatchLeitura] = await Promise.all([
+    fontes.massiva ? obterUltimoBatchMassiva(db) : null,
+    fontes.leitura || fontes.releitura ? obterUltimoBatchLeitura(db) : null,
+  ]);
+
+  if (!ultimoBatchMassiva && !ultimoBatchLeitura) {
     return {
       dataImport: null,
       horaImport: null,
@@ -187,26 +327,46 @@ async function obterResumo(db, filtros) {
     };
   }
 
-  const { dt_import: dataImport, hr_import: horaImport } = ultimoBatch;
-
-  const [pendentes, atribuidas, emExecucao] = await Promise.all([
-    contarTabela(db, 'pendentes', dataImport, horaImport, filtros),
-    contarTabela(db, 'atribuidas', dataImport, horaImport, filtros),
-    contarTabela(db, 'emExecucao', dataImport, horaImport, filtros),
-  ]);
-
   const chaves = chavesAtivas(filtros.status);
 
-  const [total, noPrazo, prazoFinal, atrasadas] = await Promise.all([
-    contarTotalDeduplicado(db, chaves, dataImport, horaImport, filtros),
-    contarTotalDeduplicado(db, chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'noPrazo' }),
-    contarTotalDeduplicado(db, chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'final' }),
-    contarTotalDeduplicado(db, chaves, dataImport, horaImport, { ...filtros, condicaoPrazo: 'atrasada' }),
+  async function contarStatus(statusChave) {
+    const partes = [];
+    if (fontes.massiva && ultimoBatchMassiva) {
+      partes.push(contarTabela(db, statusChave, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, filtros));
+    }
+    if ((fontes.leitura || fontes.releitura) && ultimoBatchLeitura) {
+      const tipo = fontes.leitura && fontes.releitura ? null : fontes.leitura ? 'leitura' : 'releitura';
+      partes.push(contarFonteContr(db, statusChave, tipo, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros));
+    }
+    return somarContagens(...(await Promise.all(partes)));
+  }
+
+  async function contarTotal(filtrosExtra = {}) {
+    const combinados = { ...filtros, ...filtrosExtra };
+    const partes = [];
+    if (fontes.massiva && ultimoBatchMassiva) {
+      partes.push(contarTotalMassivaDeduplicado(db, chaves, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, combinados));
+    }
+    if ((fontes.leitura || fontes.releitura) && ultimoBatchLeitura) {
+      const tipo = fontes.leitura && fontes.releitura ? null : fontes.leitura ? 'leitura' : 'releitura';
+      partes.push(contarFonteContr(db, null, tipo, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, combinados));
+    }
+    return somarContagens(...(await Promise.all(partes)));
+  }
+
+  const [pendentes, atribuidas, emExecucao, total, noPrazo, prazoFinal, atrasadas] = await Promise.all([
+    contarStatus('pendentes'),
+    contarStatus('atribuidas'),
+    contarStatus('emExecucao'),
+    contarTotal(),
+    contarTotal({ condicaoPrazo: 'noPrazo' }),
+    contarTotal({ condicaoPrazo: 'final' }),
+    contarTotal({ condicaoPrazo: 'atrasada' }),
   ]);
 
   return {
-    dataImport,
-    horaImport,
+    dataImport: ultimoBatchMassiva?.dt_import ?? ultimoBatchLeitura?.data_import ?? null,
+    horaImport: ultimoBatchMassiva?.hr_import ?? ultimoBatchLeitura?.hora_import ?? null,
     pendentes,
     atribuidas,
     emExecucao,
@@ -217,63 +377,98 @@ async function obterResumo(db, filtros) {
   };
 }
 
-async function obterOpcoesFiltro(db) {
-  const ultimoBatch = await obterUltimoBatch(db);
-  if (!ultimoBatch) {
-    return { regionais: [], etapas: [] };
-  }
-  const { dt_import: dataImport, hr_import: horaImport } = ultimoBatch;
+async function obterOpcoesFiltro(db, filtros = {}) {
+  const fontes = fontesAtivas(filtros.tipoServico);
+  const consultas = [];
 
-  const [regionais, etapas] = await Promise.all([
-    db.query(
-      `
-      SELECT DISTINCT cl.regional
-      FROM (
-        SELECT local, dt_import, hr_import FROM pendentes_im
-        UNION ALL SELECT local, dt_import, hr_import FROM atribuidas_im
-        UNION ALL SELECT local, dt_import, hr_import FROM em_execucao_im
-      ) t
-      JOIN cidades_localidades cl ON cl.local = t.local
-      WHERE t.dt_import = $1 AND t.hr_import = $2 AND cl.regional IS NOT NULL
-      ORDER BY cl.regional
-      `,
-      [dataImport, horaImport],
-    ),
-    db.query(
-      `
-      SELECT DISTINCT etapa FROM (
-        SELECT etapa, dt_import, hr_import FROM pendentes_im
-        UNION ALL SELECT etapa, dt_import, hr_import FROM atribuidas_im
-        UNION ALL SELECT etapa, dt_import, hr_import FROM em_execucao_im
-      ) t
-      WHERE t.dt_import = $1 AND t.hr_import = $2 AND etapa IS NOT NULL
-      ORDER BY etapa
-      `,
-      [dataImport, horaImport],
-    ),
-  ]);
+  if (fontes.massiva) {
+    consultas.push(
+      db.query(`
+        SELECT DISTINCT cl.regional
+        FROM (
+          SELECT local, dt_import, hr_import FROM pendentes_im
+          UNION ALL SELECT local, dt_import, hr_import FROM atribuidas_im
+          UNION ALL SELECT local, dt_import, hr_import FROM em_execucao_im
+        ) t
+        JOIN cidades_localidades cl ON cl.local = t.local
+        WHERE cl.regional IS NOT NULL
+        ORDER BY cl.regional
+      `),
+      db.query(`
+        SELECT DISTINCT etapa FROM (
+          SELECT etapa FROM pendentes_im
+          UNION ALL SELECT etapa FROM atribuidas_im
+          UNION ALL SELECT etapa FROM em_execucao_im
+        ) t
+        WHERE etapa IS NOT NULL
+        ORDER BY etapa
+      `),
+    );
+  }
+  if (fontes.leitura || fontes.releitura) {
+    consultas.push(
+      db.query(`
+        SELECT DISTINCT cl.regional
+        FROM contr_execucao_leitura c
+        JOIN cidades_localidades cl ON cl.local = c.localidade
+        WHERE cl.regional IS NOT NULL
+        ORDER BY cl.regional
+      `),
+      db.query(`SELECT DISTINCT etapa FROM contr_execucao_leitura WHERE etapa IS NOT NULL ORDER BY etapa`),
+    );
+  }
+
+  const resultados = await Promise.all(consultas);
+  const regionais = new Set();
+  const etapas = new Set();
+  resultados.forEach((r, i) => {
+    const alvo = i % 2 === 0 ? regionais : etapas;
+    const campo = i % 2 === 0 ? 'regional' : 'etapa';
+    r.rows.forEach(linha => alvo.add(linha[campo]));
+  });
 
   return {
-    regionais: regionais.rows.map(r => r.regional),
-    etapas: etapas.rows.map(e => e.etapa),
+    regionais: [...regionais].sort(),
+    etapas: [...etapas].sort(),
   };
 }
 
 async function obterDetalhe(db, filtros) {
-  const ultimoBatch = await obterUltimoBatch(db);
-  if (!ultimoBatch) {
+  const fontes = fontesAtivas(filtros.tipoServico);
+  const [ultimoBatchMassiva, ultimoBatchLeitura] = await Promise.all([
+    fontes.massiva ? obterUltimoBatchMassiva(db) : null,
+    fontes.leitura || fontes.releitura ? obterUltimoBatchLeitura(db) : null,
+  ]);
+
+  if (!ultimoBatchMassiva && !ultimoBatchLeitura) {
     return { dataImport: null, horaImport: null, linhas: [] };
   }
-  const { dt_import: dataImport, hr_import: horaImport } = ultimoBatch;
 
+  const [linhasMassiva, linhasContr] = await Promise.all([
+    fontes.massiva && ultimoBatchMassiva
+      ? detalheMassiva(db, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, filtros)
+      : [],
+    (fontes.leitura || fontes.releitura) && ultimoBatchLeitura
+      ? detalheContr(db, fontes.leitura && fontes.releitura ? null : fontes.leitura ? 'leitura' : 'releitura', ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros)
+      : [],
+  ]);
+
+  return {
+    dataImport: ultimoBatchMassiva?.dt_import ?? ultimoBatchLeitura?.data_import ?? null,
+    horaImport: ultimoBatchMassiva?.hr_import ?? ultimoBatchLeitura?.hora_import ?? null,
+    linhas: [...linhasMassiva, ...linhasContr],
+  };
+}
+
+async function detalheMassiva(db, dataImport, horaImport, filtros) {
   const chaves = chavesAtivas(filtros.status);
 
   const subconsultas = chaves
     .map(chave => {
-      const { nome, temLeiturista, rotulo } = TABELAS[chave];
+      const { nome, temLeiturista, rotulo } = TABELAS_MASSIVA[chave];
       const leituristaSelect = temLeiturista ? 't.leiturista' : 'NULL::text';
       return `
-        SELECT '${rotulo}' AS status, t.livro, t.etapa, t.local, cal.prazo_massiva AS dt_prev_limite,
+        SELECT '${rotulo}' AS status, 'massiva' AS tipo_servico, t.livro, t.etapa, t.local, cal.prazo_massiva AS dt_prev_limite,
           CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$' THEN split_part(t.qtd_digitados_nao_digitados, '/', 1)::int ELSE 0 END AS digitados,
           CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$' THEN split_part(t.qtd_digitados_nao_digitados, '/', 2)::int ELSE 0 END AS nao_digitados,
           ${leituristaSelect} AS leiturista
@@ -314,10 +509,10 @@ async function obterDetalhe(db, filtros) {
   }
 
   const sql = `
-    SELECT status, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista
+    SELECT status, tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista
     FROM (
       SELECT DISTINCT ON (u.status, u.livro)
-        u.status, u.livro, u.etapa, cl.regional,
+        u.status, u.tipo_servico, u.livro, u.etapa, cl.regional,
         to_date(u.dt_prev_limite, 'YYYY-MM-DD') AS dt_prev_limite,
         u.digitados, u.nao_digitados, u.leiturista
       FROM (${subconsultas}) u
@@ -330,66 +525,109 @@ async function obterDetalhe(db, filtros) {
     ORDER BY dt_prev_limite ASC NULLS LAST, livro ASC
   `;
 
-  const { rows: linhas } = await db.query(sql, [dataImport, horaImport, ...parametros]);
+  const { rows } = await db.query(sql, [dataImport, horaImport, ...parametros]);
+  return rows;
+}
 
-  return { dataImport, horaImport, linhas };
+async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
+  const condicoesExtras = [];
+  const parametros = [];
+
+  if (filtros.regional) {
+    parametros.push(filtros.regional);
+    condicoesExtras.push(`cl.regional = $${parametros.length + 2}`);
+  }
+  if (filtros.livro) {
+    parametros.push(`%${filtros.livro}%`);
+    condicoesExtras.push(`c.livro ILIKE $${parametros.length + 2}`);
+  }
+  if (filtros.etapa) {
+    parametros.push(filtros.etapa);
+    condicoesExtras.push(`c.etapa = $${parametros.length + 2}`);
+  }
+
+  const condicaoTipo = condicaoTipoServico(tipoServico);
+  if (condicaoTipo) condicoesExtras.push(condicaoTipo);
+
+  const status = filtros.status && filtros.status !== 'todos' ? ROTULO_STATUS[filtros.status] : null;
+  const digitados = condicaoQuantidade('c.qtd_digitados_nao_digitados');
+  const naoDigitados = condicaoQuantidadeNao('c.qtd_digitados_nao_digitados');
+
+  const condicaoPrazoExterna = condicaoSqlPrazoContr(filtros.prazo);
+  if (condicaoPrazoExterna) condicoesExtras.push(condicaoPrazoExterna);
+
+  let filtroColaborador = '';
+  if (filtros.colaborador) {
+    parametros.push(`%${filtros.colaborador}%`);
+    filtroColaborador = `AND leiturista_calc ILIKE $${parametros.length + 2}`;
+  }
+
+  const sql = `
+    SELECT status_calc AS status, tipo_calc AS tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista_calc AS leiturista
+    FROM (
+      SELECT DISTINCT ON (c.livro) c.livro, c.etapa, cl.regional,
+        to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') AS dt_prev_limite,
+        ${digitados} AS digitados, ${naoDigitados} AS nao_digitados,
+        ${STATUS_CONTR_SQL} AS status_calc,
+        ${LEITURISTA_CONTR_SQL} AS leiturista_calc,
+        CASE
+          WHEN c.data_recebimento IS NULL THEN NULL
+          WHEN to_date(c.data_recebimento, 'DD/MM/YYYY') <= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') THEN 'leitura'
+          ELSE 'releitura'
+        END AS tipo_calc
+      FROM contr_execucao_leitura c
+      LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+      WHERE c.data_import = $1 AND c.hora_import = $2
+        ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
+      ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
+    ) escolhido
+    WHERE 1 = 1
+      ${status ? `AND status_calc = '${status}'` : ''}
+      ${filtroColaborador}
+    ORDER BY dt_prev_limite ASC NULLS LAST, livro ASC
+  `;
+
+  const { rows } = await db.query(sql, [dataImport, horaImport, ...parametros]);
+  return rows;
+}
+
+// "DD/MM/YYYY" + "HH:MM:SS" -> epoch, pra ordenar direito entre meses/anos
+// diferentes (string simples ordena "01/12" antes de "15/01", que é errado).
+function paraEpoch(dataImport, horaImport) {
+  const [dia, mes, ano] = (dataImport || '').split('/').map(Number);
+  const [h, m, s] = (horaImport || '0:0:0').split(':').map(Number);
+  if (!dia || !mes || !ano) return 0;
+  return new Date(ano, mes - 1, dia, h || 0, m || 0, s || 0).getTime();
 }
 
 async function obterHistoricoLivro(db, livro) {
-  const subconsultas = Object.values(TABELAS)
-    .map(({ nome, temLeiturista, rotulo }) => {
-      const leituristaSelect = temLeiturista ? 't.leiturista' : 'NULL::text';
-      return `
-        SELECT '${rotulo}' AS status, t.livro, t.etapa, t.local, t.dt_import, t.hr_import, cal.prazo_massiva AS dt_prev_limite,
-          CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$' THEN split_part(t.qtd_digitados_nao_digitados, '/', 1)::int ELSE 0 END AS digitados,
-          CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$' THEN split_part(t.qtd_digitados_nao_digitados, '/', 2)::int ELSE 0 END AS nao_digitados,
-          ${leituristaSelect} AS leiturista
-        FROM ${nome} t
-        ${joinCalendario('t')}
-        WHERE t.livro = $1
-      `;
-    })
-    .join(' UNION ALL ');
+  const [historicoMassiva, historicoContr] = await Promise.all([
+    historicoMassivaLivro(db, livro),
+    historicoContrLivro(db, livro),
+  ]);
 
-  // Um livro pode ter mais de uma linha no mesmo lote (ex.: dois leituristas
-  // trabalhando nele ao mesmo tempo em em_execucao_im). Agrupa por lote antes
-  // de comparar, senão a alternância entre as linhas gera falsas trocas de
-  // colaborador no timeline (mesmo bug já visto na timeline de colaboradores).
-  const sql = `
-    SELECT u.status, u.etapa, cl.regional, u.dt_import, u.hr_import,
-      MIN(u.dt_prev_limite) AS dt_prev_limite,
-      SUM(u.digitados)::int AS digitados,
-      SUM(u.nao_digitados)::int AS nao_digitados,
-      STRING_AGG(DISTINCT u.leiturista, ', ' ORDER BY u.leiturista) AS leiturista
-    FROM (${subconsultas}) u
-    LEFT JOIN cidades_localidades cl ON cl.local = u.local
-    GROUP BY u.status, u.etapa, cl.regional, u.dt_import, u.hr_import
-    ORDER BY to_timestamp(u.dt_import || ' ' || u.hr_import, 'DD/MM/YYYY HH24:MI:SS') ASC
-  `;
-
-  const { rows: linhas } = await db.query(sql, [livro]);
+  const linhas = [...historicoMassiva, ...historicoContr].sort(
+    (a, b) => paraEpoch(a.dataImport, a.horaImport) - paraEpoch(b.dataImport, b.horaImport),
+  );
 
   const eventos = [];
   let anterior = null;
 
   for (const linha of linhas) {
     const mudancaStatus = anterior !== null && anterior.status !== linha.status;
-    // Só conta como "mudou de colaborador" quando de fato troca de um
-    // leiturista pra outro. Sair de "Pendente" (sem leiturista) pra
-    // "Atribuída"/"Em Execução" (primeiro leiturista) é mudança de situação,
-    // não de colaborador — antes não tinha leiturista nenhum.
     const mudancaColaborador = anterior !== null && !!anterior.leiturista && !!linha.leiturista && anterior.leiturista !== linha.leiturista;
 
     if (anterior === null || mudancaStatus || mudancaColaborador) {
       eventos.push({
         status: linha.status,
+        tipoServico: linha.tipoServico,
         etapa: linha.etapa,
         regional: linha.regional,
-        dataImport: linha.dt_import,
-        horaImport: linha.hr_import,
-        dtPrevLimite: linha.dt_prev_limite ? linha.dt_prev_limite.split(' ')[0] : null,
+        dataImport: linha.dataImport,
+        horaImport: linha.horaImport,
+        dtPrevLimite: linha.dtPrevLimite,
         digitados: linha.digitados,
-        naoDigitados: linha.nao_digitados,
+        naoDigitados: linha.naoDigitados,
         leiturista: linha.leiturista,
         primeiraAparicao: anterior === null,
         mudancaStatus,
@@ -401,6 +639,89 @@ async function obterHistoricoLivro(db, livro) {
   }
 
   return { livro, eventos };
+}
+
+// Um livro pode ter mais de uma linha no mesmo lote (ex.: dois leituristas
+// trabalhando nele ao mesmo tempo em em_execucao_im). Agrupa por lote antes
+// de comparar, senão a alternância entre as linhas gera falsas trocas de
+// colaborador no timeline (mesmo bug já visto na timeline de colaboradores).
+async function historicoMassivaLivro(db, livro) {
+  const subconsultas = Object.values(TABELAS_MASSIVA)
+    .map(({ nome, temLeiturista, rotulo }) => {
+      const leituristaSelect = temLeiturista ? 't.leiturista' : 'NULL::text';
+      return `
+        SELECT '${rotulo}' AS status, 'massiva' AS tipo_servico, t.livro, t.etapa, t.local, t.dt_import, t.hr_import, cal.prazo_massiva AS dt_prev_limite,
+          CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$' THEN split_part(t.qtd_digitados_nao_digitados, '/', 1)::int ELSE 0 END AS digitados,
+          CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$' THEN split_part(t.qtd_digitados_nao_digitados, '/', 2)::int ELSE 0 END AS nao_digitados,
+          ${leituristaSelect} AS leiturista
+        FROM ${nome} t
+        ${joinCalendario('t')}
+        WHERE t.livro = $1
+      `;
+    })
+    .join(' UNION ALL ');
+
+  const sql = `
+    SELECT u.status, u.tipo_servico, u.etapa, cl.regional, u.dt_import, u.hr_import,
+      MIN(u.dt_prev_limite) AS dt_prev_limite,
+      SUM(u.digitados)::int AS digitados,
+      SUM(u.nao_digitados)::int AS nao_digitados,
+      STRING_AGG(DISTINCT u.leiturista, ', ' ORDER BY u.leiturista) AS leiturista
+    FROM (${subconsultas}) u
+    LEFT JOIN cidades_localidades cl ON cl.local = u.local
+    GROUP BY u.status, u.tipo_servico, u.etapa, cl.regional, u.dt_import, u.hr_import
+  `;
+
+  const { rows } = await db.query(sql, [livro]);
+  return rows.map(linha => ({
+    status: linha.status,
+    tipoServico: linha.tipo_servico,
+    etapa: linha.etapa,
+    regional: linha.regional,
+    dataImport: linha.dt_import,
+    horaImport: linha.hr_import,
+    dtPrevLimite: linha.dt_prev_limite ? String(linha.dt_prev_limite).split(' ')[0] : null,
+    digitados: linha.digitados,
+    naoDigitados: linha.nao_digitados,
+    leiturista: linha.leiturista,
+  }));
+}
+
+async function historicoContrLivro(db, livro) {
+  const digitados = condicaoQuantidade('c.qtd_digitados_nao_digitados');
+  const naoDigitados = condicaoQuantidadeNao('c.qtd_digitados_nao_digitados');
+
+  const sql = `
+    SELECT ${STATUS_CONTR_SQL} AS status,
+      CASE
+        WHEN c.data_recebimento IS NULL THEN NULL
+        WHEN to_date(c.data_recebimento, 'DD/MM/YYYY') <= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') THEN 'leitura'
+        ELSE 'releitura'
+      END AS tipo_servico,
+      c.etapa, cl.regional, c.data_import, c.hora_import,
+      to_char(to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY'), 'YYYY-MM-DD') AS dt_prev_limite,
+      SUM(${digitados})::int AS digitados,
+      SUM(${naoDigitados})::int AS nao_digitados,
+      STRING_AGG(DISTINCT ${LEITURISTA_CONTR_SQL}, ', ' ORDER BY ${LEITURISTA_CONTR_SQL}) AS leiturista
+    FROM contr_execucao_leitura c
+    LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+    WHERE c.livro = $1
+    GROUP BY status, tipo_servico, c.etapa, cl.regional, c.data_import, c.hora_import, dt_prev_limite
+  `;
+
+  const { rows } = await db.query(sql, [livro]);
+  return rows.map(linha => ({
+    status: linha.status,
+    tipoServico: linha.tipo_servico,
+    etapa: linha.etapa,
+    regional: linha.regional,
+    dataImport: linha.data_import,
+    horaImport: linha.hora_import,
+    dtPrevLimite: linha.dt_prev_limite ? String(linha.dt_prev_limite).split(' ')[0] : null,
+    digitados: linha.digitados,
+    naoDigitados: linha.nao_digitados,
+    leiturista: linha.leiturista,
+  }));
 }
 
 module.exports = { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro };

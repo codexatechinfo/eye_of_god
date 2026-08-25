@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { DetalheLinha, MassivasService, StatusMassivas } from '../../../../services/massivas.service';
 
 type CorLinha = 'verde' | 'amarelo' | 'vermelho';
-type ColunaOrdenavel = 'regional' | 'livro' | 'etapa' | 'status' | 'dt_prev_limite' | 'quantidade' | 'leiturista' | 'diasAtraso';
+type ColunaOrdenavel = 'regional' | 'livro' | 'etapa' | 'status' | 'tipoServico' | 'dt_prev_limite' | 'quantidade' | 'leiturista' | 'diasAtraso';
 type DirecaoOrdenacao = 'asc' | 'desc';
 
 @Component({
@@ -42,6 +42,8 @@ export class MassivasView {
         return linha.etapa;
       case 'status':
         return linha.status;
+      case 'tipoServico':
+        return linha.tipo_servico;
       case 'dt_prev_limite':
         return linha.dt_prev_limite ? new Date(linha.dt_prev_limite).getTime() : -Infinity;
       case 'quantidade':

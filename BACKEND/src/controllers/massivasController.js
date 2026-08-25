@@ -2,8 +2,8 @@ const { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro } = re
 
 async function resumo(req, res) {
   try {
-    const { regional, livro, etapa, colaborador, status, prazo } = req.query;
-    const dados = await obterResumo(req.db, { regional, livro, etapa, colaborador, status, prazo });
+    const { regional, livro, etapa, colaborador, status, prazo, tipoServico } = req.query;
+    const dados = await obterResumo(req.db, { regional, livro, etapa, colaborador, status, prazo, tipoServico });
     res.json({ sucesso: true, ...dados });
   } catch (erro) {
     console.error('❌ Erro ao obter resumo de massivas:', erro);
@@ -13,7 +13,8 @@ async function resumo(req, res) {
 
 async function opcoesFiltro(req, res) {
   try {
-    const opcoes = await obterOpcoesFiltro(req.db);
+    const { tipoServico } = req.query;
+    const opcoes = await obterOpcoesFiltro(req.db, { tipoServico });
     res.json({ sucesso: true, ...opcoes });
   } catch (erro) {
     console.error('❌ Erro ao obter opções de filtro de massivas:', erro);
@@ -23,8 +24,8 @@ async function opcoesFiltro(req, res) {
 
 async function detalhe(req, res) {
   try {
-    const { regional, livro, etapa, colaborador, status, prazo } = req.query;
-    const dados = await obterDetalhe(req.db, { regional, livro, etapa, colaborador, status, prazo });
+    const { regional, livro, etapa, colaborador, status, prazo, tipoServico } = req.query;
+    const dados = await obterDetalhe(req.db, { regional, livro, etapa, colaborador, status, prazo, tipoServico });
     res.json({ sucesso: true, ...dados });
   } catch (erro) {
     console.error('❌ Erro ao obter detalhe de massivas:', erro);

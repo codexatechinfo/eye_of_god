@@ -28,6 +28,7 @@ export interface OpcoesFiltroMassivas {
 
 export interface DetalheLinha {
   status: string;
+  tipo_servico: 'leitura' | 'releitura' | 'massiva';
   livro: string;
   etapa: string;
   regional: string | null;
@@ -47,6 +48,7 @@ export interface DetalheMassivas {
 export type StatusMassivas = 'todos' | 'pendentes' | 'atribuidas' | 'emExecucao';
 export type VisualizacaoMassivas = 'livros' | 'leituras';
 export type PrazoMassivas = '' | 'noPrazo' | 'final' | 'atrasada';
+export type TipoServico = 'todos' | 'leitura' | 'releitura' | 'massiva';
 
 export interface HistoricoLivroEvento {
   status: string;
@@ -84,6 +86,7 @@ export class MassivasService {
   filtroColaborador = signal('');
   filtroStatus = signal<StatusMassivas>('todos');
   filtroPrazo = signal<PrazoMassivas>('');
+  filtroTipoServico = signal<TipoServico>('todos');
 
   visualizacao = signal<VisualizacaoMassivas>('livros');
 
@@ -109,7 +112,10 @@ export class MassivasService {
   }
 
   carregarOpcoesFiltro(): void {
-    this.http.get<OpcoesFiltroMassivas>(`${this.apiUrl}/massivas/opcoes-filtro`).subscribe({
+    let params = new HttpParams();
+    if (this.filtroTipoServico() !== 'todos') params = params.set('tipoServico', this.filtroTipoServico());
+
+    this.http.get<OpcoesFiltroMassivas>(`${this.apiUrl}/massivas/opcoes-filtro`, { params }).subscribe({
       next: resposta => {
         this.regionais.set(resposta.regionais);
         this.etapas.set(resposta.etapas);
@@ -125,6 +131,7 @@ export class MassivasService {
     if (this.filtroColaborador()) params = params.set('colaborador', this.filtroColaborador());
     if (this.filtroStatus() !== 'todos') params = params.set('status', this.filtroStatus());
     if (this.filtroPrazo()) params = params.set('prazo', this.filtroPrazo());
+    if (this.filtroTipoServico() !== 'todos') params = params.set('tipoServico', this.filtroTipoServico());
     return params;
   }
 
@@ -177,6 +184,15 @@ export class MassivasService {
     this.filtroColaborador.set('');
     this.filtroStatus.set('todos');
     this.filtroPrazo.set('');
+    this.filtroTipoServico.set('todos');
+    this.carregarOpcoesFiltro();
+    this.buscarTudo();
+  }
+
+  onTipoServicoChange(): void {
+    this.filtroRegional.set('');
+    this.filtroEtapa.set('');
+    this.carregarOpcoesFiltro();
     this.buscarTudo();
   }
 

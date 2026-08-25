@@ -47,6 +47,17 @@
         <option value="emExecucao">Em execução</option>
       </select>
 
+      <select
+        [ngModel]="massivasService.filtroTipoServico()"
+        (ngModelChange)="massivasService.filtroTipoServico.set($event); massivasService.onTipoServicoChange()"
+        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+      >
+        <option value="todos">Tipo · todos</option>
+        <option value="leitura">Leitura</option>
+        <option value="releitura">Releitura</option>
+        <option value="massiva">Massiva</option>
+      </select>
+
       <button
         (click)="massivasService.limparFiltros()"
         class="text-xs font-medium text-slate-400 hover:text-blue-600 cursor-pointer px-1 transition-colors"
@@ -273,6 +284,9 @@
             <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('status')">
               Situação{{ indicadorOrdenacao('status') }}
             </th>
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('tipoServico')">
+              Tipo{{ indicadorOrdenacao('tipoServico') }}
+            </th>
             <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('dt_prev_limite')">
               Data limite{{ indicadorOrdenacao('dt_prev_limite') }}
             </th>
@@ -302,6 +316,16 @@
             <td class="px-3 py-1.5 font-semibold text-slate-700">{{ linha.livro }}</td>
             <td class="px-3 py-1.5 text-slate-600">{{ linha.etapa }}</td>
             <td class="px-3 py-1.5 text-slate-600">{{ linha.status }}</td>
+            <td class="px-3 py-1.5">
+              <span
+                class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                [ngClass]="{
+                  'bg-blue-100 text-blue-700': linha.tipo_servico === 'leitura',
+                  'bg-amber-100 text-amber-700': linha.tipo_servico === 'releitura',
+                  'bg-slate-100 text-slate-600': linha.tipo_servico === 'massiva'
+                }"
+              >{{ linha.tipo_servico }}</span>
+            </td>
             <td class="px-3 py-1.5 text-slate-600 tabular-nums">{{ linha.dt_prev_limite ? (linha.dt_prev_limite | date: 'dd/MM/yyyy':'UTC') : '—' }}</td>
             <td class="px-3 py-1.5 text-right tabular-nums text-slate-600">{{ linha.digitados }}/{{ linha.nao_digitados }}</td>
             <td class="px-3 py-1.5 text-slate-600 truncate max-w-[180px]" [title]="linha.leiturista || ''">{{ linha.leiturista || '—' }}</td>

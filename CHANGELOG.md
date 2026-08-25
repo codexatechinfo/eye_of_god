@@ -9,8 +9,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 - Cards de indicador (balões) na lista de colaboradores e no painel de detalhe do livro
   trocaram o fundo de cor sólida por um degradê discreto (canto superior esquerdo mais
-  saturado, esmaecendo até o tom claro de sempre). Placeholders "Em breve" continuam com
-  fundo neutro, sem degradê.
+  saturado, esmaecendo até o tom claro de sempre) — opacidade reduzida (40%) pra ficar
+  ainda mais sutil. Placeholders "Em breve" continuam com fundo neutro, sem degradê.
+- Logo A2L no cabeçalho: os 3 traços que eram azul-marinho escuro (`#0B2E59`) viraram
+  branco — ficavam invisíveis contra o fundo escuro do header.
 
 ### Adicionado
 

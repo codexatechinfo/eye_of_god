@@ -155,7 +155,7 @@
           <!-- Último sincronismo -->
           <div
             class="flex items-center gap-1.5 rounded-lg border px-2 py-1.5 bg-gradient-to-br"
-            [ngClass]="a.parado ? 'border-amber-200 from-amber-100 to-amber-50' : 'border-slate-100 from-slate-100 to-slate-50'"
+            [ngClass]="a.parado ? 'border-amber-200 from-amber-100/40 to-amber-50' : 'border-slate-100 from-slate-100/40 to-slate-50'"
           >
             <div
               class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
@@ -177,7 +177,7 @@
           </div>
 
           <!-- Total de leituras -->
-          <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100 to-blue-50 px-2 py-1.5">
+          <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/40 to-blue-50 px-2 py-1.5">
             <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="5" y="4" width="14" height="17" rx="2" />
@@ -192,7 +192,7 @@
           </div>
 
           <!-- Realizadas -->
-          <div class="flex items-center gap-1.5 rounded-lg border border-cyan-100 bg-gradient-to-br from-cyan-100 to-cyan-50 px-2 py-1.5">
+          <div class="flex items-center gap-1.5 rounded-lg border border-cyan-100 bg-gradient-to-br from-cyan-100/40 to-cyan-50 px-2 py-1.5">
             <div class="w-6 h-6 rounded-md bg-cyan-100 text-cyan-600 flex items-center justify-center shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9" />
@@ -206,7 +206,7 @@
           </div>
 
           <!-- Pendentes -->
-          <div class="flex items-center gap-1.5 rounded-lg border border-orange-100 bg-gradient-to-br from-orange-100 to-orange-50 px-2 py-1.5">
+          <div class="flex items-center gap-1.5 rounded-lg border border-orange-100 bg-gradient-to-br from-orange-100/40 to-orange-50 px-2 py-1.5">
             <div class="w-6 h-6 rounded-md bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9" stroke-dasharray="3 3" />
@@ -234,7 +234,7 @@
           </div>
 
           <!-- Total de livros -->
-          <div class="flex items-center gap-1.5 rounded-lg border border-violet-100 bg-gradient-to-br from-violet-100 to-violet-50 px-2 py-1.5">
+          <div class="flex items-center gap-1.5 rounded-lg border border-violet-100 bg-gradient-to-br from-violet-100/40 to-violet-50 px-2 py-1.5">
             <div class="w-6 h-6 rounded-md bg-violet-100 text-violet-600 flex items-center justify-center shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -248,7 +248,7 @@
           </div>
 
           <!-- Em execução -->
-          <div class="flex items-center gap-1.5 rounded-lg border border-emerald-100 bg-gradient-to-br from-emerald-100 to-emerald-50 px-2 py-1.5">
+          <div class="flex items-center gap-1.5 rounded-lg border border-emerald-100 bg-gradient-to-br from-emerald-100/40 to-emerald-50 px-2 py-1.5">
             <div class="w-6 h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 12 7 12 9 6 13 18 16 12 21 12" />
@@ -301,7 +301,7 @@
 
       <ng-template #semAtividade>
         <ng-container *ngIf="colaboradoresService.afastamentoDe(colaborador.colaborador) as af; else semJustificativa">
-          <div class="rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100 to-blue-50 px-2.5 py-2">
+          <div class="rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/40 to-blue-50 px-2.5 py-2">
             <div class="flex items-center gap-1.5 mb-1">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 11H3v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9h-6" />

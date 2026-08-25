@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.9",
+  "versao": "0.4.10",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T21:40:00.000Z",
+  "atualizado_em": "2026-08-25T22:00:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "97e455a",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -296,6 +296,13 @@
       "skill": "/projeto-novo",
       "evento": "Cards de indicador ganharam degradê discreto no lugar de cor sólida",
       "detalhe": "Usuário pediu pra tirar a cor sólida dos cards em 'ambas as barras' (lista de colaboradores e painel de detalhe do livro) e pôr um degradê discreto num canto superior. Trocado bg-{cor}-50 por bg-gradient-to-br from-{cor}-100 to-{cor}-50 em todos os cards coloridos das duas sidebars — inclusive nos dois estados dinâmicos por ngClass (Em Execução em livro-detalhe.html, Último sincronismo em lista-colaboradores.html) e no card de Ausência justificada. Os 4 placeholders 'Em breve' (Km percorrido, Impedimentos, Leituras/min, Improdutivo) ficaram de fora de propósito — continuam com fundo neutro sólido, sem degradê, pra reforçar visualmente que são diferentes (sem dado ainda). Testado ao vivo via JWT de teste: getComputedStyle confirma background-image: linear-gradient(...) nos cards coloridos e background-image: none nos placeholders."
+    },
+    {
+      "data": "2026-08-25T22:00:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Degradê mais discreto ainda + logo A2L visível no header escuro",
+      "detalhe": "Dois ajustes pedidos: 1) o degradê dos cards ficou forte demais — reduzida a opacidade do lado mais saturado pra 40% (from-{cor}-100/40 to-{cor}-50) nos 11 cards das duas sidebars, mantendo o mesmo padrão de canto superior esquerdo. 2) 3 dos 6 <path> da logo A2L (svg em home.html) usavam #0B2E59 (azul-marinho escuro), praticamente invisível contra o gradiente escuro do header (slate-900/800) — trocados pra #FFFFFF; os outros 3 (#F28C28 laranja, #006DFF azul vivo) continuam iguais, já tinham contraste. Testado ao vivo (JWT de teste local): logoFills confirma [#FFFFFF, #F28C28, #006DFF, #FFFFFF, #F28C28, #FFFFFF]; getComputedStyle do card 'Realizadas' confirma o gradiente com opacidade 0.4 no primeiro stop."
     }
   ]
 }

@@ -60,12 +60,11 @@
         <option value="releitura">Releitura</option>
       </select>
 
-      <!-- Prazo regulatório — mesmo signal dos badges clicáveis da barra de
-           resumo (filtroFaixaDias/filtroPrazo), então dropdown e badge ficam
-           sempre sincronizados sozinhos, sem estado duplicado. Opções por
-           escopo: Livros usa as faixas de prazo_reg_livros (ADR 0012 Adendo
-           4/5); Massivas usa o prazo de calendario_leitura.prazo_massiva
-           (mesmo filtroPrazo de sempre). -->
+      <!-- Prazo regulatório (só Monitoramento de Livros — pedido do usuário
+           removeu o equivalente da aba Massivas, ver ADR 0012 Adendo 7).
+           Mesmo signal do badge clicável da barra de resumo
+           (filtroFaixaDias), então dropdown e badge ficam sincronizados
+           sozinhos, sem estado duplicado. -->
       <select
         *ngIf="escopo === 'leiturarelitura'"
         [ngModel]="massivasService.filtroFaixaDias()"
@@ -76,18 +75,6 @@
         <option value="menor27">&lt; 27 dias</option>
         <option value="igual33">33 dias</option>
         <option value="maior34">34+ dias</option>
-      </select>
-
-      <select
-        *ngIf="escopo === 'massiva'"
-        [ngModel]="massivasService.filtroPrazo()"
-        (ngModelChange)="massivasService.filtroPrazo.set($event); massivasService.buscarTudo()"
-        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-      >
-        <option value="">Prazo regulatório · todos</option>
-        <option value="noPrazo">No prazo</option>
-        <option value="final">Prazo final</option>
-        <option value="atrasada">Atraso</option>
       </select>
 
       <button

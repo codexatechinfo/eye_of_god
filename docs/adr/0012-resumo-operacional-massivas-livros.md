@@ -261,6 +261,26 @@ final" no dropdown (Massivas) filtrou pra 21 registros com o mesmo destaque no b
 correspondente. Suíte de isolamento de tenant (12 testes) e build do Angular continuam
 passando — mudança só de template (FRONTEND), nenhum backend tocado.
 
+## Adendo 7 — dropdown "Prazo regulatório" removido da aba Massivas
+
+Usuário pediu pra remover o dropdown "Prazo regulatório" (No prazo/Prazo final/Atraso)
+adicionado à barra de filtros da aba Massivas no Adendo 6. Removido o `<select
+*ngIf="escopo === 'massiva'">` de `massivas-view.html`; o `<select *ngIf="escopo ===
+'leiturarelitura'">` (faixas &lt;27/33/34+ dias, Monitoramento de Livros) não foi tocado —
+o pedido mencionou só a aba Massivas.
+
+Os badges clicáveis No prazo/Prazo final/Atraso na barra de resumo (que já existiam desde a
+decisão original deste ADR, reconfirmados no Adendo 5) **continuam funcionando** — só o
+controle redundante na barra de filtros de topo saiu. `filtroPrazo` (o signal por trás)
+também não mudou; o dropdown só era mais uma forma de setá-lo, removê-lo não tira
+funcionalidade nenhuma que não estivesse disponível pelo badge.
+
+Testado ao vivo: aba Massivas com a barra de filtros voltando a ter só
+Regional/Etapa/Status; badges No prazo/Prazo final/Atraso continuam clicáveis e filtrando a
+tabela normalmente; aba Monitoramento de Livros com o dropdown de faixas de dias intacto.
+Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só
+de template, nenhum backend tocado.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries

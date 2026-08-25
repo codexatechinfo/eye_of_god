@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T04:25:00.000Z",
+  "atualizado_em": "2026-08-26T04:35:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "4f02b47",
   "seguranca": {
@@ -394,6 +394,13 @@
       "skill": "/projeto-novo",
       "evento": "Prazo regulatório também disponível como dropdown na barra de filtros",
       "detalhe": "Usuário pediu pra levar os mesmos filtros do ciclo anterior (badges clicáveis das faixas de dias/prazo) também pra dentro da barra de filtros do topo, em cada aba. Implementado como dois <select> novos condicionados por escopo (mesmo padrão do select Tipo, que já só aparecia em leiturarelitura): 'Prazo regulatório' com as opções <27 dias/33 dias/34+ dias em Monitoramento de Livros, e com No prazo/Prazo final/Atraso em Massivas. Os dois ligam no MESMO signal que os badges clicáveis já usavam (filtroFaixaDias/filtroPrazo) — dropdown e badge ficam sincronizados sozinhos, sem estado duplicado nem lógica nova. Testado ao vivo: selecionar '34+ dias' no dropdown (Livros) filtrou a tabela pra 53 registros e destacou o badge correspondente (opacidade 1, outros em 0.4); selecionar 'Prazo final' no dropdown (Massivas) filtrou pra 21 registros com o mesmo destaque sincronizado. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só de template, nenhum backend tocado. Ver adendo 6 da ADR 0012."
+    },
+    {
+      "data": "2026-08-26T04:35:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Dropdown de prazo regulatório removido da aba Massivas",
+      "detalhe": "Usuário pediu pra remover o filtro (dropdown 'Prazo regulatório') adicionado no ciclo anterior à barra de filtros da aba Massivas. Removido o <select *ngIf=\"escopo === 'massiva'\"> de massivas-view.html; o dropdown equivalente em Monitoramento de Livros (faixas <27/33/34+ dias) não foi tocado, o pedido mencionou só Massivas. Os badges clicáveis No prazo/Prazo final/Atraso na barra de resumo (que já existiam desde a decisão original da ADR 0012, reconfirmados no ciclo do adendo 5) continuam funcionando normalmente — só o controle redundante na barra de filtros de topo saiu; filtroPrazo (o signal por trás) não mudou. Testado ao vivo: barra de filtros da aba Massivas voltou a ter só Regional/Etapa/Status; badges de prazo continuam clicáveis e filtrando a tabela; aba Monitoramento de Livros com o dropdown de faixas de dias intacto. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só de template, nenhum backend tocado. Ver adendo 7 da ADR 0012."
     }
   ]
 }

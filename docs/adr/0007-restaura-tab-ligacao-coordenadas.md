@@ -38,3 +38,11 @@ referência compartilhada (`calendario_leitura`, `cidades_localidades`,
   UC nova aparece, UC não mencionada no arquivo fica intocada — exatamente a regra pedida.
 - Produção não foi tocada — só lida mais uma vez pra copiar a estrutura dessa tabela
   especificamente.
+- **`id bigserial primary key` adicionado depois**, a pedido do usuário — pra ficar
+  consistente com o padrão de toda outra tabela do banco local (`bigint` + sequence, PK).
+  Pegadinha real encontrada no teste: `ALTER TABLE ... ADD COLUMN id bigserial` cria uma
+  sequence nova, e o `GRANT` original na tabela (feito na criação) **não cobre sequence
+  criada depois** — o import quebrou com `permission denied for sequence
+  tab_ligacao_coordenadas_id_seq` até rodar `GRANT USAGE, SELECT ON SEQUENCE
+  tab_ligacao_coordenadas_id_seq TO app_user` à parte. Vale lembrar disso sempre que uma
+  coluna serial/identity for adicionada numa tabela que já existia.

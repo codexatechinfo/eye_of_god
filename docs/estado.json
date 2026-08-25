@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.1",
+  "versao": "0.4.2",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T15:00:00.000Z",
+  "atualizado_em": "2026-08-25T15:20:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "c6766fb",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -240,6 +240,13 @@
       "skill": "/projeto-novo",
       "evento": "tab_ligacao_coordenadas restaurada e habilitada pra importação por UC",
       "detalhe": "A pedido do usuário: tabela removida na poda (ADR 0004) trazida de volta via pg_dump --schema-only -t tab_ligacao_coordenadas da produção (mesma técnica da ADR 0002). Sem empresa_id — mesma classificação de referência compartilhada que calendario_leitura/cidades_localidades. Adicionada em importacaoConfig.js: modo upsert, chave UC — mecanismo genérico de importacaoService.js já suportava esse caso (chave de uma coluna, temEmpresa:false), sem mudança de código. Testado ponta a ponta: UC repetida substitui, UC nova acrescenta, UC não mencionada fica intocada. Banco local com 16 tabelas agora. Ver ADR 0007."
+    },
+    {
+      "data": "2026-08-25T15:20:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "id bigserial adicionado em tab_ligacao_coordenadas",
+      "detalhe": "A pedido do usuário, pra ficar consistente com o padrão bigint+sequence+PK do resto das tabelas. Pegadinha real no teste: ALTER TABLE ADD COLUMN id bigserial cria uma sequence nova que o GRANT original (feito na criação da tabela) não cobre — import quebrou com 'permission denied for sequence tab_ligacao_coordenadas_id_seq' até rodar GRANT USAGE, SELECT ON SEQUENCE ... TO app_user à parte. Corrigido e reconfirmado com import de teste. Vale lembrar sempre que adicionar coluna serial/identity numa tabela existente."
     }
   ]
 }

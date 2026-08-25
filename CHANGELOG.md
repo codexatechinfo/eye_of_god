@@ -5,13 +5,26 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Adicionado
+
+- Colaboradores com massiva atribuída/em execução hoje, mas sem nenhuma leitura/releitura,
+  deixam de aparecer como "sem serviço" na lista do Trilho — passam a contar com os mesmos
+  detalhes de "Livros de hoje" (badge roxo "massiva") que leitura/releitura já tinham. Ver
+  [ADR 0013](docs/adr/0013-colaboradores-massiva-no-trilho.md).
+- Badge de cargo (Motoqueiro/Pedestre/Monitor) ao lado da regional quando um colaborador é
+  expandido na lista do Trilho.
+
 ### Alterado
 
-- Aba Massivas voltou a mostrar o visual clássico de antes da ADR 0012 (título "Resumo de
-  Massivas" + os 7 cards Pendentes/Atribuídas/Em Execução/Total/No Prazo/Prazo Final/
-  Atraso) — a barra de resumo nova (Agentes em campo/Comunicação/Progresso/faixas de dias)
-  fica só na aba Monitoramento de Livros.
-
+- Filtros de Massivas e Monitoramento de Livros passam a persistir por aba ao trocar de aba
+  (antes reiniciavam toda vez que a aba era reaberta, porque o componente era destruído e
+  recriado — trocado `*ngIf` por `[hidden]` mantendo a instância viva). Ver Adendo 3 da
+  [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
+- Aba Massivas passa a usar o mesmo visual de barra de resumo (uma linha só) que
+  Monitoramento de Livros, mostrando seus próprios dados (os 7 contadores clássicos
+  Pendentes/Atribuídas/Em Execução/Total/No Prazo/Prazo Final/Atraso) nesse layout — ver
+  Adendo 3 da ADR 0012 (substitui a decisão do Adendo 2, que tinha revertido a aba pro
+  layout antigo em grid; o título "Resumo de Massivas" saiu de vez).
 - Barra de resumo operacional (ADR 0012): título/subtítulo ("Resumo de Massivas" / "Dados
   de... às...") removido; Agentes em campo/Comunicação/Progresso e os contadores de
   status/faixas de dias voltaram a ficar numa linha só, em vez de duas seções separadas.
@@ -19,7 +32,6 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   já usado em `ColaboradoresService`) e o toggle Livros/Leituras agora também vale pras
   faixas &lt;27/33/34+ dias (`obterFaixasDias` passou a somar `volume_de_leituras`, não só
   contar linhas).
-
 - Abas Massivas e Monitoramento de Livros: os 7 cards (Pendentes/Atribuídas/Em Execução/
   Total/No Prazo/Prazo Final/Atraso) foram substituídos por uma barra de resumo
   operacional — Agentes em campo (Moto/A pé/Na base), Comunicação · 30 min, Progresso de
@@ -27,11 +39,8 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   34+ dias. As faixas de dias vêm de `prazo_reg_livros` (nova query, `dias_finais` ajustado
   pela diferença entre hoje e `prazo_calendario`); o resto reaproveita dado que já existia.
   Ver [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
-
-### Adicionado
-
-- "Livros de hoje" na lista de colaboradores (aba Trilho) ganhou um badge indicando se o
-  livro é leitura ou releitura — mesma classificação da ADR 0006/0011, agora exposta em
+- "Livros de hoje" na lista de colaboradores (aba Trilho) ganhou um badge indicando o tipo
+  do livro — leitura, releitura (ADR 0006/0011) ou massiva (ADR 0013), agora exposto em
   `atividadeColaboradoresService.js` e `LivroAtividade.tipoServico`.
 
 ### Corrigido

@@ -69,21 +69,11 @@
     </div>
   </div>
 
-  <!-- Cabeçalho + toggle — o título só aparece na aba Massivas, que manteve
-       o visual clássico de antes da ADR 0012; Monitoramento de Livros não
-       tem título (a barra de resumo nova substitui o cabeçalho). -->
-  <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-    <div *ngIf="escopo === 'massiva'">
-      <h2 class="text-sm font-bold text-slate-800">Resumo de Massivas</h2>
-      <p class="text-[11px] text-slate-400" *ngIf="massivasService.resumo() as r">
-        Dados de {{ r.dataImport }} às {{ r.horaImport }}
-      </p>
-    </div>
-
+  <div class="flex justify-end mb-3">
     <button
       type="button"
       (click)="massivasService.alternarVisualizacao()"
-      class="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-blue-600 bg-white border border-slate-200 hover:border-blue-300 rounded-full px-3 py-1.5 transition-colors cursor-pointer ml-auto"
+      class="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-blue-600 bg-white border border-slate-200 hover:border-blue-300 rounded-full px-3 py-1.5 transition-colors cursor-pointer"
       title="Alternar entre contagem de livros e de leituras"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -101,162 +91,13 @@
     {{ massivasService.erro() }}
   </div>
 
-  <!-- Cards clássicos — só na aba Massivas, visual de antes da ADR 0012. -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6" *ngIf="escopo === 'massiva' && !massivasService.carregando() && !massivasService.erro()">
-    <!-- Pendentes -->
-    <button
-      type="button"
-      (click)="selecionarStatus('pendentes')"
-      class="relative overflow-hidden rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4"
-      [style.transform]="cardEmDestaque('pendentes') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-amber-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <polyline points="12 7 12 12 15 14" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-amber-700 tabular-nums">{{ valorCard('pendentes') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-amber-500 mt-0.5">Pendentes</div>
-    </button>
-
-    <!-- Atribuídas -->
-    <button
-      type="button"
-      (click)="selecionarStatus('atribuidas')"
-      class="relative overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-blue-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="cardEmDestaque('atribuidas') ? 1 : 0.4"
-      [style.transform]="cardEmDestaque('atribuidas') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-blue-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="18" rx="2" />
-            <path d="m8.5 13 2 2 4.5-4.5" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-blue-700 tabular-nums">{{ valorCard('atribuidas') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-blue-500 mt-0.5">Atribuídas</div>
-    </button>
-
-    <!-- Em execução -->
-    <button
-      type="button"
-      (click)="selecionarStatus('emExecucao')"
-      class="relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="cardEmDestaque('emExecucao') ? 1 : 0.4"
-      [style.transform]="cardEmDestaque('emExecucao') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-emerald-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 12 7 12 9 6 13 18 16 12 21 12" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-emerald-700 tabular-nums">{{ valorCard('emExecucao') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-emerald-500 mt-0.5">Em execução</div>
-    </button>
-
-    <!-- Total -->
-    <button
-      type="button"
-      (click)="selecionarTotal()"
-      class="relative overflow-hidden rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-violet-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="totalCardEmDestaque() ? 1 : 0.4"
-      [style.transform]="totalCardEmDestaque() ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-violet-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-violet-700 tabular-nums">{{ valorCard('total') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-violet-500 mt-0.5">Total massivas</div>
-    </button>
-
-    <!-- No prazo -->
-    <button
-      type="button"
-      (click)="selecionarPrazo('noPrazo')"
-      class="relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="prazoCardEmDestaque('noPrazo') ? 1 : 0.4"
-      [style.transform]="prazoCardEmDestaque('noPrazo') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-emerald-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-emerald-700 tabular-nums">{{ valorCard('noPrazo') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-emerald-500 mt-0.5">No prazo</div>
-    </button>
-
-    <!-- Prazo final -->
-    <button
-      type="button"
-      (click)="selecionarPrazo('final')"
-      class="relative overflow-hidden rounded-xl border border-yellow-200 bg-gradient-to-br from-yellow-50 via-white to-yellow-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="prazoCardEmDestaque('final') ? 1 : 0.4"
-      [style.transform]="prazoCardEmDestaque('final') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-yellow-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-yellow-100 text-yellow-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-yellow-700 tabular-nums">{{ valorCard('prazoFinal') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-yellow-600 mt-0.5">Prazo final</div>
-    </button>
-
-    <!-- Atraso -->
-    <button
-      type="button"
-      (click)="selecionarPrazo('atrasada')"
-      class="relative overflow-hidden rounded-xl border border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="prazoCardEmDestaque('atrasada') ? 1 : 0.4"
-      [style.transform]="prazoCardEmDestaque('atrasada') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-red-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <line x1="12" y1="8" x2="12" y2="13" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-red-700 tabular-nums">{{ valorCard('atrasadas') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-red-500 mt-0.5">Atraso</div>
-    </button>
-  </div>
-
-  <!-- Barra de resumo operacional — só na aba Monitoramento de Livros. Tudo
-       numa linha só (quebra naturalmente em telas estreitas via flex-wrap),
-       atualiza sozinha a cada 60s (MassivasService.iniciar()) e reage ao
-       toggle Livros/Leituras. -->
-  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 mb-6" *ngIf="escopo === 'leiturarelitura' && !massivasService.carregando() && !massivasService.erro()">
+  <!-- Barra de resumo operacional — mesmo visual nas duas abas (Agentes em
+       campo/Comunicação/Progresso são idênticos nas duas, já que são dado
+       de colaborador, não de massiva/leitura); só os contadores da direita
+       mudam por escopo. Tudo numa linha só (quebra em telas estreitas via
+       flex-wrap), atualiza sozinha a cada 60s e reage ao toggle
+       Livros/Leituras. -->
+  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 mb-6" *ngIf="!massivasService.carregando() && !massivasService.erro()">
     <div class="flex flex-wrap items-stretch gap-x-8 gap-y-4">
       <div>
         <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Agentes em campo</div>
@@ -290,62 +131,128 @@
 
       <span class="w-px self-stretch bg-slate-200 shrink-0"></span>
 
-      <button type="button" (click)="selecionarStatus('pendentes')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4">
-        <span class="w-1 self-stretch rounded-full bg-amber-400 shrink-0"></span>
-        <span>
-          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Pendentes</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('pendentes') }}</span>
-        </span>
-      </button>
+      <!-- Aba Massivas: os 7 contadores clássicos (Pendentes/Atribuídas/Em
+           Execução/Total/No Prazo/Prazo Final/Atraso), mesma fonte de
+           sempre (massivasService.resumo()), só que no visual novo. -->
+      <ng-container *ngIf="escopo === 'massiva'">
+        <button type="button" (click)="selecionarStatus('pendentes')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-amber-400 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Pendentes</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('pendentes') }}</span>
+          </span>
+        </button>
 
-      <button type="button" (click)="selecionarStatus('atribuidas')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('atribuidas') ? 1 : 0.4">
-        <span class="w-1 self-stretch rounded-full bg-blue-400 shrink-0"></span>
-        <span>
-          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Atribuídos</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('atribuidas') }}</span>
-        </span>
-      </button>
+        <button type="button" (click)="selecionarStatus('atribuidas')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('atribuidas') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-blue-400 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Atribuídas</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('atribuidas') }}</span>
+          </span>
+        </button>
 
-      <button type="button" (click)="selecionarStatus('emExecucao')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('emExecucao') ? 1 : 0.4">
-        <span class="w-1 self-stretch rounded-full bg-emerald-400 shrink-0"></span>
-        <span>
-          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Em execução</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('emExecucao') }}</span>
-        </span>
-      </button>
+        <button type="button" (click)="selecionarStatus('emExecucao')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('emExecucao') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-emerald-400 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Em execução</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('emExecucao') }}</span>
+          </span>
+        </button>
 
-      <button type="button" (click)="selecionarPrazo('atrasada')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="prazoCardEmDestaque('atrasada') ? 1 : 0.4">
-        <span class="w-1 self-stretch rounded-full bg-red-500 shrink-0"></span>
-        <span>
-          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Em atraso</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('atrasadas') }}</span>
-        </span>
-      </button>
+        <button type="button" (click)="selecionarTotal()" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="totalCardEmDestaque() ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-violet-500 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Total massivas</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('total') }}</span>
+          </span>
+        </button>
 
-      <!-- Faixas de dias (prazo_reg_livros.dias_finais ajustado pra hoje — ver ADR 0012) -->
-      <span class="flex items-center gap-2.5" title="Livros com projeção de menos de 27 dias até o prazo regulatório">
-        <span class="w-1 self-stretch rounded-full bg-emerald-500 shrink-0"></span>
-        <span>
-          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">&lt; 27 dias</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('menor27') }}</span>
-        </span>
-      </span>
+        <button type="button" (click)="selecionarPrazo('noPrazo')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="prazoCardEmDestaque('noPrazo') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-emerald-500 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">No prazo</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('noPrazo') }}</span>
+          </span>
+        </button>
 
-      <span class="flex items-center gap-2.5" title="Livros na borda do prazo regulatório (33 dias)">
-        <span class="w-1 self-stretch rounded-full bg-amber-500 shrink-0"></span>
-        <span>
-          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">33 dias</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('igual33') }}</span>
-        </span>
-      </span>
+        <button type="button" (click)="selecionarPrazo('final')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="prazoCardEmDestaque('final') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-yellow-500 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Prazo final</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('prazoFinal') }}</span>
+          </span>
+        </button>
 
-      <span class="flex items-center gap-2.5" title="Livros que já estouraram o prazo regulatório de 33 dias">
-        <span class="w-1 self-stretch rounded-full bg-red-600 shrink-0"></span>
-        <span>
-          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">34+ dias</span>
-          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('maior34') }}</span>
+        <button type="button" (click)="selecionarPrazo('atrasada')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="prazoCardEmDestaque('atrasada') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-red-500 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Atraso</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('atrasadas') }}</span>
+          </span>
+        </button>
+      </ng-container>
+
+      <!-- Aba Monitoramento de Livros: Pendentes/Atribuídos/Em Execução/Em
+           Atraso (mesma fonte de sempre) + faixas de dias (prazo_reg_livros,
+           ver ADR 0012). -->
+      <ng-container *ngIf="escopo === 'leiturarelitura'">
+        <button type="button" (click)="selecionarStatus('pendentes')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-amber-400 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Pendentes</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('pendentes') }}</span>
+          </span>
+        </button>
+
+        <button type="button" (click)="selecionarStatus('atribuidas')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('atribuidas') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-blue-400 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Atribuídos</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('atribuidas') }}</span>
+          </span>
+        </button>
+
+        <button type="button" (click)="selecionarStatus('emExecucao')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('emExecucao') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-emerald-400 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Em execução</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('emExecucao') }}</span>
+          </span>
+        </button>
+
+        <button type="button" (click)="selecionarPrazo('atrasada')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="prazoCardEmDestaque('atrasada') ? 1 : 0.4">
+          <span class="w-1 self-stretch rounded-full bg-red-500 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Em atraso</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('atrasadas') }}</span>
+          </span>
+        </button>
+
+        <!-- Faixas de dias (prazo_reg_livros.dias_finais ajustado pra hoje — ver ADR 0012) -->
+        <span class="flex items-center gap-2.5" title="Livros com projeção de menos de 27 dias até o prazo regulatório">
+          <span class="w-1 self-stretch rounded-full bg-emerald-500 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">&lt; 27 dias</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('menor27') }}</span>
+          </span>
         </span>
-      </span>
+
+        <span class="flex items-center gap-2.5" title="Livros na borda do prazo regulatório (33 dias)">
+          <span class="w-1 self-stretch rounded-full bg-amber-500 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">33 dias</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('igual33') }}</span>
+          </span>
+        </span>
+
+        <span class="flex items-center gap-2.5" title="Livros que já estouraram o prazo regulatório de 33 dias">
+          <span class="w-1 self-stretch rounded-full bg-red-600 shrink-0"></span>
+          <span>
+            <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">34+ dias</span>
+            <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('maior34') }}</span>
+          </span>
+        </span>
+      </ng-container>
     </div>
   </div>
 

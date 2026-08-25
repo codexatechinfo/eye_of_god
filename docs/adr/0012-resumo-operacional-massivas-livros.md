@@ -108,6 +108,39 @@ campo/Comunicação/Progresso/faixas de dias) ficou atrás de
 de Livros continua sem título (pedido do adendo anterior, que era especificamente sobre
 essa aba).
 
+## Adendo 3 — Massivas ganha o visual novo de volta (com seus próprios dados), e filtros passam a persistir por aba
+
+Terceira volta do usuário sobre a mesma tela: "quero as informações do anexo1 [os 7 cards
+clássicos de Massivas] mas no visual do anexo2 [a barra de uma linha só do Adendo 2] usando
+os resumos mas para as massivas". Ou seja, reverte só a parte VISUAL do Adendo 2 — as duas
+abas voltam a compartilhar o mesmo layout de barra — mantendo os DADOS que cada aba sempre
+mostrou (Massivas continua lendo `massivasService.resumo()` com os 7 contadores clássicos;
+Monitoramento de Livros continua com Pendentes/Atribuídos/Em Execução/Em Atraso + faixas de
+dias). Não é uma terceira mudança de fonte de dado, só de onde cada contador é desenhado.
+
+Implementado como um único bloco `*ngIf="!carregando && !erro"` com Agentes em
+campo/Comunicação/Progresso em comum (sempre os mesmos, não dependem de escopo — são
+métrica de colaborador, ver seção acima), um divisor vertical, e dois `ng-container`
+mutuamente exclusivos por `escopo` pros contadores: `massiva` renderiza os 7 badges
+clássicos (mesmos métodos de sempre — `valorCard`, `selecionarTotal`/`totalCardEmDestaque`,
+`selecionarPrazo`/`prazoCardEmDestaque` — só que como botões numa linha em vez de cards em
+grid); `leiturarelitura` mantém os 4 status + 3 faixas de dias que já tinha desde o Adendo
+2. O título ("Resumo de Massivas" + data/hora) saiu de vez — não fazia sentido nesse layout
+de barra, e o pedido nunca mencionou querê-lo de volta.
+
+Separadamente, usuário reportou "os filtros das abas estão se comunicando" — investigado ao
+vivo (JWT de teste, checando `document.querySelectorAll('app-massivas-view').length`) e
+**não havia vazamento de dado entre abas**: a arquitetura por-instância de `MassivasService`
+(ADR 0010) já isola cada aba corretamente. O comportamento real era outro — cada aba
+**reiniciava** o próprio filtro toda vez que o usuário saía e voltava a ela, porque
+`home.html` usava `*ngIf` pra alternar as duas `<app-massivas-view>`, e `*ngIf` destrói e
+recria o componente (e o serviço por-instância junto) a cada troca. Trocado por `[hidden]`
+nos dois `<div>` que envolvem cada instância, com `*ngIf="abaAtiva() === 'livros' ||
+jaAbriuLivros()"` controlando só a criação preguiçosa (a instância nasce na primeira vez que
+a aba é aberta, e depois disso fica viva — só escondida — pelo resto da sessão). Confirmado
+ao vivo: filtro Regional=Cascavel setado em Monitoramento de Livros sobrevive a uma
+passagem pela aba Massivas e volta.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries

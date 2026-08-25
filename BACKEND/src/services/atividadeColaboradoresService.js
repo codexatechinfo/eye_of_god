@@ -34,6 +34,69 @@ function classificarTipoServico(dataRecebimento, dataPrevistaLimite) {
   return recebimento <= prevista ? 'leitura' : 'releitura';
 }
 
+// Só atribuidas_im/em_execucao_im têm leiturista (pendentes_im não tem
+// ninguém atribuído ainda, então não entra aqui — ver TABELAS_MASSIVA em
+// massivasService.js). Pega sempre o batch mais recente de cada tabela.
+//
+// Cada tabela pode ter mais de uma linha por (leiturista, livro) — o mesmo
+// padrão de sub-lote visto em massivasService.contarFonteMassiva/detalheMassiva
+// — então dedup igual lá: dentro da mesma categoria fica com a linha de
+// menor quantidade restante (mais avançada); entre categorias, "Em Execução"
+// vence "Atribuída".
+async function listarColaboradoresMassivaHoje(db) {
+  const restante = `(CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$'
+    THEN split_part(t.qtd_digitados_nao_digitados, '/', 1)::int + split_part(t.qtd_digitados_nao_digitados, '/', 2)::int
+    ELSE 0 END)`;
+
+  const { rows: linhas } = await db.query(`
+    WITH ultimo_atribuidas AS (
+      SELECT dt_import, hr_import FROM atribuidas_im ORDER BY id DESC LIMIT 1
+    ), ultimo_execucao AS (
+      SELECT dt_import, hr_import FROM em_execucao_im ORDER BY id DESC LIMIT 1
+    ), atribuidas AS (
+      SELECT DISTINCT ON (t.leiturista, t.livro)
+        t.leiturista, t.livro, t.etapa, t.qtd_digitados_nao_digitados, t.hr_import,
+        'Atribuída' AS situacao, 1 AS prioridade
+      FROM atribuidas_im t, ultimo_atribuidas u
+      WHERE t.dt_import = u.dt_import AND t.hr_import = u.hr_import AND t.leiturista IS NOT NULL
+      ORDER BY t.leiturista, t.livro, ${restante} ASC
+    ), execucao AS (
+      SELECT DISTINCT ON (t.leiturista, t.livro)
+        t.leiturista, t.livro, t.etapa, t.qtd_digitados_nao_digitados, t.hr_import,
+        'Em Execução' AS situacao, 2 AS prioridade
+      FROM em_execucao_im t, ultimo_execucao u
+      WHERE t.dt_import = u.dt_import AND t.hr_import = u.hr_import AND t.leiturista IS NOT NULL
+      ORDER BY t.leiturista, t.livro, ${restante} ASC
+    )
+    SELECT DISTINCT ON (leiturista, livro) leiturista, livro, etapa, qtd_digitados_nao_digitados, hr_import, situacao
+    FROM (SELECT * FROM atribuidas UNION ALL SELECT * FROM execucao) unidos
+    ORDER BY leiturista, livro, prioridade DESC
+  `);
+
+  const porColaborador = new Map();
+  for (const linha of linhas) {
+    const nome = (linha.leiturista || '').trim();
+    if (!nome) continue;
+    const { digitados, naoDigitados } = parseQtd(linha.qtd_digitados_nao_digitados);
+    const etapaLimpa = (linha.etapa || '').match(/\d+/)?.[0] ?? linha.etapa;
+
+    if (!porColaborador.has(nome)) porColaborador.set(nome, []);
+    porColaborador.get(nome).push({
+      livro: linha.livro,
+      etapa: etapaLimpa,
+      situacaoAtual: linha.situacao,
+      digitados,
+      naoDigitados,
+      tipoServico: 'massiva',
+      primeiraVez: linha.hr_import,
+      ultimaVez: linha.hr_import,
+      historico: [{ horaImport: linha.hr_import, situacao: linha.situacao, digitados, naoDigitados }],
+    });
+  }
+
+  return porColaborador;
+}
+
 async function listarAtividadeHoje(db) {
   const hoje = new Date().toLocaleDateString('pt-BR');
 
@@ -167,6 +230,39 @@ async function listarAtividadeHoje(db) {
       semSincronismo,
       livros,
     });
+  }
+
+  // Colaboradores só com massiva atribuída não aparecem em contr_execucao_leitura
+  // (que é só leitura/releitura) e cairiam em "sem serviço" mesmo trabalhando —
+  // mescla quem já está na lista e cria entrada nova pra quem só tem massiva.
+  const massivaPorColaborador = await listarColaboradoresMassivaHoje(db);
+  for (const [nome, livrosMassiva] of massivaPorColaborador) {
+    const existente = colaboradores.find(c => c.colaborador === nome);
+    const digitadosMassiva = livrosMassiva.reduce((soma, l) => soma + l.digitados, 0);
+    const pendentesMassiva = livrosMassiva.reduce((soma, l) => soma + l.naoDigitados, 0);
+    const emExecucaoMassiva = livrosMassiva.filter(l => l.situacaoAtual === 'Em Execução').length;
+
+    if (existente) {
+      existente.livros.push(...livrosMassiva);
+      existente.totalRealizadas += digitadosMassiva;
+      existente.totalPendentes += pendentesMassiva;
+      existente.totalLivros += livrosMassiva.length;
+      existente.totalEmExecucao += emExecucaoMassiva;
+    } else {
+      colaboradores.push({
+        colaborador: nome,
+        totalRealizadas: digitadosMassiva,
+        totalPendentes: pendentesMassiva,
+        totalLivros: livrosMassiva.length,
+        totalEmExecucao: emExecucaoMassiva,
+        ultimaMudancaHora: livrosMassiva[0].ultimaVez,
+        minutosParado: 0,
+        parado: false,
+        ativo: true,
+        semSincronismo: false,
+        livros: livrosMassiva,
+      });
+    }
   }
 
   const afastamentosHoje = await obterAfastamentosHoje(db);

@@ -242,11 +242,17 @@
     </main>
   </div>
 
-  <div class="flex-1 min-h-0" *ngIf="abaAtiva() === 'livros'">
+  <!-- [hidden] em vez de *ngIf de propósito: cada aba mantém sua própria
+       instância (e o próprio filtro) viva o tempo todo depois da primeira
+       visita — com *ngIf o componente era destruído/recriado a cada troca
+       de aba, resetando o filtro toda vez (parecia "esquecer" o que o
+       usuário tinha selecionado). *ngIf ainda decide a CRIAÇÃO (lazy — só
+       instancia se o usuário chegar a abrir a aba). -->
+  <div class="flex-1 min-h-0" *ngIf="abaAtiva() === 'livros' || jaAbriuLivros()" [hidden]="abaAtiva() !== 'livros'">
     <app-massivas-view class="block h-full" escopo="leiturarelitura"></app-massivas-view>
   </div>
 
-  <div class="flex-1 min-h-0" *ngIf="abaAtiva() === 'massivas'">
+  <div class="flex-1 min-h-0" *ngIf="abaAtiva() === 'massivas' || jaAbriuMassivas()" [hidden]="abaAtiva() !== 'massivas'">
     <app-massivas-view class="block h-full" escopo="massiva"></app-massivas-view>
   </div>
 

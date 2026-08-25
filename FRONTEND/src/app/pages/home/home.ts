@@ -41,6 +41,12 @@ export class Home implements OnInit, OnDestroy {
   ultimoImport = signal<{ dataImport: string; horaImport: string } | null>(null);
   abaAtiva = signal<Aba>('monitoramento');
 
+  // Controla a criação (lazy) de app-massivas-view — depois de aberta uma
+  // vez, [hidden] no template mantém a instância viva (e o filtro dela
+  // junto) em vez de destruir ao trocar de aba. Ver home.html.
+  jaAbriuLivros = signal(false);
+  jaAbriuMassivas = signal(false);
+
   private intervaloId?: ReturnType<typeof setInterval>;
   private readonly INTERVALO_VERIFICACAO_MS = 30000;
 
@@ -82,6 +88,8 @@ export class Home implements OnInit, OnDestroy {
 
   selecionarAba(aba: Aba): void {
     this.abaAtiva.set(aba);
+    if (aba === 'livros') this.jaAbriuLivros.set(true);
+    if (aba === 'massivas') this.jaAbriuMassivas.set(true);
   }
 
   podeImportar(): boolean {

@@ -127,12 +127,20 @@
     </button>
 
     <div *ngIf="colaboradoresService.colaboradorSelecionado() === colaborador.colaborador" class="px-2.5 pt-2 pb-3">
-      <div class="flex items-center gap-1 mb-2">
+      <div class="flex items-center gap-1.5 mb-2">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
           <circle cx="12" cy="10" r="3" />
         </svg>
         <span class="text-[10.5px] font-semibold text-slate-500 truncate">{{ regionalDe(colaborador.base) }}</span>
+        <span
+          class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+          [ngClass]="{
+            'bg-blue-100 text-blue-700': colaborador.cargo === 'LEITURISTA MOTOCICLISTA',
+            'bg-orange-100 text-orange-700': colaborador.cargo === 'LEITURISTA',
+            'bg-slate-200 text-slate-600': colaborador.cargo === 'MONITOR'
+          }"
+        >{{ rotuloCargo(colaborador.cargo) }}</span>
       </div>
       <ng-container *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as a; else semAtividade">
         <!-- Grid de indicadores -->
@@ -274,7 +282,11 @@
                   <span
                     *ngIf="livro.tipoServico"
                     class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-full"
-                    [ngClass]="livro.tipoServico === 'releitura' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'"
+                    [ngClass]="{
+                      'bg-amber-100 text-amber-700': livro.tipoServico === 'releitura',
+                      'bg-blue-100 text-blue-700': livro.tipoServico === 'leitura',
+                      'bg-violet-100 text-violet-700': livro.tipoServico === 'massiva'
+                    }"
                   >{{ livro.tipoServico }}</span>
                 </span>
                 <span class="flex items-center gap-1.5 shrink-0">

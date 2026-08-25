@@ -32,6 +32,14 @@ export class ListaColaboradores {
     return normalizarRegional(base);
   }
 
+  // Cargo cru de ativos_inativos vira um rótulo mais claro na lista.
+  rotuloCargo(cargo: string): string {
+    if (cargo === 'LEITURISTA MOTOCICLISTA') return 'Motoqueiro';
+    if (cargo === 'LEITURISTA') return 'Pedestre';
+    if (cargo === 'MONITOR') return 'Monitor';
+    return cargo;
+  }
+
   abrirLivro(colaboradorNome: string, livro: LivroAtividade): void {
     this.colaboradoresService.abrirLivro(colaboradorNome, livro);
   }

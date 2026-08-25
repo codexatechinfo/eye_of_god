@@ -52,8 +52,9 @@ export interface LivroAtividade {
   digitados: number;
   naoDigitados: number;
   // null = ainda sem data_recebimento, não dá pra saber se vai virar leitura
-  // ou releitura (mesma regra da ADR 0006/0011).
-  tipoServico: 'leitura' | 'releitura' | null;
+  // ou releitura (mesma regra da ADR 0006/0011); 'massiva' = livro vindo das
+  // tabelas de massiva (atribuidas_im/em_execucao_im), não de contr_execucao_leitura.
+  tipoServico: 'leitura' | 'releitura' | 'massiva' | null;
   primeiraVez: string;
   ultimaVez: string;
   historico: HistoricoLivroItem[];

@@ -229,6 +229,20 @@ export class MassivasView implements OnInit {
     this.massivasService.buscarTudo();
   }
 
+  // Filtro clicável das faixas <27/33/34+ dias (aba Monitoramento de Livros
+  // — ADR 0012 Adendo 4). Dimensão independente de status/prazo (é
+  // prazo_reg_livros, não contr_execucao_leitura), então não zera os outros
+  // filtros ao selecionar — só alterna o próprio.
+  faixaEmDestaque(faixa: 'menor27' | 'igual33' | 'maior34'): boolean {
+    const filtro = this.massivasService.filtroFaixaDias();
+    return !filtro || filtro === faixa;
+  }
+
+  selecionarFaixa(faixa: 'menor27' | 'igual33' | 'maior34'): void {
+    this.massivasService.filtroFaixaDias.set(this.massivasService.filtroFaixaDias() === faixa ? '' : faixa);
+    this.massivasService.buscarTudo();
+  }
+
   abrirHistorico(livro: string): void {
     this.massivasService.abrirHistoricoLivro(livro);
   }

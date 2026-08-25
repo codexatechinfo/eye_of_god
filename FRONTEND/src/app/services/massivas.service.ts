@@ -56,6 +56,10 @@ export type StatusMassivas = 'todos' | 'pendentes' | 'atribuidas' | 'emExecucao'
 export type VisualizacaoMassivas = 'livros' | 'leituras';
 export type PrazoMassivas = '' | 'noPrazo' | 'final' | 'atrasada';
 export type TipoServico = 'todos' | 'leitura' | 'releitura' | 'massiva' | 'leiturarelitura';
+// Filtro clicável das faixas de dias (aba Monitoramento de Livros — ver ADR
+// 0012 Adendo 4). Só faz efeito lá; na aba Massivas o backend ignora porque
+// o join com prazo_reg_livros usa o livro de contr_execucao_leitura.
+export type FaixaDiasMassivas = '' | 'menor27' | 'igual33' | 'maior34';
 
 // Escopo fixo da aba: "massiva" é a aba Massivas (só massiva, sem opção de
 // trocar); "leiturarelitura" é a aba Monitoramento de Livros (leitura e
@@ -105,6 +109,7 @@ export class MassivasService implements OnDestroy {
   filtroColaborador = signal('');
   filtroStatus = signal<StatusMassivas>('todos');
   filtroPrazo = signal<PrazoMassivas>('');
+  filtroFaixaDias = signal<FaixaDiasMassivas>('');
   filtroTipoServico = signal<TipoServico>('leiturarelitura');
 
   visualizacao = signal<VisualizacaoMassivas>('livros');
@@ -169,6 +174,7 @@ export class MassivasService implements OnDestroy {
     if (this.filtroColaborador()) params = params.set('colaborador', this.filtroColaborador());
     if (this.filtroStatus() !== 'todos') params = params.set('status', this.filtroStatus());
     if (this.filtroPrazo()) params = params.set('prazo', this.filtroPrazo());
+    if (this.filtroFaixaDias()) params = params.set('faixaDias', this.filtroFaixaDias());
     if (this.filtroTipoServico() !== 'todos') params = params.set('tipoServico', this.filtroTipoServico());
     return params;
   }
@@ -222,6 +228,7 @@ export class MassivasService implements OnDestroy {
     this.filtroColaborador.set('');
     this.filtroStatus.set('todos');
     this.filtroPrazo.set('');
+    this.filtroFaixaDias.set('');
     this.filtroTipoServico.set(this.escopo);
     this.carregarOpcoesFiltro();
     this.buscarTudo();

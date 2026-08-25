@@ -387,10 +387,10 @@ async function contarTotalMassivaDeduplicado(db, chaves, dataImport, horaImport,
 // CONSULTA (confirmado com o usuário) — nunca fonte de linhas por si só. O
 // ponto de partida é sempre o livro de contr_execucao_leitura (mesmo "último
 // lote" usado no resto da tela); só entra na contagem quando esse livro TEM
-// correspondência em prazo_reg_livros (INNER JOIN por número do livro — os
-// dois lados são sempre numéricos, mas prazo_reg_livros grava sem zero à
-// esquerda enquanto contr_execucao_leitura usa 6 dígitos, daí o ::int em vez
-// de comparar as strings). Livro sem linha correspondente em prazo_reg_livros
+// correspondência em prazo_reg_livros (por número do livro — os dois lados
+// são sempre numéricos, mas prazo_reg_livros grava sem zero à esquerda
+// enquanto contr_execucao_leitura usa 6 dígitos, daí o ::int em vez de
+// comparar as strings). Livro sem linha correspondente em prazo_reg_livros
 // simplesmente não aparece em nenhuma faixa — não é "zero", é "não avaliado".
 //
 // dias_finais é o nº de dias entre a primeira leitura e o prazo regulatório
@@ -401,6 +401,25 @@ async function contarTotalMassivaDeduplicado(db, chaves, dataImport, horaImport,
 // (c.data_import), não CURRENT_DATE — mesmo princípio já usado em
 // IMPORT_TS_CONTR_SQL/PRAZO_CONTR_SQL: o "agora" do app é o momento do
 // último scrape, não o relógio real.
+//
+// Reaproveitada em detalheContr() pro filtro clicável das faixas <27/33/34+
+// dias — mesma fórmula, join com LEFT (não INNER) porque aqui o filtro é
+// opcional: sem faixaDias selecionada, o join não deve excluir nenhum livro.
+const EFETIVO_PRAZO_REG_SQL = `preg.dias_finais::int + (to_date(c.data_import, 'DD/MM/YYYY') - to_date(preg.prazo_calendario, 'YYYY-MM-DD'))`;
+
+function joinPrazoRegLivros() {
+  return `LEFT JOIN prazo_reg_livros preg
+    ON preg.livro::int = c.livro::int
+    AND preg.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')`;
+}
+
+function condicaoFaixaDias(faixa) {
+  if (faixa === 'menor27') return `${EFETIVO_PRAZO_REG_SQL} < 27`;
+  if (faixa === 'igual33') return `${EFETIVO_PRAZO_REG_SQL} = 33`;
+  if (faixa === 'maior34') return `${EFETIVO_PRAZO_REG_SQL} >= 34`;
+  return null;
+}
+
 async function obterFaixasDias(db, dataImport, horaImport, filtros) {
   const condicoesExtras = [];
   const parametros = [];
@@ -430,12 +449,12 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
         SELECT DISTINCT ON (c.livro)
           c.livro,
           (${digitados} + ${naoDigitados}) AS leituras,
-          p.dias_finais::int + (to_date(c.data_import, 'DD/MM/YYYY') - to_date(p.prazo_calendario, 'YYYY-MM-DD')) AS efetivo
+          ${EFETIVO_PRAZO_REG_SQL} AS efetivo
         FROM contr_execucao_leitura c
         LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
-        JOIN prazo_reg_livros p
-          ON p.livro::int = c.livro::int
-          AND p.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
+        JOIN prazo_reg_livros preg
+          ON preg.livro::int = c.livro::int
+          AND preg.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
         WHERE c.data_import = $1 AND c.hora_import = $2
           ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
         ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
@@ -715,6 +734,12 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
   const condicaoPrazoExterna = condicaoSqlPrazoContr(filtros.prazo);
   if (condicaoPrazoExterna) condicoesExtras.push(condicaoPrazoExterna);
 
+  // Filtro clicável das faixas <27/33/34+ dias (mesma fórmula de
+  // obterFaixasDias) — join só entra quando o filtro está ativo, pra não
+  // pesar a consulta padrão sem esse filtro.
+  const condicaoFaixa = condicaoFaixaDias(filtros.faixaDias);
+  if (condicaoFaixa) condicoesExtras.push(condicaoFaixa);
+
   let filtroColaborador = '';
   if (filtros.colaborador) {
     parametros.push(`%${filtros.colaborador}%`);
@@ -733,6 +758,7 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
       FROM contr_execucao_leitura c
       LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
       ${joinCalendarioContr()}
+      ${filtros.faixaDias ? joinPrazoRegLivros() : ''}
       WHERE c.data_import = $1 AND c.hora_import = $2
         ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
       ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC

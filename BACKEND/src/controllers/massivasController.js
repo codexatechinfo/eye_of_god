@@ -24,8 +24,8 @@ async function opcoesFiltro(req, res) {
 
 async function detalhe(req, res) {
   try {
-    const { regional, livro, etapa, colaborador, status, prazo, tipoServico } = req.query;
-    const dados = await obterDetalhe(req.db, { regional, livro, etapa, colaborador, status, prazo, tipoServico });
+    const { regional, livro, etapa, colaborador, status, prazo, tipoServico, faixaDias } = req.query;
+    const dados = await obterDetalhe(req.db, { regional, livro, etapa, colaborador, status, prazo, tipoServico, faixaDias });
     res.json({ sucesso: true, ...dados });
   } catch (erro) {
     console.error('❌ Erro ao obter detalhe de massivas:', erro);

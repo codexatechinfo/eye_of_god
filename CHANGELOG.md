@@ -7,6 +7,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Faixas &lt;27/33/34+ dias (aba Monitoramento de Livros) agora são clicáveis e filtram a
+  tabela de detalhe abaixo, igual aos outros badges da barra de resumo — antes eram só
+  display. Aba Massivas já tinha o equivalente (No Prazo/Prazo Final/Atraso), reconfirmado
+  funcionando. Ver Adendo 5 da [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
 - Colaboradores com massiva atribuída/em execução hoje, mas sem nenhuma leitura/releitura,
   deixam de aparecer como "sem serviço" na lista do Trilho — passam a contar com os mesmos
   detalhes de "Livros de hoje" (badge roxo "massiva") que leitura/releitura já tinham. Ver

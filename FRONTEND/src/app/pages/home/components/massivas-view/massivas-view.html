@@ -228,30 +228,31 @@
           </span>
         </button>
 
-        <!-- Faixas de dias (prazo_reg_livros.dias_finais ajustado pra hoje — ver ADR 0012) -->
-        <span class="flex items-center gap-2.5" title="Livros com projeção de menos de 27 dias até o prazo regulatório">
+        <!-- Faixas de dias (prazo_reg_livros.dias_finais ajustado pra hoje — ver
+             ADR 0012; clicável desde o Adendo 4, filtra a tabela abaixo). -->
+        <button type="button" (click)="selecionarFaixa('menor27')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="faixaEmDestaque('menor27') ? 1 : 0.4" title="Livros com projeção de menos de 27 dias até o prazo regulatório">
           <span class="w-1 self-stretch rounded-full bg-emerald-500 shrink-0"></span>
           <span>
             <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">&lt; 27 dias</span>
             <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('menor27') }}</span>
           </span>
-        </span>
+        </button>
 
-        <span class="flex items-center gap-2.5" title="Livros na borda do prazo regulatório (33 dias)">
+        <button type="button" (click)="selecionarFaixa('igual33')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="faixaEmDestaque('igual33') ? 1 : 0.4" title="Livros na borda do prazo regulatório (33 dias)">
           <span class="w-1 self-stretch rounded-full bg-amber-500 shrink-0"></span>
           <span>
             <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">33 dias</span>
             <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('igual33') }}</span>
           </span>
-        </span>
+        </button>
 
-        <span class="flex items-center gap-2.5" title="Livros que já estouraram o prazo regulatório de 33 dias">
+        <button type="button" (click)="selecionarFaixa('maior34')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="faixaEmDestaque('maior34') ? 1 : 0.4" title="Livros que já estouraram o prazo regulatório de 33 dias">
           <span class="w-1 self-stretch rounded-full bg-red-600 shrink-0"></span>
           <span>
             <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">34+ dias</span>
             <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorFaixa('maior34') }}</span>
           </span>
-        </span>
+        </button>
       </ng-container>
     </div>
   </div>

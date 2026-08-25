@@ -199,6 +199,49 @@ plano); com `regional=CASCAVEL`, 7/17/6, um subconjunto plausível do total. Con
 visualmente na aba Monitoramento de Livros. Suíte de isolamento de tenant (12 testes)
 continua passando.
 
+## Adendo 5 — faixas <27/33/34+ dias viram filtro clicável (aba Massivas já tinha o equivalente)
+
+Usuário pediu: "adiciona na aba monitoramento de livros o filtro por prazo regulatório onde
+vai filtrar os três casos do anexo1 [as faixas &lt;27/33/34+]" e "aba massivas também mas
+para os do anexo2 [No Prazo/Prazo Final/Atraso]".
+
+Conferido antes de implementar: **item 2 já existia.** Os badges No Prazo/Prazo Final/Atraso
+da aba Massivas já são clicáveis desde a decisão original deste ADR (`selecionarPrazo()`/
+`prazoCardEmDestaque()`) e já filtram a tabela de detalhe via `filtros.prazo` →
+`condicaoSqlPrazo()` no backend — só reconfirmado ao vivo (clique em "Prazo final" levou a
+tabela de 1068 pra 21 registros, batendo com o número do card) pra garantir que nada tinha
+quebrado nas reformulações visuais recentes (Adendo 3). Nenhuma mudança de código nesse
+ponto.
+
+Item 1 era novo de verdade: as faixas &lt;27/33/34+ dias (aba Monitoramento de Livros) eram
+só display (`valorFaixa()`, sem `onclick`) — sem capacidade nenhuma de filtrar a tabela.
+Implementado o equivalente ao padrão já usado pros outros badges:
+
+- `EFETIVO_PRAZO_REG_SQL`/`joinPrazoRegLivros()`/`condicaoFaixaDias(faixa)` extraídos como
+  helpers reutilizáveis em `massivasService.js` — a mesma fórmula e o mesmo join que
+  `obterFaixasDias()` (Adendo 4) já usa pra contar os cards, só que aqui o join é `LEFT` (não
+  `INNER`): o filtro é opcional, então sem `faixaDias` selecionada o join não pode excluir
+  nenhum livro; quando `preg` não casa, a expressão vira `NULL` e a condição
+  (`efetivo < 27`, etc.) nunca é verdadeira, então o filtro só exclui quando de fato ativo.
+- `detalheContr()` ganhou a condição via `filtros.faixaDias`, com o `LEFT JOIN
+  prazo_reg_livros` só entrando na query quando esse filtro está presente (evita o join extra
+  no caso comum, sem filtro).
+- Rota `GET /massivas/detalhe` e `massivasController.detalhe` passaram a aceitar
+  `faixaDias` como query string, valendo `menor27`, `igual33` ou `maior34`.
+- FRONTEND: `MassivasService` ganhou `filtroFaixaDias` (signal) incluído em `montarParams()`
+  e resetado em `limparFiltros()`; `MassivasView` ganhou `selecionarFaixa()`/
+  `faixaEmDestaque()` (mesmo padrão de `selecionarPrazo()`/`prazoCardEmDestaque()`, mas
+  **não** zera os outros filtros ao selecionar — faixa de dias é uma dimensão independente
+  de status/prazo, não mutuamente exclusiva com eles); os três `<span>` das faixas viraram
+  `<button>` com `(click)` e opacidade reduzida quando outra faixa está selecionada, igual
+  aos demais badges da barra.
+
+Testado ao vivo: clique em "34+ dias" (card mostrando 54) filtrou a tabela de "Detalhe por
+livro" pra exatamente 54 registros; via API, o filtro com valor `menor27` retornou 14 linhas,
+`igual33` 140 (card mostrava 143 — diferença de 3 esperada pelo job de coleta em paralelo
+entre o momento do card e o da consulta detalhada), `maior34` 54 (card 56). Suíte de
+isolamento de tenant (12 testes) e build do Angular continuam passando.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries

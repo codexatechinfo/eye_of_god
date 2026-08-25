@@ -62,6 +62,15 @@ async function extrairLinhas(buffer, colunasValidas) {
   return linhas;
 }
 
+// node-postgres tem um bug conhecido e não corrigido (issue #2579) em INSERT
+// multi-linha com muitos parâmetros de bind: a partir de certa combinação de
+// quantidade/conteúdo (o limiar varia — relatos na comunidade vão de ~1.100
+// a ~50.000 parâmetros), a mensagem Bind sai corrompida e o Postgres recusa
+// com "bind message has N parameter formats but 0 parameters". Não dá pra
+// prever o limiar (depende do conteúdo real, não só da contagem), então o
+// INSERT é sempre fatiado em lotes bem abaixo de qualquer relato de quebra.
+const LOTE_MAX_LINHAS = 300;
+
 function montarInsert(tabela, colunas, linhas, empresaId, temEmpresa) {
   const colunasFinais = temEmpresa ? [...colunas, 'empresa_id'] : colunas;
   const valores = [];
@@ -116,10 +125,15 @@ async function importarArquivo(db, tabela, empresaId, buffer) {
     );
   }
 
-  const { sql, valores } = montarInsert(tabela, config.colunas, linhas, empresaId, config.temEmpresa);
-  const { rowCount } = await db.query(sql, valores);
+  let linhasInseridas = 0;
+  for (let i = 0; i < linhas.length; i += LOTE_MAX_LINHAS) {
+    const lote = linhas.slice(i, i + LOTE_MAX_LINHAS);
+    const { sql, valores } = montarInsert(tabela, config.colunas, lote, empresaId, config.temEmpresa);
+    const { rowCount } = await db.query(sql, valores);
+    linhasInseridas += rowCount;
+  }
 
-  return { linhasProcessadas: rowCount, modo: config.modo, tabela, compartilhada: !config.temEmpresa };
+  return { linhasProcessadas: linhasInseridas, modo: config.modo, tabela, compartilhada: !config.temEmpresa };
 }
 
 module.exports = { importarArquivo, CONFIG_IMPORTACAO };

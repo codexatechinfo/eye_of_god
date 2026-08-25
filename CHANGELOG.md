@@ -5,6 +5,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Corrigido
+
+- Import de planilha com muitas linhas (~1.600, ex: `prazo_reg_livros`) quebrava com
+  `bind message has N parameter formats but 0 parameters` — bug conhecido do driver `pg`
+  (node-postgres [#2579](https://github.com/brianc/node-postgres/issues/2579)) que corrompe
+  o `INSERT` multi-linha a partir de certa combinação de quantidade/conteúdo de parâmetros
+  (o limiar não é previsível). `importacaoService.js` agora insere em lotes de 300 linhas em
+  vez de um único `INSERT` gigante — sidestepping o bug em vez de tentar prever o limiar.
+  Testado com reimportação de ~1.600 linhas sem erro.
+
 ### Alterado
 
 - `calendario_leitura`, `cidades_localidades` e `tab_ligacao_coordenadas` deixaram de ser

@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.4",
+  "versao": "0.4.5",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T18:30:00.000Z",
+  "atualizado_em": "2026-08-25T19:15:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "8786a59",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -261,6 +261,13 @@
       "skill": "/projeto-novo",
       "evento": "calendario_leitura, cidades_localidades e tab_ligacao_coordenadas deixaram de ser compartilhadas",
       "detalhe": "Usuário questionou por que essas 3 tabelas não tinham a mesma separação por empresa das outras 13 (classificadas como referência compartilhada nas ADR 0003/0007, premissa de contrato único). Esclarecido: cada empresa cliente do SaaS pode atender contrato/região diferente, então cada uma pode ter seu próprio calendário de prazos, lista de localidades e coordenadas de UC — a premissa de referência única não vale mais. Banco local estava vazio nessas 3 tabelas e sem empresa cadastrada ainda, então não houve dado legado pra migrar. Aplicado ALTER TABLE ADD COLUMN empresa_id uuid not null references empresas(id) + índice + enable/force RLS + policy isolamento_empresa (mesma das outras 13), rodado como usuário postgres dentro do container supabase-db (app_user não é dono das tabelas, não roda DDL). CONFIG_IMPORTACAO (temEmpresa:false→true nas 3) foi a única mudança de código no backend — controller/service já eram genéricos desde a ADR 0008; FRONTEND não mudou lógica, o seletor de empresa já vinha do campo compartilhada que o backend calcula. LEFT JOIN cidades_localidades/calendario_leitura em massivasService.js/leituraUrbanaService.js não precisou mudar — roda sobre req.db (contexto de tenant), a RLS filtra sozinha. Testado: 6 casos novos em isolamento_tenant.test.js (fail-closed + isolamento cross-empresa nas 3 tabelas, suíte com 12 testes passando) e o caminho real de import (ROOT com empresaId grava só na empresa escolhida, outra empresa não enxerga) direto contra importacaoService.js. Não existe mais tabela de negócio sem dono no catálogo. Ver ADR 0009."
+    },
+    {
+      "data": "2026-08-25T19:15:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Corrigido: import de planilha grande quebrava com erro de bind do driver pg",
+      "detalhe": "Usuário tentou importar prazo_reg_livros.xlsx (~1.600 linhas) e recebeu 'bind message has 25472 parameter formats but 0 parameters' na tela. Investigado: bug conhecido e não corrigido do node-postgres (issue #2579 no GitHub) em INSERT multi-linha com muitos parâmetros de bind — a mensagem Bind sai corrompida a partir de certa combinação de quantidade/conteúdo dos parâmetros; relatos da comunidade variam de ~1.100 a ~50.000 parâmetros pro mesmo erro, então o limiar não é previsível e depende do conteúdo real, não só da contagem. Reproduzido com dado sintético equivalente (1592 linhas x 16 colunas = 25472 parâmetros) direto contra o Postgres local. Corrigido fatiando o INSERT em lotes de 300 linhas em importacaoService.js (LOTE_MAX_LINHAS), em vez de tentar prever o limiar exato do bug. Testado: reimportação de 1592 linhas sintéticas em prazo_reg_livros sem erro, resultado conferido no banco e limpo depois; suíte de isolamento (12 testes) continua passando."
     }
   ]
 }

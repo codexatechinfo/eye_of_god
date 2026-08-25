@@ -69,7 +69,7 @@
     </div>
   </div>
 
-  <!-- Cabeçalho dos cards + toggle -->
+  <!-- Cabeçalho + toggle -->
   <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
     <div>
       <h2 class="text-sm font-bold text-slate-800">{{ escopo === 'massiva' ? 'Resumo de Massivas' : 'Resumo de Leitura/Releitura' }}</h2>
@@ -99,155 +99,98 @@
     {{ massivasService.erro() }}
   </div>
 
-  <!-- Cards -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6" *ngIf="!massivasService.carregando() && !massivasService.erro()">
-    <!-- Pendentes -->
-    <button
-      type="button"
-      (click)="selecionarStatus('pendentes')"
-      class="relative overflow-hidden rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4"
-      [style.transform]="cardEmDestaque('pendentes') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-amber-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <polyline points="12 7 12 12 15 14" />
-          </svg>
+  <!-- Barra de resumo operacional -->
+  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 mb-6" *ngIf="!massivasService.carregando() && !massivasService.erro() && massivasService.resumo() as r">
+    <div class="flex flex-wrap gap-x-10 gap-y-4 pb-4 mb-4 border-b border-slate-100">
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Agentes em campo</div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl font-extrabold text-slate-800 tabular-nums">{{ agentesEmCampo() }}</span>
+          <span class="text-xs font-medium text-slate-400">de {{ totalAtivos() }}</span>
+        </div>
+        <div class="flex items-center gap-3 mt-1.5 text-[11px] text-slate-500">
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>Moto <b class="tabular-nums">{{ agentesMoto() }}</b></span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500 shrink-0"></span>A pé <b class="tabular-nums">{{ agentesAPe() }}</b></span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-slate-400 shrink-0"></span>Na base <b class="tabular-nums">{{ agentesNaBase() }}</b></span>
         </div>
       </div>
-      <div class="relative text-2xl font-extrabold text-amber-700 tabular-nums">{{ valorCard('pendentes') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-amber-500 mt-0.5">Pendentes</div>
-    </button>
 
-    <!-- Atribuídas -->
-    <button
-      type="button"
-      (click)="selecionarStatus('atribuidas')"
-      class="relative overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-blue-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="cardEmDestaque('atribuidas') ? 1 : 0.4"
-      [style.transform]="cardEmDestaque('atribuidas') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-blue-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="18" rx="2" />
-            <path d="m8.5 13 2 2 4.5-4.5" />
-          </svg>
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Comunicação · 30 min</div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl font-extrabold text-slate-800 tabular-nums">{{ comunicacaoOk() }}</span>
+          <span class="text-xs font-medium text-slate-400">{{ comunicacaoPercent() | number: '1.1-1' }}% dos {{ agentesEmCampo() }}</span>
+        </div>
+        <div class="text-[11px] mt-1.5" [ngClass]="semComunicar30() > 0 ? 'text-red-500 font-semibold' : 'text-slate-400'">
+          {{ semComunicar30() }} sem comunicar há mais de 30 min
         </div>
       </div>
-      <div class="relative text-2xl font-extrabold text-blue-700 tabular-nums">{{ valorCard('atribuidas') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-blue-500 mt-0.5">Atribuídas</div>
-    </button>
 
-    <!-- Em execução -->
-    <button
-      type="button"
-      (click)="selecionarStatus('emExecucao')"
-      class="relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="cardEmDestaque('emExecucao') ? 1 : 0.4"
-      [style.transform]="cardEmDestaque('emExecucao') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-emerald-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 12 7 12 9 6 13 18 16 12 21 12" />
-          </svg>
-        </div>
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Progresso de atividades</div>
+        <div class="text-2xl font-extrabold text-slate-800 tabular-nums">{{ progressoPercent() | number: '1.1-1' }}%</div>
+        <div class="text-[11px] text-slate-500 mt-1.5 tabular-nums">{{ progressoRealizadas() }} / {{ progressoTotal() }}</div>
       </div>
-      <div class="relative text-2xl font-extrabold text-emerald-700 tabular-nums">{{ valorCard('emExecucao') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-emerald-500 mt-0.5">Em execução</div>
-    </button>
+    </div>
 
-    <!-- Total -->
-    <button
-      type="button"
-      (click)="selecionarTotal()"
-      class="relative overflow-hidden rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-violet-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="totalCardEmDestaque() ? 1 : 0.4"
-      [style.transform]="totalCardEmDestaque() ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-violet-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-violet-700 tabular-nums">{{ valorCard('total') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-violet-500 mt-0.5">{{ escopo === 'massiva' ? 'Total massivas' : 'Total' }}</div>
-    </button>
+    <div class="flex flex-wrap items-stretch gap-x-6 gap-y-3">
+      <button type="button" (click)="selecionarStatus('pendentes')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4">
+        <span class="w-1 self-stretch rounded-full bg-amber-400 shrink-0"></span>
+        <span>
+          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Pendentes</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('pendentes') }}</span>
+        </span>
+      </button>
 
-    <!-- No prazo -->
-    <button
-      type="button"
-      (click)="selecionarPrazo('noPrazo')"
-      class="relative overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="prazoCardEmDestaque('noPrazo') ? 1 : 0.4"
-      [style.transform]="prazoCardEmDestaque('noPrazo') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-emerald-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-emerald-700 tabular-nums">{{ valorCard('noPrazo') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-emerald-500 mt-0.5">No prazo</div>
-    </button>
+      <button type="button" (click)="selecionarStatus('atribuidas')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('atribuidas') ? 1 : 0.4">
+        <span class="w-1 self-stretch rounded-full bg-blue-400 shrink-0"></span>
+        <span>
+          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Atribuídos</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('atribuidas') }}</span>
+        </span>
+      </button>
 
-    <!-- Prazo final -->
-    <button
-      type="button"
-      (click)="selecionarPrazo('final')"
-      class="relative overflow-hidden rounded-xl border border-yellow-200 bg-gradient-to-br from-yellow-50 via-white to-yellow-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="prazoCardEmDestaque('final') ? 1 : 0.4"
-      [style.transform]="prazoCardEmDestaque('final') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-yellow-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-yellow-100 text-yellow-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-yellow-700 tabular-nums">{{ valorCard('prazoFinal') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-yellow-600 mt-0.5">Prazo final</div>
-    </button>
+      <button type="button" (click)="selecionarStatus('emExecucao')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('emExecucao') ? 1 : 0.4">
+        <span class="w-1 self-stretch rounded-full bg-emerald-400 shrink-0"></span>
+        <span>
+          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Em execução</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('emExecucao') }}</span>
+        </span>
+      </button>
 
-    <!-- Atraso -->
-    <button
-      type="button"
-      (click)="selecionarPrazo('atrasada')"
-      class="relative overflow-hidden rounded-xl border border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/40 p-3.5 text-left transition-all duration-300 cursor-pointer hover:shadow-md"
-      [style.opacity]="prazoCardEmDestaque('atrasada') ? 1 : 0.4"
-      [style.transform]="prazoCardEmDestaque('atrasada') ? 'scale(1)' : 'scale(0.97)'"
-    >
-      <div class="absolute -right-5 -top-5 w-16 h-16 rounded-full bg-red-300/25 blur-xl"></div>
-      <div class="relative flex items-center justify-between mb-2.5">
-        <div class="w-7 h-7 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <line x1="12" y1="8" x2="12" y2="13" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-        </div>
-      </div>
-      <div class="relative text-2xl font-extrabold text-red-700 tabular-nums">{{ valorCard('atrasadas') }}</div>
-      <div class="relative text-[10px] font-bold uppercase tracking-wide text-red-500 mt-0.5">Atraso</div>
-    </button>
+      <button type="button" (click)="selecionarPrazo('atrasada')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="prazoCardEmDestaque('atrasada') ? 1 : 0.4">
+        <span class="w-1 self-stretch rounded-full bg-red-500 shrink-0"></span>
+        <span>
+          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">Em atraso</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ valorCard('atrasadas') }}</span>
+        </span>
+      </button>
+
+      <!-- Faixas de dias (prazo_reg_livros.dias_finais ajustado pra hoje — ver ADR) -->
+      <span class="flex items-center gap-2.5" title="Livros com projeção de menos de 27 dias até o prazo regulatório">
+        <span class="w-1 self-stretch rounded-full bg-emerald-500 shrink-0"></span>
+        <span>
+          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">&lt; 27 dias</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ r.faixasDias.menor27 }}</span>
+        </span>
+      </span>
+
+      <span class="flex items-center gap-2.5" title="Livros na borda do prazo regulatório (33 dias)">
+        <span class="w-1 self-stretch rounded-full bg-amber-500 shrink-0"></span>
+        <span>
+          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">33 dias</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ r.faixasDias.igual33 }}</span>
+        </span>
+      </span>
+
+      <span class="flex items-center gap-2.5" title="Livros que já estouraram o prazo regulatório de 33 dias">
+        <span class="w-1 self-stretch rounded-full bg-red-600 shrink-0"></span>
+        <span>
+          <span class="block text-[9.5px] font-bold uppercase tracking-wide text-slate-400">34+ dias</span>
+          <span class="block text-lg font-extrabold text-slate-800 tabular-nums">{{ r.faixasDias.maior34 }}</span>
+        </span>
+      </span>
+    </div>
   </div>
 
   <!-- Tabela de detalhe -->

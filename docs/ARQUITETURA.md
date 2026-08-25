@@ -150,3 +150,6 @@ sequenceDiagram
   `calendario_leitura.prazo_leitura` por etapa (01–19 urbana, 21–38 rural); prazo de
   releitura é `data_recebimento` + 24h/48h. De quebra, corrigido um bug de fuso horário do
   driver `pg` com `timestamp` sem timezone.
+- [ADR 0012](adr/0012-resumo-operacional-massivas-livros.md) — cards das abas
+  Massivas/Monitoramento de Livros trocados por uma barra de resumo (agentes em campo,
+  comunicação, progresso, faixas de dias via `prazo_reg_livros`).

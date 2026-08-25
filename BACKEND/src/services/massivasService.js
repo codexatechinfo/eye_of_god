@@ -383,6 +383,47 @@ async function contarTotalMassivaDeduplicado(db, chaves, dataImport, horaImport,
   return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
 }
 
+// Faixas de "dias efetivos" por livro, a partir de prazo_reg_livros — tabela
+// separada das outras fontes (massiva/leitura/releitura), sem relação com
+// tipoServico. Regra dada pelo usuário: dias_finais é o nº de dias entre a
+// primeira leitura e o prazo regulatório (prazo_calendario) — um valor fixo
+// por livro, não "dias em atraso ao vivo". Pra saber o atraso de hoje, ajusta
+// esse valor pela diferença entre hoje e prazo_calendario: cada dia depois
+// do prazo soma 1, cada dia antes subtrai 1. Ex.: dias_finais=33,
+// prazo_calendario ontem → hoje conta 34; prazo_calendario daqui 6 dias →
+// hoje conta 27.
+async function obterFaixasDias(db, filtros) {
+  const condicoes = [`mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')`];
+  const parametros = [];
+  if (filtros.regional) {
+    parametros.push(filtros.regional);
+    condicoes.push(`regional = $${parametros.length}`);
+  }
+
+  const sql = `
+    SELECT faixa, COUNT(*)::int AS total
+    FROM (
+      SELECT
+        CASE
+          WHEN efetivo < 27 THEN 'menor27'
+          WHEN efetivo = 33 THEN 'igual33'
+          WHEN efetivo >= 34 THEN 'maior34'
+        END AS faixa
+      FROM (
+        SELECT dias_finais::int + (CURRENT_DATE - to_date(prazo_calendario, 'YYYY-MM-DD')) AS efetivo
+        FROM prazo_reg_livros
+        WHERE ${condicoes.join(' AND ')}
+      ) calc
+    ) classificado
+    WHERE faixa IS NOT NULL
+    GROUP BY faixa
+  `;
+
+  const { rows } = await db.query(sql, parametros);
+  const mapa = Object.fromEntries(rows.map(r => [r.faixa, r.total]));
+  return { menor27: mapa.menor27 ?? 0, igual33: mapa.igual33 ?? 0, maior34: mapa.maior34 ?? 0 };
+}
+
 async function obterResumo(db, filtros) {
   const fontes = fontesAtivas(filtros.tipoServico);
   const [ultimoBatchMassiva, ultimoBatchLeitura] = await Promise.all([
@@ -401,6 +442,7 @@ async function obterResumo(db, filtros) {
       noPrazo: { ...CONTAGEM_ZERO },
       prazoFinal: { ...CONTAGEM_ZERO },
       atrasadas: { ...CONTAGEM_ZERO },
+      faixasDias: { menor27: 0, igual33: 0, maior34: 0 },
     };
   }
 
@@ -431,7 +473,7 @@ async function obterResumo(db, filtros) {
     return somarContagens(...(await Promise.all(partes)));
   }
 
-  const [pendentes, atribuidas, emExecucao, total, noPrazo, prazoFinal, atrasadas] = await Promise.all([
+  const [pendentes, atribuidas, emExecucao, total, noPrazo, prazoFinal, atrasadas, faixasDias] = await Promise.all([
     contarStatus('pendentes'),
     contarStatus('atribuidas'),
     contarStatus('emExecucao'),
@@ -439,6 +481,7 @@ async function obterResumo(db, filtros) {
     contarTotal({ condicaoPrazo: 'noPrazo' }),
     contarTotal({ condicaoPrazo: 'final' }),
     contarTotal({ condicaoPrazo: 'atrasada' }),
+    obterFaixasDias(db, filtros),
   ]);
 
   return {
@@ -451,6 +494,7 @@ async function obterResumo(db, filtros) {
     noPrazo,
     prazoFinal,
     atrasadas,
+    faixasDias,
   };
 }
 

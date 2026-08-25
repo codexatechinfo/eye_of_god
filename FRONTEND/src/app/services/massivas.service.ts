@@ -7,6 +7,12 @@ export interface ContagemMassivas {
   leituras: number;
 }
 
+export interface FaixasDias {
+  menor27: number;
+  igual33: number;
+  maior34: number;
+}
+
 export interface ResumoMassivas {
   sucesso: boolean;
   dataImport: string | null;
@@ -18,6 +24,7 @@ export interface ResumoMassivas {
   noPrazo: ContagemMassivas;
   prazoFinal: ContagemMassivas;
   atrasadas: ContagemMassivas;
+  faixasDias: FaixasDias;
 }
 
 export interface OpcoesFiltroMassivas {

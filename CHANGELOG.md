@@ -5,6 +5,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Alterado
+
+- Abas Massivas e Monitoramento de Livros: os 7 cards (Pendentes/Atribuídas/Em Execução/
+  Total/No Prazo/Prazo Final/Atraso) foram substituídos por uma barra de resumo
+  operacional — Agentes em campo (Moto/A pé/Na base), Comunicação · 30 min, Progresso de
+  atividades, e contadores Pendentes/Atribuídos/Em Execução/Em Atraso/&lt;27 dias/33 dias/
+  34+ dias. As faixas de dias vêm de `prazo_reg_livros` (nova query, `dias_finais` ajustado
+  pela diferença entre hoje e `prazo_calendario`); o resto reaproveita dado que já existia.
+  Ver [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
+
 ### Adicionado
 
 - "Livros de hoje" na lista de colaboradores (aba Trilho) ganhou um badge indicando se o

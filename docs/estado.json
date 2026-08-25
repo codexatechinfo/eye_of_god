@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.6",
+  "versao": "0.4.7",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T20:00:00.000Z",
+  "atualizado_em": "2026-08-25T21:00:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "6b0e7d2",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -275,6 +275,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: borda visual ao redor do mapa (aba Trilho)",
       "detalhe": "Usuário reportou 'border do mapa' limitando o mapa a um tamanho específico, com print mostrando uma moldura clara ao redor. Sem senha do ROOT pra ver a tela ao vivo, gerei um JWT de teste localmente (mesma chave/mecanismo que authService.js usa no login, sem tocar em nenhuma credencial real) só pra inspecionar o DOM renderizado. Medindo o layout, a matemática do flexbox já batia certo (mapa preenchia 100% do container pai) — a 'borda' era o padding p-4 (16px) do <div class=\"relative flex-1 min-h-0 p-4\"> em home.html:195, que deixava o fundo bg-slate-50 da página aparecer como moldura ao redor do mapa; o painel de detalhe do livro (livro-detalhe, position:absolute) já ignorava esse padding e ficava rente à borda, por isso só o mapa parecia 'preso' numa caixa menor. Removido o p-4; mapa agora vai de ponta a ponta, confirmado via medição do DOM (896x621, igual ao container pai, antes era 864x589 com a folga de 32px). Print/screenshot da ferramenta de browser não funcionou neste ambiente (pane não compositava frame) — validação feita por leitura de getBoundingClientRect()/getComputedStyle() antes e depois da mudança."
+    },
+    {
+      "data": "2026-08-25T21:00:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Logo A2L, painel do livro fecha ao clicar fora, balões trocados",
+      "detalhe": "Três pedidos do usuário na mesma mensagem: 1) trocar o título 'A2l' pela logo oficial em SVG (fornecida inline pelo usuário) — colocada em home.html no lugar do <h1>, cores originais mantidas (#0B2E59/#F28C28/#006DFF), legível sobre o header escuro. 2) painel de detalhe do livro (livro-detalhe.ts) agora fecha ao clicar fora dele — HostListener('document:click') comparando elementRef.nativeElement.contains(target); o botão que ABRE o painel (lista-colaboradores.html) ganhou $event.stopPropagation() pra evitar que abrir/trocar de livro no mesmo clique dispare o fechamento (sem isso, trocar de livro com o painel já aberto fecharia ele no mesmo evento, já que o listener de document dispara depois do listener do botão na fase de bubble). 3) balões do painel trocados para os 8 pedidos: Leituras/min, Em Execução, Improdutivo, Km percorrido, Último sincronismo, Realizadas, A realizar, Impedimentos — verificado que Km percorrido e Impedimentos não existem em nenhuma coluna de nenhuma tabela do banco (nem rastreamento de GPS/distância, nem status de impedimento na coluna situacao, que só tem Pendente/Atribuída/Em Execução); perguntado ao usuário, que confirmou deixar os dois como placeholder 'Em breve' até existir fonte de dado real. Testado ao vivo com JWT de teste (mesma técnica do commit anterior): logo renderiza, clique no mapa fecha o painel, clicar num livro diferente com o painel já aberto troca o conteúdo sem fechar, os 8 balões aparecem na ordem certa com dado real nos 6 que têm fonte."
     }
   ]
 }

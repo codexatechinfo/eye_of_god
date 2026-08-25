@@ -268,7 +268,7 @@
             <div *ngFor="let livro of a.livros">
               <button
                 type="button"
-                (click)="abrirLivro(colaborador.colaborador, livro)"
+                (click)="abrirLivro(colaborador.colaborador, livro); $event.stopPropagation()"
                 class="w-full flex items-center justify-between gap-2 text-[11px] rounded-md border border-slate-100 bg-slate-50 hover:bg-slate-100 px-2 py-1.5 transition-colors cursor-pointer"
               >
                 <span class="flex items-center gap-1.5 min-w-0">

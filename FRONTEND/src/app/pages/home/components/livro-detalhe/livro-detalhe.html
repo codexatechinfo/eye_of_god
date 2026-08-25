@@ -20,34 +20,7 @@
 
   <div class="flex-1 overflow-y-auto px-4 py-3">
     <div class="grid grid-cols-2 gap-1.5 mb-4">
-      <!-- Situação atual -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 12 7 12 9 6 13 18 16 12 21 12" />
-          </svg>
-        </div>
-        <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide truncate">Situação</div>
-          <div class="text-xs font-bold text-slate-700 truncate">{{ sel.livro.situacaoAtual }}</div>
-        </div>
-      </div>
-
-      <!-- Digitados / A realizar -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="5" y="4" width="14" height="17" rx="2" />
-            <path d="m9 13 2 2 4-4" />
-          </svg>
-        </div>
-        <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Realizado / A realizar</div>
-          <div class="text-xs font-bold text-blue-700 tabular-nums">{{ sel.livro.digitados }}/{{ sel.livro.naoDigitados }}</div>
-        </div>
-      </div>
-
-      <!-- Média de leituras por minuto -->
+      <!-- Leituras/min -->
       <div class="flex items-center gap-1.5 rounded-lg border border-cyan-100 bg-cyan-50 px-2 py-1.5">
         <div class="w-6 h-6 rounded-md bg-cyan-100 text-cyan-600 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -60,37 +33,106 @@
         </div>
       </div>
 
-      <!-- Produtividade -->
+      <!-- Em Execução -->
+      <div class="flex items-center gap-1.5 rounded-lg border px-2 py-1.5" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'border-emerald-100 bg-emerald-50' : 'border-slate-100 bg-slate-50'">
+        <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 12 7 12 9 6 13 18 16 12 21 12" />
+          </svg>
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold uppercase tracking-wide truncate" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'text-emerald-500' : 'text-slate-400'">Em Execução</div>
+          <div class="text-xs font-bold truncate" [ngClass]="sel.livro.situacaoAtual === 'Em Execução' ? 'text-emerald-700' : 'text-slate-500'">{{ sel.livro.situacaoAtual === 'Em Execução' ? 'Sim' : 'Não' }}</div>
+        </div>
+      </div>
+
+      <!-- Improdutivo -->
       <ng-container *ngIf="produtividade(sel.livro) as prod">
-        <div
-          class="flex items-center gap-1.5 rounded-lg border px-2 py-1.5"
-          [ngClass]="prod.percentProdutivo >= 50 ? 'border-emerald-100 bg-emerald-50' : 'border-red-100 bg-red-50'"
-        >
-          <div
-            class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-            [ngClass]="prod.percentProdutivo >= 50 ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'"
-          >
+        <div class="flex items-center gap-1.5 rounded-lg border border-red-100 bg-red-50 px-2 py-1.5">
+          <div class="w-6 h-6 rounded-md bg-red-100 text-red-600 flex items-center justify-center shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="9" />
               <polyline points="12 7 12 12 15 14" />
             </svg>
           </div>
           <div class="min-w-0 leading-tight">
-            <div
-              class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
-              [ngClass]="prod.percentProdutivo >= 50 ? 'text-emerald-500' : 'text-red-500'"
-            >
-              {{ prod.percentProdutivo >= 50 ? 'Produtivo' : 'Improdutivo' }}
-            </div>
-            <div class="text-xs font-bold tabular-nums" [ngClass]="prod.percentProdutivo >= 50 ? 'text-emerald-700' : 'text-red-700'">
-              {{ prod.percentProdutivo }}%
-              <span class="font-medium text-[10px]">
-                · {{ formatarDuracao(prod.percentProdutivo >= 50 ? prod.produtivoMin : prod.improdutivoMin) }}
-              </span>
+            <div class="text-[8.5px] font-semibold text-red-500 uppercase tracking-wide truncate">Improdutivo</div>
+            <div class="text-xs font-bold text-red-700 tabular-nums">
+              {{ 100 - prod.percentProdutivo }}%
+              <span class="font-medium text-[10px]">· {{ formatarDuracao(prod.improdutivoMin) }}</span>
             </div>
           </div>
         </div>
       </ng-container>
+
+      <!-- Km percorrido — sem fonte de dado ainda (nenhuma tabela rastreia GPS/distância) -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12h4l3-9 4 18 3-9h4" />
+          </svg>
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold text-slate-300 uppercase tracking-wide truncate">Km percorrido</div>
+          <div class="text-xs font-bold text-slate-300 truncate">Em breve</div>
+        </div>
+      </div>
+
+      <!-- Último sincronismo -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-indigo-100 bg-indigo-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 16 14" />
+          </svg>
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold text-indigo-400 uppercase tracking-wide truncate">Último sincronismo</div>
+          <div class="text-xs font-bold text-indigo-700 tabular-nums truncate">{{ sel.livro.ultimaVez }}</div>
+        </div>
+      </div>
+
+      <!-- Realizadas -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="4" width="14" height="17" rx="2" />
+            <path d="m9 13 2 2 4-4" />
+          </svg>
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Realizadas</div>
+          <div class="text-xs font-bold text-blue-700 tabular-nums">{{ sel.livro.digitados }}</div>
+        </div>
+      </div>
+
+      <!-- A realizar -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-amber-100 bg-amber-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="4" width="14" height="17" rx="2" />
+            <path d="M9 9h6M9 13h6" />
+          </svg>
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold text-amber-500 uppercase tracking-wide truncate">A realizar</div>
+          <div class="text-xs font-bold text-amber-700 tabular-nums">{{ sel.livro.naoDigitados }}</div>
+        </div>
+      </div>
+
+      <!-- Impedimentos — sem fonte de dado ainda (situacao só tem Pendente/Atribuída/Em Execução) -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 9v4M12 17h.01" />
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+          </svg>
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold text-slate-300 uppercase tracking-wide truncate">Impedimentos</div>
+          <div class="text-xs font-bold text-slate-300 truncate">Em breve</div>
+        </div>
+      </div>
     </div>
 
     <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Histórico</div>

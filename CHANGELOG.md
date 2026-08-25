@@ -5,6 +5,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Adicionado
+
+- Logo A2L (SVG) no lugar do título em texto no cabeçalho.
+- Painel de detalhe do livro fecha ao clicar fora dele (mapa, sidebar, qualquer lugar);
+  continua abrindo/trocando normalmente sem fechar-e-reabrir quando o clique é em outro
+  livro da lista.
+- Balões do painel de detalhe do livro trocados para o conjunto pedido: Leituras/min, Em
+  Execução, Improdutivo, Km percorrido, Último sincronismo, Realizadas, A realizar,
+  Impedimentos. `Km percorrido` e `Impedimentos` aparecem como "Em breve" — não existe
+  fonte de dado pra nenhum dos dois hoje (sem rastreamento de GPS/distância, e a coluna
+  `situacao` só tem Pendente/Atribuída/Em Execução).
+
 ### Corrigido
 
 - Mapa de bases regionais (aba "Trilho") tinha um respiro de 16px (`p-4`) ao redor —

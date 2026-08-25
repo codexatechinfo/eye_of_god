@@ -7,6 +7,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Aba Massivas voltou a mostrar o visual clássico de antes da ADR 0012 (título "Resumo de
+  Massivas" + os 7 cards Pendentes/Atribuídas/Em Execução/Total/No Prazo/Prazo Final/
+  Atraso) — a barra de resumo nova (Agentes em campo/Comunicação/Progresso/faixas de dias)
+  fica só na aba Monitoramento de Livros.
+
 - Barra de resumo operacional (ADR 0012): título/subtítulo ("Resumo de Massivas" / "Dados
   de... às...") removido; Agentes em campo/Comunicação/Progresso e os contadores de
   status/faixas de dias voltaram a ficar numa linha só, em vez de duas seções separadas.

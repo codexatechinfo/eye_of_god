@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.6.1",
+  "versao": "0.6.2",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T01:45:00.000Z",
+  "atualizado_em": "2026-08-26T02:00:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "8bd7a9a",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -352,6 +352,13 @@
       "skill": "/projeto-novo",
       "evento": "Ajustes na barra de resumo: sem título, layout numa linha só, atualização automática",
       "detalhe": "Três correções sobre o painel do ciclo anterior, com prints de comparação. 1) Removido o título 'Resumo de Massivas'/'Resumo de Leitura/Releitura' + subtítulo 'Dados de... às...' — usuário pediu pra tirar. 2) Layout estava em duas seções (Agentes/Comunicação/Progresso numa div com border-bottom, contadores numa div separada embaixo) — diferente do print de referência, que tinha tudo numa linha só; unificado num único flex-wrap com um divisor vertical entre os dois grupos, sem border-bottom. 3) Painel estava estático: massivasService.resumo() só era buscado no ngOnInit e em cliques de filtro, nunca sozinho — MassivasService ganhou polling de 60s (mesmo padrão de ColaboradoresService), limpo no ngOnDestroy (novo, o service passou a implementar OnDestroy). Também detectado que o toggle Livros/Leituras não afetava as faixas <27/33/34+ dias (só contavam linhas de prazo_reg_livros, sempre 'livros', nunca 'leituras') — obterFaixasDias() passou a somar volume_de_leituras também, retornando {livros, leituras} por faixa igual às outras contagens da tela; FRONTEND ganhou valorFaixa() (mesmo padrão do valorCard() já existente) e o template trocou r.faixasDias.X por valorFaixa('X'). Testado ao vivo: título sumiu, painel numa linha só, toggle Livros/Leituras muda as faixas de dias também (ex: <27 dias foi de 161 livros pra 23.413 leituras). Suíte de isolamento de tenant (12 testes) continua passando."
+    },
+    {
+      "data": "2026-08-26T02:00:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Barra nova só em Monitoramento de Livros; Massivas volta ao visual clássico",
+      "detalhe": "Usuário esclareceu que o redesign (ADR 0012) era só pra Monitoramento de Livros — a aba Massivas deveria manter o visual de antes: título 'Resumo de Massivas' + os 7 cards clássicos (Pendentes/Atribuídas/Em Execução/Total/No Prazo/Prazo Final/Atraso), junto com os dados de resumo que já tinha. Reaplicado o bloco dos 7 cards clássicos no template (tinha sido removido no primeiro adendo da ADR 0012), agora atrás de *ngIf=\"escopo === 'massiva'\"; a barra nova (Agentes em campo/Comunicação/Progresso/faixas de dias) ficou atrás de *ngIf=\"escopo === 'leiturarelitura'\". Restaurados também selecionarTotal()/totalCardEmDestaque() em massivas-view.ts (removidos por ficarem sem uso na mudança anterior, voltaram a ser usados pelo card Total). Título só aparece na aba Massivas agora — Monitoramento de Livros continua sem título, conforme pedido do ciclo anterior (que era especificamente sobre essa aba). Também explicado ao usuário (sem mudança de código) o que o card 'Comunicação · 30 min' representa: de todos os colaboradores com atividade hoje ('em campo'), quantos tiveram o último sincronismo há menos de 30 minutos (comunicando) vs. há 30+ minutos (sem comunicar) — número tende a subir no fim do expediente, quando leituristas terminam o dia e param de sincronizar. Testado ao vivo: aba Massivas com título + 7 cards clássicos, sem Agentes em campo; aba Monitoramento de Livros sem título, com a barra nova intacta. Suíte de isolamento de tenant (12 testes) continua passando. Ver adendo 2 da ADR 0012."
     }
   ]
 }

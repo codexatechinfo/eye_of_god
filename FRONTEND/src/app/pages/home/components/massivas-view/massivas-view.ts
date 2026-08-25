@@ -199,6 +199,17 @@ export class MassivasView implements OnInit {
     this.massivasService.buscarTudo();
   }
 
+  // Só usado pelo card "Total massivas" (aba Massivas, visual clássico).
+  totalCardEmDestaque(): boolean {
+    return this.massivasService.filtroStatus() === 'todos' && !this.massivasService.filtroPrazo();
+  }
+
+  selecionarTotal(): void {
+    this.massivasService.filtroStatus.set('todos');
+    this.massivasService.filtroPrazo.set('');
+    this.massivasService.buscarTudo();
+  }
+
   prazoCardEmDestaque(prazo: 'noPrazo' | 'final' | 'atrasada'): boolean {
     const filtroPrazo = this.massivasService.filtroPrazo();
     return !filtroPrazo || filtroPrazo === prazo;

@@ -95,6 +95,19 @@ Usuário apontou 3 problemas comparando com o print de referência de novo:
    `{livros, leituras}` por faixa como as outras contagens — `valorFaixa()` no FRONTEND
    aplica o mesmo toggle que `valorCard()` já aplicava nos outros contadores.
 
+## Adendo 2 — barra nova só em Monitoramento de Livros, Massivas volta ao clássico
+
+Usuário esclareceu que o pedido de redesign (anexo2 original) valia só pra
+Monitoramento de Livros. A aba Massivas deveria "manter o visual" — os 7 cards clássicos
+(Pendentes/Atribuídas/Em Execução/Total/No Prazo/Prazo Final/Atraso) e o título "Resumo de
+Massivas", exatamente como eram antes deste ADR. Reaplicado: os 7 cards clássicos (e
+`selecionarTotal()`/`totalCardEmDestaque()`, removidos no primeiro adendo) voltaram ao
+template, agora atrás de `*ngIf="escopo === 'massiva'"`; a barra nova (Agentes em
+campo/Comunicação/Progresso/faixas de dias) ficou atrás de
+`*ngIf="escopo === 'leiturarelitura'"`. O título só aparece na aba Massivas — Monitoramento
+de Livros continua sem título (pedido do adendo anterior, que era especificamente sobre
+essa aba).
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries

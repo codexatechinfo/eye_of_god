@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.4.8",
+  "versao": "0.4.9",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T21:20:00.000Z",
+  "atualizado_em": "2026-08-25T21:40:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "c869128",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -289,6 +289,13 @@
       "skill": "/projeto-novo",
       "evento": "Leituras/min e Improdutivo também viraram \"Em breve\"",
       "detalhe": "Usuário perguntou como os balões Leituras/min e Improdutivo eram calculados; expliquei que Leituras/min = digitados ÷ (última vez visto − primeira vez visto) e Improdutivo = % do tempo entre eventos do histórico do livro sem avanço de digitados, e que isso mede o LIVRO, não o colaborador (ele pode estar produtivo em outro livro no mesmo intervalo). Usuário pediu pra marcar os dois como 'em breve' também. Trocado o conteúdo dos dois cards em livro-detalhe.html pro mesmo estilo tracejado/cinza do Km percorrido e Impedimentos; removidas as funções que ficaram sem uso nenhum (mediaLeiturasPorMinuto, produtividade, formatarDuracao e os helpers paraMinutosDoDia/diferencaMinutos/interface Produtividade em colaboradores.service.ts) e os métodos wrapper em livro-detalhe.ts. Testado ao vivo (mesmo JWT de teste local): painel agora mostra 4 dos 8 balões como 'Em breve' (Leituras/min, Improdutivo, Km percorrido, Impedimentos), sem erro no console."
+    },
+    {
+      "data": "2026-08-25T21:40:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Cards de indicador ganharam degradê discreto no lugar de cor sólida",
+      "detalhe": "Usuário pediu pra tirar a cor sólida dos cards em 'ambas as barras' (lista de colaboradores e painel de detalhe do livro) e pôr um degradê discreto num canto superior. Trocado bg-{cor}-50 por bg-gradient-to-br from-{cor}-100 to-{cor}-50 em todos os cards coloridos das duas sidebars — inclusive nos dois estados dinâmicos por ngClass (Em Execução em livro-detalhe.html, Último sincronismo em lista-colaboradores.html) e no card de Ausência justificada. Os 4 placeholders 'Em breve' (Km percorrido, Impedimentos, Leituras/min, Improdutivo) ficaram de fora de propósito — continuam com fundo neutro sólido, sem degradê, pra reforçar visualmente que são diferentes (sem dado ainda). Testado ao vivo via JWT de teste: getComputedStyle confirma background-image: linear-gradient(...) nos cards coloridos e background-image: none nos placeholders."
     }
   ]
 }

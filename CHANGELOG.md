@@ -5,6 +5,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Alterado
+
+- Cards de indicador (balões) na lista de colaboradores e no painel de detalhe do livro
+  trocaram o fundo de cor sólida por um degradê discreto (canto superior esquerdo mais
+  saturado, esmaecendo até o tom claro de sempre). Placeholders "Em breve" continuam com
+  fundo neutro, sem degradê.
+
 ### Adicionado
 
 - Logo A2L (SVG) no lugar do título em texto no cabeçalho.

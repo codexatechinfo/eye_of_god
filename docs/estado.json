@@ -2,9 +2,9 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.5.2",
+  "versao": "0.5.3",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T23:55:00.000Z",
+  "atualizado_em": "2026-08-25T23:58:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "06ca529",
   "seguranca": {
@@ -324,6 +324,13 @@
       "skill": "/projeto-novo",
       "evento": "Etapa suja na origem: copelImportService.js limpa antes de gravar",
       "detalhe": "Usuário perguntou se era falha da API o formato 'ETAPA 18 - (528)' aparecer em contr_execucao_leitura.etapa, e pediu pra sempre limpar pro formato '09' na importação. Confirmado: não é falha, é o texto literal do link clicável no portal da Copel (o número entre parênteses é uma contagem de itens visíveis naquele momento, muda a cada ciclo de coleta) — o scraper (copelScraperService.js) lê esse texto como veio, e copelImportService.js gravava direto, sem limpar. Adicionada limparEtapa(valor) em copelImportService.js: extrai só o número via regex e normaliza pra 2 dígitos (padStart), aplicada em obj.etapa antes do INSERT — mesma convenção que calendario_leitura.etapa já usa. Testado com os casos reais e de borda: 'ETAPA 18 - (528)' -> '18', 'ETAPA 09 - (66)' -> '09', 'ETAPA 9 - (1)' -> '09' (sem zero à esquerda na origem, ainda assim normaliza), já limpo passa direto, null/undefined/vazio vira null sem quebrar. Não fiz backfill das ~317 mil linhas já gravadas sujas — as queries de prazo (ADR 0011) já extraem o número via regex no SQL (ETAPA_NUM_CONTR_SQL) e funcionam com os dois formatos, então o dado sujo antigo não quebra nada, só fica cosmeticamente inconsistente até ser naturalmente substituído pelos próximos ciclos de coleta. Sinalizado ao usuário que um UPDATE retroativo é possível se ele quiser, mas não é necessário funcionalmente."
+    },
+    {
+      "data": "2026-08-25T23:58:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Backfill retroativo da coluna etapa em contr_execucao_leitura",
+      "detalhe": "Usuário confirmou querer limpar as linhas já gravadas sujas (sinalizado como opcional no ciclo anterior). Conferido antes de rodar: 320.474 de 323.569 linhas precisavam de limpeza, 0 ficariam sem número extraível (cobertura completa). Rodado UPDATE contr_execucao_leitura SET etapa = lpad(substring(etapa from '[0-9]+'), 2, '0') WHERE etapa !~ '^[0-9]{2}\\$' AND etapa ~ '[0-9]' como ROOT (RLS vê todas as empresas), dentro de transação com COMMIT explícito só depois de confirmar o resultado. Pós-UPDATE: 0 linhas sujas restantes, 19 valores distintos de etapa (todos limpos, 2 dígitos, batendo com as etapas do calendario_leitura). Suíte de isolamento de tenant (12 testes) roda de novo, continua passando. Resumo de leitura/releitura recalculado sem erro (números mudaram levemente vs. o teste anterior — 1542 vs 1577 total — por causa do job de coleta que roda em paralelo em segundo plano, não por causa dessa mudança). Testado ao vivo no browser: coluna 'Etapa' na tabela de Monitoramento de Livros mostra valores limpos ('29', '31', '32'...) em vez de 'ETAPA 29 - (3)'. Nenhuma alteração de código — só dado; não versionado em commit, registrado aqui como histórico da ação."
     }
   ]
 }

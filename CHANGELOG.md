@@ -5,6 +5,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Alterado
+
+- Título do painel: "Painel de Monitoramento / Olho de Deus · FIMM" → "A2l" (placeholder até
+  entrar a logo).
+- Aba "MONITORAMENTO" → "TRILHO"; aba "MASSIVAS" → "MONITORAMENTO DE LIVROS" (só o rótulo
+  visível — chave interna da aba não mudou).
+
 ### Corrigido
 
 - Token JWT expirado (12h) fazia o FRONTEND mostrar "API Offline" mesmo com o backend no

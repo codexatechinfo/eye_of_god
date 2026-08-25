@@ -367,7 +367,15 @@
               >{{ linha.tipo_servico }}</span>
             </td>
             <td class="px-3 py-1.5 text-slate-600 tabular-nums">{{ linha.dt_prev_limite ? (linha.dt_prev_limite | date: 'dd/MM/yyyy':'UTC') : '—' }}</td>
-            <td *ngIf="escopo === 'leiturarelitura'" class="px-3 py-1.5 text-right tabular-nums text-slate-600">
+            <td
+              *ngIf="escopo === 'leiturarelitura'"
+              class="px-3 py-1.5 text-right tabular-nums"
+              [ngClass]="{
+                'text-emerald-600 font-semibold': corPrazoRegulatorio(linha.dias_prazo_regulatorio) === 'verde',
+                'text-red-600 font-semibold': corPrazoRegulatorio(linha.dias_prazo_regulatorio) === 'vermelho',
+                'text-slate-600': !corPrazoRegulatorio(linha.dias_prazo_regulatorio)
+              }"
+            >
               {{ linha.dias_prazo_regulatorio !== null ? (linha.dias_prazo_regulatorio + ' dias') : '—' }}
             </td>
             <td class="px-3 py-1.5 text-right tabular-nums text-slate-600">{{ linha.digitados }}/{{ linha.nao_digitados }}</td>

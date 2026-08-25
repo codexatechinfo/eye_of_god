@@ -303,6 +303,12 @@ async function listarAtividadeHoje(db) {
       existente.totalLivros += livrosMassiva.length;
       existente.totalEmExecucao += emExecucaoMassiva;
     } else {
+      // Mesma regra de "parado" já usada pra leitura/releitura (linha 259):
+      // tem serviço hoje mas ainda não realizou nada. Estava fixo em
+      // ativo:true/parado:false pra todo colaborador só-massiva, mesmo quem
+      // tinha 0 executadas — usuário reportou colaborador com REALIZADAS: 0
+      // aparecendo como "ativo".
+      const paradoMassiva = digitadosMassiva === 0;
       colaboradores.push({
         colaborador: nome,
         totalRealizadas: digitadosMassiva,
@@ -311,8 +317,8 @@ async function listarAtividadeHoje(db) {
         totalEmExecucao: emExecucaoMassiva,
         ultimaMudancaHora: livrosMassiva[0].ultimaVez,
         minutosParado: 0,
-        parado: false,
-        ativo: true,
+        parado: paradoMassiva,
+        ativo: !paradoMassiva,
         semSincronismo: false,
         livros: livrosMassiva,
       });

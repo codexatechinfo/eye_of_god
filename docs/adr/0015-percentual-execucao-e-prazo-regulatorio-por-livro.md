@@ -106,6 +106,43 @@ corretas; na atividade do Trilho, 0 livros de releitura ou etapa rural com
 `diasPrazoRegulatorio`, 1163 livros de leitura urbana continuam com o valor certo. Suíte de
 isolamento de tenant (12 testes) e build do Angular continuam passando.
 
+## Adendo 2 — destaque de cor no prazo, colaborador só-massiva classificado errado, ordem padrão por criticidade
+
+Três pedidos numa mesma mensagem, com prints comparando o estado atual.
+
+**1. Destaque de cor na coluna "Prazo regulatório".** Só os extremos chamam atenção: `>33`
+dias (crítico, já passou da janela normal) em vermelho, `<27` dias (ainda folgado) em verde;
+`27–33` fica neutro, de propósito — é a janela "normal" que não precisa de alerta.
+`corPrazoRegulatorio(dias)` nova em `massivas-view.ts`, aplicada via `[ngClass]` na célula.
+
+**2. Colaborador só-massiva com 0 executadas aparecia como "ativo".** Usuário reportou (print)
+ALYSSON DIEGO DENIPOTI com `REALIZADAS: 0` mas sem o indicador de "parado". Bug real: no
+ramo que cria uma entrada NOVA de colaborador (ADR 0013 — colaborador que só tem massiva,
+sem nenhuma leitura/releitura hoje), `parado`/`ativo` estavam **fixos** em `false`/`true`,
+independente de `digitadosMassiva`. Corrigido aplicando a mesma regra já usada pra
+leitura/releitura (`parado = totalRealizadas === 0`, já validada) — `paradoMassiva =
+digitadosMassiva === 0`. Só o ramo de entrada nova foi tocado; o ramo que mescla massiva num
+colaborador que já existia (já tinha leitura/releitura hoje) não mexe nos booleans
+`parado`/`ativo`/`semSincronismo` calculados antes da mescla — esses continuam refletindo só
+a atividade de leitura/releitura, fora de escopo deste pedido.
+
+**3. Ordem padrão da tabela pelos mais críticos, em qualquer filtro, nas duas abas.**
+`linhasOrdenadas()` só ordenava quando o usuário clicava num cabeçalho de coluna — sem
+coluna escolhida, a tabela ficava na ordem crua que o backend manda (`dt_prev_limite ASC`).
+Trocado o caso "sem coluna" pra ordenar por `diasAtraso()` descendente (mais dias em atraso
+primeiro — a única noção de atraso que as duas abas já calculam do mesmo jeito, ver
+`corLinha()`/`diasAtraso()`), com `percentualLinha()` ascendente como desempate (entre dois
+livros com o mesmo atraso, quem fez menos ainda é mais crítico). Continua valendo pra
+qualquer combinação de filtro, já que é a ordem padrão aplicada sobre o resultado já
+filtrado — só é substituída quando o usuário clica explicitamente num cabeçalho.
+
+Testado ao vivo (JWT de teste): coluna Prazo regulatório com "34 dias" em vermelho
+(`text-red-600 font-semibold`) ao filtrar pela faixa 34+; ALYSSON DIEGO DENIPOTI confirmado
+via API com `{totalRealizadas: 0, parado: true, ativo: false}` (era `ativo: true` antes) e
+visualmente com o destaque âmbar de "Parado" na lista; tabela sem nenhuma coluna ordenada
+mostrando 12/9/8/6/6/6/6/6 dias de atraso em ordem decrescente. Suíte de isolamento de
+tenant (12 testes) e build do Angular continuam passando.
+
 ## Consequências
 
 - Testado ao vivo (JWT de teste): lista do Trilho com filtro "Ativo" mostrando ordem

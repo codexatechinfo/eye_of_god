@@ -185,7 +185,20 @@ export class MassivasView implements OnInit {
   linhasOrdenadas(): DetalheLinha[] {
     const linhas = this.massivasService.detalhe();
     const coluna = this.colunaOrdenacao();
-    if (!coluna) return linhas;
+
+    // Sem coluna escolhida pelo usuário (clique num cabeçalho): ordena pelos
+    // mais críticos primeiro, em qualquer filtro/aba — dias em atraso desc
+    // (é a única noção de "atraso" que as duas abas já calculam da mesma
+    // forma, ver diasAtraso()), com % de execução asc como desempate (quem
+    // fez menos ainda é mais crítico entre dois livros com o mesmo atraso).
+    if (!coluna) {
+      return [...linhas].sort((a, b) => {
+        const atrasoA = this.diasAtraso(a);
+        const atrasoB = this.diasAtraso(b);
+        if (atrasoA !== atrasoB) return atrasoB - atrasoA;
+        return this.percentualLinha(a) - this.percentualLinha(b);
+      });
+    }
 
     const direcao = this.direcaoOrdenacao() === 'asc' ? 1 : -1;
     return [...linhas].sort((a, b) => {
@@ -365,5 +378,16 @@ export class MassivasView implements OnInit {
     if (pct >= 70) return 'verde';
     if (pct >= 30) return 'amarelo';
     return 'vermelho';
+  }
+
+  // Destaque da coluna "Prazo regulatório": só os dois extremos chamam
+  // atenção (>33 dias = já passou do prazo regulatório de 33 dias, crítico;
+  // <27 dias = ainda folgado). A faixa 27-33 fica neutra, de propósito — é a
+  // janela "normal", sem necessidade de alerta.
+  corPrazoRegulatorio(dias: number | null): 'verde' | 'vermelho' | null {
+    if (dias === null) return null;
+    if (dias < 27) return 'verde';
+    if (dias > 33) return 'vermelho';
+    return null;
   }
 }

@@ -13,7 +13,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   regulatório" (dias efetivos frente a `prazo_reg_livros`) nova na tabela de Monitoramento de
   Livros e badge "Nd" na lista "Livros de hoje" do Trilho — vale só pra leitura urbana
   (etapas 01-19); releitura e etapa rural (21-38) ficam de fora do cálculo, mesmo quando o
-  número do livro bate com a planilha. Ver
+  número do livro bate com a planilha. Coluna "Prazo regulatório" com destaque de cor nos
+  extremos (`>33` dias vermelho, `<27` dias verde; `27–33` neutro). Tabela "Detalhe por
+  livro" passa a ordenar pelos mais críticos por padrão (dias em atraso desc, % de execução
+  asc como desempate), em qualquer filtro, nas duas abas — até o usuário clicar num
+  cabeçalho de coluna. Ver
   [ADR 0015](docs/adr/0015-percentual-execucao-e-prazo-regulatorio-por-livro.md).
 - Coluna "Situação" da tabela "Detalhe por livro" ganhou badge colorido (âmbar/Pendente,
   azul/Atribuída, verde/Em Execução) — mesmas cores já usadas nos badges de status da barra
@@ -70,6 +74,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Colaborador com massiva atribuída/em execução mas 0 executadas hoje (ADR 0013) aparecia
+  como "ativo" na lista do Trilho — o ramo que cria a entrada tinha `parado`/`ativo` fixos,
+  sem checar a quantidade digitada. Agora usa a mesma regra já validada pra
+  leitura/releitura (`parado = totalRealizadas === 0`). Ver Adendo 2 da
+  [ADR 0015](docs/adr/0015-percentual-execucao-e-prazo-regulatorio-por-livro.md).
 - Faixas &lt;27/33/34+ dias (barra de resumo, ADR 0012) contavam **toda** linha de
   `prazo_reg_livros` do mês, mesmo livro sem nenhuma correspondência viva em
   `contr_execucao_leitura` — `prazo_reg_livros` é só uma tabela de consulta, não deve gerar

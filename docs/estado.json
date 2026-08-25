@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T06:15:00.000Z",
+  "atualizado_em": "2026-08-26T06:35:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "d03157c",
   "seguranca": {
@@ -436,6 +436,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: releitura entrava incorretamente na contagem de prazo regulatório",
       "detalhe": "Usuário esclareceu que massiva, releitura e etapa rural (21-38) devem ficar de fora do cálculo/contagem de prazo regulatório (<27/33/34+ dias) — só leitura urbana (01-19) conta. Investigado antes de corrigir: prazo_reg_livros.etapa já só tem 01-19 na prática (0 linhas rurais em ~270k combinações testadas), então a parte rural já ficava de fora por coincidência da planilha, sem ser uma regra explícita no código. Releitura era um problema real: o JOIN entre contr_execucao_leitura e prazo_reg_livros é só por número do livro, sem checar tipoServico — e o mesmo número de livro pode aparecer como leitura numa consulta e releitura em outra (já foi lido, virou releitura depois). Confirmado contra dado real: dos ~1330 livros com correspondência no último lote, 275 eram releitura, entrando incorretamente na conta. Corrigido embutindo a condição na própria expressão EFETIVO_PRAZO_REG_SQL (massivasService.js) — só calcula quando TIPO_SERVICO_CONTR_SQL = 'leitura' AND etapa urbana, senão NULL explícito; como a expressão é compartilhada por obterFaixasDias/detalheContr, a correção propagou pras duas de uma vez. Em atividadeColaboradoresService.js (JS puro, não reaproveita SQL), a mesma condição foi replicada manualmente antes de consultar o mapa. Testado ao vivo: faixas de dias caíram de 14/143/56 pra 14/7/2 (a maioria do excesso era releitura); detalhe com 0 linhas de releitura com dias_prazo_regulatorio preenchido (era >0 antes) e 1057 linhas de leitura continuam corretas; atividade do Trilho com 0 livros de releitura/rural com diasPrazoRegulatorio e 1163 livros de leitura urbana corretos. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver o adendo da ADR 0015."
+    },
+    {
+      "data": "2026-08-26T06:35:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Destaque de cor no prazo regulatório, colaborador só-massiva classificado errado, ordem padrão por criticidade",
+      "detalhe": "Três pedidos na mesma mensagem, com prints comparando o estado atual. 1) Destaque de cor na coluna Prazo regulatório: >33 dias vermelho (crítico), <27 dias verde (folgado), 27-33 neutro (janela normal, sem alerta) — corPrazoRegulatorio() nova em massivas-view.ts. 2) Usuário reportou (print) colaborador ALYSSON DIEGO DENIPOTI com REALIZADAS: 0 aparecendo como 'ativo' na lista do Trilho. Bug real: no ramo que cria uma entrada NOVA de colaborador só-massiva (ADR 0013), parado/ativo estavam fixos em false/true, sem checar digitadosMassiva. Corrigido com a mesma regra já validada pra leitura/releitura (parado = totalRealizadas === 0); só o ramo de entrada nova foi tocado, o ramo que mescla massiva num colaborador que já tinha leitura/releitura hoje não mexe nos booleans calculados antes da mescla (fora de escopo deste pedido). 3) Tabela de detalhe passa a ordenar pelos mais críticos por padrão, em qualquer filtro, nas duas abas: linhasOrdenadas() só ordenava quando o usuário clicava num cabeçalho; sem coluna escolhida, ficava na ordem crua do backend (dt_prev_limite ASC). Trocado pra ordenar por diasAtraso() descendente (mais dias em atraso primeiro), com percentualLinha() ascendente como desempate — só é substituída quando o usuário clica explicitamente num cabeçalho. Testado ao vivo (JWT de teste): '34 dias' em vermelho ao filtrar pela faixa 34+; ALYSSON DIEGO DENIPOTI confirmado via API com {totalRealizadas:0, parado:true, ativo:false} (era ativo:true antes) e visualmente com o destaque âmbar de Parado; tabela sem coluna ordenada mostrando 12/9/8/6/6/6/6/6 dias de atraso em ordem decrescente. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver adendo 2 da ADR 0015."
     }
   ]
 }

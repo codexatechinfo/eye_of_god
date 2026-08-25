@@ -135,3 +135,6 @@ sequenceDiagram
 - [ADR 0007](adr/0007-restaura-tab-ligacao-coordenadas.md) — `tab_ligacao_coordenadas`
   restaurada (referência compartilhada, sem `empresa_id`) e habilitada pra importação por
   UC.
+- [ADR 0008](adr/0008-empresa-alvo-importacao-root.md) — `ROOT` escolhe a empresa alvo do
+  import (`?empresaId=`) já que não tem uma própria; `GET /empresas` novo pra alimentar o
+  seletor.

@@ -14,20 +14,35 @@ async function tabelasDisponiveis(req, res) {
   });
 }
 
+// ROOT não tem empresa própria — precisa escolher qual empresa recebe o
+// import (?empresaId= na URL). Pra quem não é ROOT, o alvo é sempre a
+// própria empresa; nunca aceita empresaId do corpo/URL nesse caso, senão um
+// ADMINISTRADOR poderia gravar dado na empresa alheia só trocando o parâmetro.
+function empresaAlvo(req, config) {
+  if (!config.temEmpresa) return null; // tabela compartilhada, empresa não se aplica
+  return req.usuario.nivel === 'ROOT' ? req.query.empresaId : req.usuario.empresaId;
+}
+
 async function importar(req, res) {
   try {
     const { tabela } = req.params;
-    if (!CONFIG_IMPORTACAO[tabela]) {
+    const config = CONFIG_IMPORTACAO[tabela];
+    if (!config) {
       return res.status(400).json({ sucesso: false, erro: `Tabela "${tabela}" não está habilitada para importação.` });
     }
     if (!req.file) {
       return res.status(400).json({ sucesso: false, erro: 'Nenhum arquivo enviado (campo "arquivo").' });
     }
 
-    const resultado = await importarArquivo(req.db, tabela, req.usuario.empresaId, req.file.buffer);
+    const empresaId = empresaAlvo(req, config);
+    if (config.temEmpresa && !empresaId) {
+      return res.status(400).json({ sucesso: false, erro: 'empresaId é obrigatório para ROOT nessa tabela.' });
+    }
+
+    const resultado = await importarArquivo(req.db, tabela, empresaId, req.file.buffer);
 
     await registrarAuditoria(req.db, {
-      empresaId: req.usuario.empresaId,
+      empresaId,
       usuarioId: req.usuario.sub,
       acao: 'importar_arquivo',
       tabela,

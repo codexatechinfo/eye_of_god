@@ -5,6 +5,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Corrigido
+
+- Importação como `ROOT` quebrava com `null value in column "empresa_id"` — `ROOT` não tem
+  empresa própria e a rota de import não dava a opção de escolher, ao contrário de
+  `/usuarios`/`/coleta`. Agora `ROOT` informa `?empresaId=` (novo `GET /empresas` alimenta
+  o seletor no FRONTEND, visível só quando faz sentido). Ver
+  [ADR 0008](docs/adr/0008-empresa-alvo-importacao-root.md).
+
 ### Adicionado
 
 - `tab_ligacao_coordenadas` restaurada no banco local (referência compartilhada, sem

@@ -38,9 +38,12 @@ export class ImportacaoService {
     });
   }
 
-  importar(tabela: string, arquivo: File) {
+  importar(tabela: string, arquivo: File, empresaId?: string | null) {
     const formData = new FormData();
     formData.append('arquivo', arquivo);
-    return this.http.post<ResultadoImportacao>(`${this.apiUrl}/importacao/${tabela}`, formData);
+    const url = empresaId
+      ? `${this.apiUrl}/importacao/${tabela}?empresaId=${encodeURIComponent(empresaId)}`
+      : `${this.apiUrl}/importacao/${tabela}`;
+    return this.http.post<ResultadoImportacao>(url, formData);
   }
 }

@@ -33,6 +33,18 @@
       </div>
     </div>
 
+    <div *ngIf="precisaEscolherEmpresa()">
+      <label class="block text-xs font-semibold text-slate-600 mb-1.5">Empresa</label>
+      <select
+        [(ngModel)]="empresaSelecionada"
+        class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+      >
+        <option value="" disabled>Escolha a empresa</option>
+        <option *ngFor="let e of empresasService.empresas()" [value]="e.id">{{ e.nome }}</option>
+      </select>
+      <p class="text-[11px] text-slate-400 mt-1">Como ROOT, você precisa dizer pra qual empresa é esse import.</p>
+    </div>
+
     <div>
       <label class="block text-xs font-semibold text-slate-600 mb-1.5">Arquivo</label>
       <input

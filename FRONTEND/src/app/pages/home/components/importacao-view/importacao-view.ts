@@ -2,6 +2,8 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ImportacaoService, ResultadoImportacao } from '../../../../services/importacao.service';
+import { EmpresasService } from '../../../../services/empresas.service';
+import { AuthService } from '../../../../services/auth.service';
 
 @Component({
   selector: 'app-importacao-view',
@@ -11,15 +13,34 @@ import { ImportacaoService, ResultadoImportacao } from '../../../../services/imp
 })
 export class ImportacaoView implements OnInit {
   tabelaSelecionada = signal('');
+  empresaSelecionada = signal('');
   arquivoSelecionado = signal<File | null>(null);
   enviando = signal(false);
   resultado = signal<ResultadoImportacao | null>(null);
   erro = signal('');
 
-  constructor(public importacaoService: ImportacaoService) {}
+  constructor(
+    public importacaoService: ImportacaoService,
+    public empresasService: EmpresasService,
+    private authService: AuthService,
+  ) {}
 
   ngOnInit(): void {
     this.importacaoService.carregarTabelas();
+    if (this.ehRoot()) {
+      this.empresasService.carregar();
+    }
+  }
+
+  ehRoot(): boolean {
+    return this.authService.getUsuarioLogado()?.nivel === 'ROOT';
+  }
+
+  // ROOT não tem empresa própria — só precisa escolher quando a tabela não é
+  // compartilhada (ver docs/adr/0007 e a rota /importacao/:tabela).
+  precisaEscolherEmpresa(): boolean {
+    const tabela = this.tabelaAtual();
+    return this.ehRoot() && !!tabela && !tabela.compartilhada;
   }
 
   onArquivoChange(evento: Event): void {
@@ -40,12 +61,16 @@ export class ImportacaoView implements OnInit {
       this.erro.set('Escolha a tabela e o arquivo .xlsx.');
       return;
     }
+    if (this.precisaEscolherEmpresa() && !this.empresaSelecionada()) {
+      this.erro.set('Escolha a empresa que vai receber esse import.');
+      return;
+    }
 
     this.enviando.set(true);
     this.erro.set('');
     this.resultado.set(null);
 
-    this.importacaoService.importar(tabela, arquivo).subscribe({
+    this.importacaoService.importar(tabela, arquivo, this.precisaEscolherEmpresa() ? this.empresaSelecionada() : null).subscribe({
       next: resposta => {
         this.resultado.set(resposta);
         this.enviando.set(false);

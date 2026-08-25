@@ -63,9 +63,12 @@ Prova automatizada em `BACKEND/test/isolamento_tenant.test.js` (`npm test`).
 
 ## Importação de planilha
 
-Ver [ADR 0005](adr/0005-importacao-de-planilha.md) — `POST /importacao/:tabela` (11
-tabelas, `.xlsx`), restrito a `ADMINISTRADOR`/`ROOT`, `empresa_id` sempre do token, nunca do
-arquivo ou da URL.
+Ver [ADR 0005](adr/0005-importacao-de-planilha.md) — `POST /importacao/:tabela` (12
+tabelas, `.xlsx`), restrito a `ADMINISTRADOR`/`ROOT`. Pra quem não é `ROOT`, `empresa_id`
+sempre do token, nunca do arquivo ou da URL. `ROOT` não tem empresa própria — precisa
+escolher via `?empresaId=` nas tabelas que não são compartilhadas (ver
+[ADR 0008](adr/0008-empresa-alvo-importacao-root.md)); `GET /empresas` (RLS filtra sozinha)
+alimenta esse seletor no FRONTEND.
 
 ## Em aberto
 

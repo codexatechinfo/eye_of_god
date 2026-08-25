@@ -48,6 +48,32 @@ individual como `contr_execucao_leitura.hora_import` tem) e `minutosParado: 0`.
 `'leitura'/'releitura'/null`; badge roxo (`bg-violet-100`) na lista "Livros de hoje" ao lado
 dos badges azul/âmbar já existentes — mesmo componente visual, só uma cor nova.
 
+## Adendo — "Progresso de atividades" contaminado entre escopos
+
+Efeito colateral não previsto: a mesma mescla que fez `atividade.totalRealizadas`/
+`totalPendentes` de cada colaborador somarem leitura+releitura+massiva juntos também
+contaminou o card "Progresso de atividades" da barra de resumo (ADR 0012) — usuário reportou
+94526/206649 (45.7%) na aba **Massivas**, um total absurdo pra massiva (206.649 é da ordem
+de grandeza de leitura+releitura, não só massiva).
+
+Causa: `MassivasView.progressoContagens()` somava `atividade.totalRealizadas`/
+`totalPendentes` — os totais já agregados do colaborador — sem filtrar por fonte. Isso
+sempre foi "global" de propósito pros três primeiros números da barra (Agentes em
+campo/Comunicação, métrica de colaborador, não de aba — ver ADR 0012), mas "Progresso de
+atividades" precisa refletir só o escopo da aba aberta, e passou a vazar dado de massiva pra
+Livros e vice-versa a partir do momento em que a atividade de massiva entrou na mesma lista
+(ADR 0013, decisão principal).
+
+Corrigido trocando a soma dos totais agregados por uma soma livro a livro, filtrando
+`livro.tipoServico === 'massiva'` (aba Massivas) ou `!== 'massiva'` (aba Monitoramento de
+Livros) antes de somar `digitados`/`naoDigitados` — `agentesEmCampoLista()`, "Agentes em
+campo" e "Comunicação" continuam globais, só o Progresso passou a ser por escopo.
+
+Testado ao vivo (JWT de teste): aba Massivas caiu de 94526/206649 pra 0/2859; aba
+Monitoramento de Livros ficou em 94526/203790. A soma das duas (203790 + 2859 = 206649) bate
+exatamente com o número contaminado de antes — confirma que a separação está certa, sem
+perda nem duplicação de contagem entre as duas abas.
+
 ## Consequências
 
 - Testado ao vivo (JWT de teste): "ALYSSON DIEGO DENIPOTI" (só tinha massiva hoje) passou a

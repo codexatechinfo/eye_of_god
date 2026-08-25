@@ -45,6 +45,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- "Progresso de atividades" (barra de resumo, ADR 0012) somava leitura+releitura+massiva
+  juntos em ambas as abas — efeito colateral de mesclar massiva na atividade do colaborador
+  (ADR 0013). Aba Massivas chegou a mostrar 94526/206649 (um total incompatível com só
+  massiva). Corrigido somando livro a livro, filtrado por `tipoServico` conforme o escopo
+  da aba; Agentes em campo/Comunicação continuam globais, de propósito. Ver adendo da
+  [ADR 0013](docs/adr/0013-colaboradores-massiva-no-trilho.md).
 - Regressão da ADR 0011: comparar "dias em atraso"/cor da linha por timestamp completo
   (em vez de por dia) fazia todo item de **massiva** com vencimento hoje aparecer vermelho
   e "1 dia em atraso", mesmo o card "Atraso" batendo 0 — o prazo de massiva

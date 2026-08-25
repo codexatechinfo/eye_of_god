@@ -89,14 +89,23 @@ export class MassivasView implements OnInit {
     return this.agentesEmCampo() - this.comunicacaoOk();
   }
 
+  // atividade.totalRealizadas/totalPendentes soma TODOS os livros do
+  // colaborador (leitura+releitura+massiva juntos, desde a ADR 0013, que
+  // passou a mesclar massiva na mesma lista de atividade). Aqui precisa ser
+  // só do escopo da aba — então soma livro a livro, filtrando por
+  // tipoServico em vez de usar os totais já agregados do colaborador.
   private progressoContagens(): { realizadas: number; total: number } {
     let realizadas = 0;
     let total = 0;
     for (const c of this.agentesEmCampoLista()) {
       const atividade = this.colaboradoresService.atividadeDe(c.colaborador);
       if (!atividade) continue;
-      realizadas += atividade.totalRealizadas;
-      total += atividade.totalRealizadas + atividade.totalPendentes;
+      for (const livro of atividade.livros) {
+        const ehMassiva = livro.tipoServico === 'massiva';
+        if (ehMassiva !== (this.escopo === 'massiva')) continue;
+        realizadas += livro.digitados;
+        total += livro.digitados + livro.naoDigitados;
+      }
     }
     return { realizadas, total };
   }

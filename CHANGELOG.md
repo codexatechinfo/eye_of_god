@@ -8,16 +8,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 ### Adicionado
 
 - Barra de % de execução abaixo do nome de cada colaborador na lista do Trilho; a lista
-  passa a ordenar quem está "ativo" pelos mais críticos (menor % primeiro). Coluna
+  passa a ordenar todos os filtros (Parado/Sem serviço/Ativo/Sem sincronismo e a lista sem
+  filtro nenhum) pelos mais críticos primeiro (menor % dentro de cada categoria). Coluna
   "Progresso" (barra + %) nova na tabela "Detalhe por livro" das duas abas. Coluna "Prazo
   regulatório" (dias efetivos frente a `prazo_reg_livros`) nova na tabela de Monitoramento de
   Livros e badge "Nd" na lista "Livros de hoje" do Trilho — vale só pra leitura urbana
   (etapas 01-19); releitura e etapa rural (21-38) ficam de fora do cálculo, mesmo quando o
-  número do livro bate com a planilha. Coluna "Prazo regulatório" com destaque de cor nos
-  extremos (`>33` dias vermelho, `<27` dias verde; `27–33` neutro). Tabela "Detalhe por
-  livro" passa a ordenar pelos mais críticos por padrão (dias em atraso desc, % de execução
-  asc como desempate), em qualquer filtro, nas duas abas — até o usuário clicar num
-  cabeçalho de coluna. Ver
+  número do livro bate com a planilha; destaque de cor nos extremos (`>33` dias vermelho,
+  `<27` dias verde; `27–33` neutro). Coluna "Recebido em" nova nas duas tabelas de detalhe.
+  Tabela "Detalhe por livro" passa a ordenar pelos mais críticos por padrão (dias em atraso
+  desc, % de execução asc como desempate), em qualquer filtro, nas duas abas — até o usuário
+  clicar num cabeçalho de coluna. Ver
   [ADR 0015](docs/adr/0015-percentual-execucao-e-prazo-regulatorio-por-livro.md).
 - Coluna "Situação" da tabela "Detalhe por livro" ganhou badge colorido (âmbar/Pendente,
   azul/Atribuída, verde/Em Execução) — mesmas cores já usadas nos badges de status da barra
@@ -74,6 +75,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Ordenação por criticidade da lista do Trilho só valia dentro do filtro "Ativo" — "Sem
+  sincronismo" e a lista sem filtro nenhum continuavam ordenados só por tempo parado, sem o
+  percentual de execução. Unificado num único cálculo de criticidade reaproveitado pelos 3
+  tiers. Ver Adendo 3 da
+  [ADR 0015](docs/adr/0015-percentual-execucao-e-prazo-regulatorio-por-livro.md).
 - Colaborador com massiva atribuída/em execução mas 0 executadas hoje (ADR 0013) aparecia
   como "ativo" na lista do Trilho — o ramo que cria a entrada tinha `parado`/`ativo` fixos,
   sem checar a quantidade digitada. Agora usa a mesma regra já validada pra

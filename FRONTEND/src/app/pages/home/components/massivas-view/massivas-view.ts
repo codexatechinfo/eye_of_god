@@ -16,7 +16,8 @@ type ColunaOrdenavel =
   | 'leiturista'
   | 'diasAtraso'
   | 'percentual'
-  | 'diasPrazoRegulatorio';
+  | 'diasPrazoRegulatorio'
+  | 'dataRecebimento';
 type DirecaoOrdenacao = 'asc' | 'desc';
 
 // Limite pra "comunicação" na barra de resumo (anexo2 do usuário) — diferente
@@ -174,7 +175,19 @@ export class MassivasView implements OnInit {
         return this.percentualLinha(linha);
       case 'diasPrazoRegulatorio':
         return linha.dias_prazo_regulatorio ?? -Infinity;
+      case 'dataRecebimento':
+        return this.dataRecebimentoMs(linha);
     }
+  }
+
+  // "DD/MM/YYYY HH:MM" (ou só "DD/MM/YYYY") -> epoch, só pra ordenar a
+  // coluna direito — o formato brasileiro não ordena certo como string.
+  private dataRecebimentoMs(linha: DetalheLinha): number {
+    if (!linha.data_recebimento) return -Infinity;
+    const [dataParte, horaParte] = linha.data_recebimento.split(' ');
+    const [d, m, a] = dataParte.split('/').map(Number);
+    const [h, min] = (horaParte || '0:0').split(':').map(Number);
+    return Date.UTC(a, m - 1, d, h || 0, min || 0);
   }
 
   indicadorOrdenacao(coluna: ColunaOrdenavel): string {

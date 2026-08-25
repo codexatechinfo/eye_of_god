@@ -313,6 +313,9 @@
             <th *ngIf="escopo === 'leiturarelitura'" class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('tipoServico')">
               Tipo{{ indicadorOrdenacao('tipoServico') }}
             </th>
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('dataRecebimento')">
+              Recebido em{{ indicadorOrdenacao('dataRecebimento') }}
+            </th>
             <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('dt_prev_limite')">
               Data limite{{ indicadorOrdenacao('dt_prev_limite') }}
             </th>
@@ -366,6 +369,7 @@
                 }"
               >{{ linha.tipo_servico }}</span>
             </td>
+            <td class="px-3 py-1.5 text-slate-600 tabular-nums">{{ linha.data_recebimento || '—' }}</td>
             <td class="px-3 py-1.5 text-slate-600 tabular-nums">{{ linha.dt_prev_limite ? (linha.dt_prev_limite | date: 'dd/MM/yyyy':'UTC') : '—' }}</td>
             <td
               *ngIf="escopo === 'leiturarelitura'"

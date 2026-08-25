@@ -666,7 +666,8 @@ async function detalheMassiva(db, dataImport, horaImport, filtros) {
         SELECT '${rotulo}' AS status, 'massiva' AS tipo_servico, t.livro, t.etapa, t.local, cal.prazo_massiva AS dt_prev_limite,
           CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$' THEN split_part(t.qtd_digitados_nao_digitados, '/', 1)::int ELSE 0 END AS digitados,
           CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$' THEN split_part(t.qtd_digitados_nao_digitados, '/', 2)::int ELSE 0 END AS nao_digitados,
-          ${leituristaSelect} AS leiturista
+          ${leituristaSelect} AS leiturista,
+          t.dt_rec_abertura AS data_recebimento
         FROM ${nome} t
         ${joinCalendario('t')}
         WHERE t.dt_import = $1 AND t.hr_import = $2
@@ -704,12 +705,12 @@ async function detalheMassiva(db, dataImport, horaImport, filtros) {
   }
 
   const sql = `
-    SELECT status, tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista
+    SELECT status, tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista, data_recebimento
     FROM (
       SELECT DISTINCT ON (u.status, u.livro)
         u.status, u.tipo_servico, u.livro, u.etapa, cl.regional,
         to_date(u.dt_prev_limite, 'YYYY-MM-DD') AS dt_prev_limite,
-        u.digitados, u.nao_digitados, u.leiturista
+        u.digitados, u.nao_digitados, u.leiturista, u.data_recebimento
       FROM (${subconsultas}) u
       LEFT JOIN cidades_localidades cl ON cl.local = u.local
       WHERE 1 = 1
@@ -765,7 +766,7 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
   }
 
   const sql = `
-    SELECT status_calc AS status, tipo_calc AS tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista_calc AS leiturista, dias_prazo_regulatorio
+    SELECT status_calc AS status, tipo_calc AS tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista_calc AS leiturista, dias_prazo_regulatorio, data_recebimento
     FROM (
       SELECT DISTINCT ON (c.livro) c.livro, c.etapa, cl.regional,
         to_char(${PRAZO_CONTR_SQL}, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS dt_prev_limite,
@@ -773,7 +774,8 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
         ${STATUS_CONTR_SQL} AS status_calc,
         ${LEITURISTA_CONTR_SQL} AS leiturista_calc,
         ${TIPO_SERVICO_CONTR_SQL} AS tipo_calc,
-        ${EFETIVO_PRAZO_REG_SQL} AS dias_prazo_regulatorio
+        ${EFETIVO_PRAZO_REG_SQL} AS dias_prazo_regulatorio,
+        CASE WHEN c.data_recebimento IS NOT NULL THEN c.data_recebimento || COALESCE(' ' || c.hora_recebimento, '') ELSE NULL END AS data_recebimento
       FROM contr_execucao_leitura c
       LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
       ${joinCalendarioContr()}

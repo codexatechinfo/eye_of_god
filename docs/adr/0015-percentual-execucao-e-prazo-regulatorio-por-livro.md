@@ -143,6 +143,43 @@ visualmente com o destaque âmbar de "Parado" na lista; tabela sem nenhuma colun
 mostrando 12/9/8/6/6/6/6/6 dias de atraso em ordem decrescente. Suíte de isolamento de
 tenant (12 testes) e build do Angular continuam passando.
 
+## Adendo 3 — ordenação por criticidade em todos os tiers do Trilho; coluna "Recebido em" nas tabelas
+
+Dois pedidos na mesma mensagem, com print mostrando o problema do primeiro.
+
+**1. Ordenação por criticidade só valia no tier "ativo".** Usuário reportou (print) o filtro
+"Sem sincronismo" com percentuais fora de ordem (1%, 14%, 26%, 13%, 3%, 48%...) e confirmou
+que a lista sem filtro nenhum também não refletia a ordenação por criticidade. Causa: o
+Adendo 1 só tinha mudado o `return` do tier "ativo" em `pontuacaoDestaque()`; os tiers "sem
+sincronismo" e "parado" continuavam somando só `minutosParado`, sem o componente de
+percentual. Corrigido calculando `criticidade = (100 - percentualExecucao) * 1000 +
+minutosParado` **uma vez só** e somando o offset de cada tier em cima dela (`2_000_000 +
+criticidade` pra sem sincronismo, `1_000_000 + criticidade` pra parado, `criticidade` sozinha
+pra ativo) — os 3 tiers continuam na mesma ordem de gravidade de sempre (sem sincronismo >
+parado > ativo), mas agora TODOS ordenam por percentual dentro do próprio tier, e a fórmula
+deixou de ter 3 implementações ligeiramente diferentes pra ter 1 só reaproveitada. Em
+"parado" isso não muda nada na prática (todo mundo tem 0% ali por definição — `totalRealizadas
+=== 0` — então a parcela de percentual vira uma constante igual pra todos, e `minutosParado`
+segue sendo o único critério que realmente diferencia), mas simplifica o código sem
+precisar de caso especial.
+
+**2. Coluna "Recebido em" nas duas tabelas de detalhe.** Dado já existia nas tabelas de
+origem — `contr_execucao_leitura.data_recebimento`/`hora_recebimento` (leitura/releitura) e
+`pendentes_im`/`atribuidas_im`/`em_execucao_im.dt_rec_abertura` (massiva, já vem como
+"DD/MM/YYYY HH:MM" pronto). `detalheContr()`/`detalheMassiva()` (`massivasService.js`)
+passaram a expor `data_recebimento` — pra leitura/releitura, concatenado em SQL
+(`c.data_recebimento || ' ' || c.hora_recebimento`); pra massiva, `dt_rec_abertura` direto,
+sem transformação. FRONTEND: coluna nova entre "Tipo" e "Data limite" (antes da coluna de
+prazo, que é sobre quando o livro *vence*, não sobre quando foi *recebido*), com
+`ordenarPor('dataRecebimento')` convertendo a string "DD/MM/YYYY HH:MM" pra epoch antes de
+comparar (o formato brasileiro não ordena certo como string crua).
+
+Testado ao vivo (JWT de teste): filtro "Sem sincronismo" com percentuais em ordem crescente
+(1%, 0%, 1%, 2%, 3%, 5%, 5%, 6%...); lista sem filtro nenhum com os mesmos primeiros nomes
+(o tier mais severo domina o topo, como sempre, só que agora também ordenado por %); coluna
+"Recebido em" presente nas duas abas ("05/08/2026 06:38" em Livros, "20/08/2026 12:54" em
+Massivas). Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando.
+
 ## Consequências
 
 - Testado ao vivo (JWT de teste): lista do Trilho com filtro "Ativo" mostrando ordem

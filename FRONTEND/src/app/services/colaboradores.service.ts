@@ -105,17 +105,22 @@ export function percentualExecucao(atividade: AtividadeColaborador | undefined |
 }
 
 // Ordem de gravidade: sem sincronismo > sem serviço (nenhuma atividade hoje)
-// > parado > ativo. Dentro de sem sincronismo/parado, quanto mais tempo sem
-// mudança, maior a pontuação (minutosParado) — critério já validado, não
-// mexido. Dentro de "ativo" (quem está executando de verdade), a pontuação
-// passou a ser pelo percentual de execução: quanto MENOR o % concluído,
-// mais crítico, e por isso aparece primeiro na lista (pedido do usuário).
-// minutosParado ainda desempata dentro da mesma faixa de %.
+// > parado > ativo — esses tiers continuam intocados (é o que já separa os
+// 4 toggles). DENTRO de cada tier, a pontuação é pelo percentual de
+// execução: quanto MENOR o % concluído, mais crítico, então aparece
+// primeiro — vale pros 4 filtros e pra lista sem filtro nenhum (usuário
+// reportou que só tinha funcionado dentro de "Ativo"; "Sem sincronismo" e a
+// lista completa continuavam ordenadas só por minutosParado). minutosParado
+// desempata dentro da mesma faixa de %. Em "parado", todo mundo tem 0% por
+// definição (totalRealizadas === 0), então a fórmula vira uma constante
+// ali e minutosParado acaba sendo o único critério real de qualquer forma —
+// não precisa de caso especial.
 function pontuacaoDestaque(atividade: AtividadeColaborador | undefined): number {
   if (!atividade) return 1_500_000;
-  if (atividade.semSincronismo) return 2_000_000 + atividade.minutosParado;
-  if (atividade.parado) return 1_000_000 + atividade.minutosParado;
-  return (100 - percentualExecucao(atividade)) * 1000 + atividade.minutosParado;
+  const criticidade = (100 - percentualExecucao(atividade)) * 1000 + atividade.minutosParado;
+  if (atividade.semSincronismo) return 2_000_000 + criticidade;
+  if (atividade.parado) return 1_000_000 + criticidade;
+  return criticidade;
 }
 
 // As quatro categorias dos toggles. "semServico" é quem não tem nenhum

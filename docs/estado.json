@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T06:35:00.000Z",
+  "atualizado_em": "2026-08-26T07:00:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "c11f20c",
   "seguranca": {
@@ -443,6 +443,13 @@
       "skill": "/projeto-novo",
       "evento": "Destaque de cor no prazo regulatório, colaborador só-massiva classificado errado, ordem padrão por criticidade",
       "detalhe": "Três pedidos na mesma mensagem, com prints comparando o estado atual. 1) Destaque de cor na coluna Prazo regulatório: >33 dias vermelho (crítico), <27 dias verde (folgado), 27-33 neutro (janela normal, sem alerta) — corPrazoRegulatorio() nova em massivas-view.ts. 2) Usuário reportou (print) colaborador ALYSSON DIEGO DENIPOTI com REALIZADAS: 0 aparecendo como 'ativo' na lista do Trilho. Bug real: no ramo que cria uma entrada NOVA de colaborador só-massiva (ADR 0013), parado/ativo estavam fixos em false/true, sem checar digitadosMassiva. Corrigido com a mesma regra já validada pra leitura/releitura (parado = totalRealizadas === 0); só o ramo de entrada nova foi tocado, o ramo que mescla massiva num colaborador que já tinha leitura/releitura hoje não mexe nos booleans calculados antes da mescla (fora de escopo deste pedido). 3) Tabela de detalhe passa a ordenar pelos mais críticos por padrão, em qualquer filtro, nas duas abas: linhasOrdenadas() só ordenava quando o usuário clicava num cabeçalho; sem coluna escolhida, ficava na ordem crua do backend (dt_prev_limite ASC). Trocado pra ordenar por diasAtraso() descendente (mais dias em atraso primeiro), com percentualLinha() ascendente como desempate — só é substituída quando o usuário clica explicitamente num cabeçalho. Testado ao vivo (JWT de teste): '34 dias' em vermelho ao filtrar pela faixa 34+; ALYSSON DIEGO DENIPOTI confirmado via API com {totalRealizadas:0, parado:true, ativo:false} (era ativo:true antes) e visualmente com o destaque âmbar de Parado; tabela sem coluna ordenada mostrando 12/9/8/6/6/6/6/6 dias de atraso em ordem decrescente. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver adendo 2 da ADR 0015."
+    },
+    {
+      "data": "2026-08-26T07:00:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Ordenação por criticidade em todos os tiers do Trilho; coluna Recebido em nas tabelas",
+      "detalhe": "Dois pedidos na mesma mensagem, com print mostrando o problema do primeiro. 1) Usuário reportou (print) o filtro Sem sincronismo com percentuais fora de ordem (1%, 14%, 26%, 13%, 3%, 48%...) e confirmou que a lista sem filtro nenhum também não refletia a ordenação por criticidade — só o tier 'ativo' tinha sido corrigido no ciclo anterior. Corrigido calculando criticidade = (100 - percentualExecucao) * 1000 + minutosParado uma vez só em pontuacaoDestaque() e somando o offset de cada tier em cima dela (sem sincronismo/parado/ativo continuam na mesma ordem de gravidade de sempre, mas agora todos ordenam por percentual dentro do próprio tier). Em 'parado' isso não muda nada na prática (todo mundo tem 0% por definição), mas elimina a duplicação de fórmula. 2) Coluna 'Recebido em' nova nas duas tabelas de detalhe — dado já existia nas tabelas de origem (contr_execucao_leitura.data_recebimento/hora_recebimento pra leitura/releitura; pendentes_im/atribuidas_im/em_execucao_im.dt_rec_abertura pra massiva, já pronto como 'DD/MM/YYYY HH:MM'). detalheContr()/detalheMassiva() (massivasService.js) passaram a expor data_recebimento; FRONTEND ganhou a coluna entre Tipo e Data limite, com ordenação convertendo a string brasileira pra epoch antes de comparar. Testado ao vivo (JWT de teste): filtro Sem sincronismo com percentuais em ordem crescente (1%, 0%, 1%, 2%, 3%, 5%, 5%, 6%...); lista sem filtro nenhum com os mesmos primeiros nomes; coluna Recebido em presente nas duas abas ('05/08/2026 06:38' em Livros, '20/08/2026 12:54' em Massivas). Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver adendo 3 da ADR 0015."
     }
   ]
 }

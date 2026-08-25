@@ -47,6 +47,11 @@ export interface DetalheLinha {
   // 0012 Adendo 4). Só vem preenchido pra leitura/releitura; livro de
   // massiva ou sem correspondência na planilha vem null.
   dias_prazo_regulatorio: number | null;
+  // Data (e hora, quando tem) de recebimento — leitura/releitura vem de
+  // contr_execucao_leitura.data_recebimento/hora_recebimento ("DD/MM/YYYY
+  // HH:MM"); massiva vem de dt_rec_abertura (mesmo formato, já concatenado
+  // na origem). null = ainda não recebido/aberto.
+  data_recebimento: string | null;
 }
 
 export interface DetalheMassivas {

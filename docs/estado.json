@@ -2,11 +2,11 @@
   "schema": 1,
   "projeto": "olho-de-deus",
   "perfil": "saas-multi-cliente",
-  "versao": "0.3.0",
+  "versao": "0.3.1",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-25T00:15:00.000Z",
+  "atualizado_em": "2026-08-25T13:00:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "bbfa166",
+  "commit": null,
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -219,6 +219,13 @@
       "skill": "/projeto-novo",
       "evento": "Importação de planilha (.xlsx) por tabela, POST /importacao/:tabela",
       "detalhe": "11 tabelas de negócio (fora users e as 3 de RBAC). Regra por tabela definida pelo usuário: substituir (atestados, ativos_inativos, cidades_localidades, suspensao) ou upsert por chave composta (as demais). Upsert implementado como DELETE...USING unnest() + INSERT, sem UNIQUE constraint (quebraria o insert repetido do scraper). Cabeçalho da planilha validado contra allowlist de colunas por tabela antes de qualquer query — nunca usa nome de coluna do arquivo direto em SQL. empresa_id sempre do token, nunca do arquivo/URL. Restrito a ADMINISTRADOR/ROOT. Biblioteca: exceljs no lugar de xlsx (xlsx tem 2 CVE sem correção via npm) — exceljs tem 1 advisory moderado transitivo (uuid), sem exploração óbvia no caminho usado aqui, registrado para o /seguranca revisar. Testado ponta a ponta via curl (substituir, upsert com chave repetida/nova, bloqueio de nível, bloqueio de tabela fora do allowlist) e na UI real via browser (login, aba Importação, reatividade do formulário). Aba 'Importação' nova no FRONTEND, visível só pra ADMINISTRADOR/ROOT. Ver ADR 0005."
+    },
+    {
+      "data": "2026-08-25T13:00:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Corrigido: token expirado fazia o FRONTEND mostrar 'API Offline' por engano",
+      "detalhe": "Usuário reportou dashboard/massivas vazios com 'API offline' apesar do backend estar rodando. Diagnóstico: token JWT de 12h vencido, e qualquer 401/403 numa rota autenticada caía no mesmo tratamento de erro de rede do HttpClient, sem distinção. authInterceptor agora detecta 401/403, limpa a sessão e redireciona pra /login (?motivo=sessao-expirada). Confirmado ao vivo pelo browser: com token novo, dashboard e massivas carregam dado real (943 registros) — a API nunca esteve offline de fato."
     }
   ]
 }

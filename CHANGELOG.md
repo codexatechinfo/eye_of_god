@@ -5,6 +5,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Corrigido
+
+- Token JWT expirado (12h) fazia o FRONTEND mostrar "API Offline" mesmo com o backend no
+  ar — qualquer 401/403 numa rota autenticada era tratado como falha de rede. Agora o
+  interceptor detecta sessão vencida, limpa o storage e manda pra `/login` em vez de deixar
+  o app preso num estado enganoso.
+
 ## [0.3.0] - 2026-08-25
 
 ### Adicionado

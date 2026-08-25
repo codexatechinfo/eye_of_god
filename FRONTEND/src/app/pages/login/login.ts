@@ -1,7 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -22,9 +22,14 @@ export class Login implements OnInit {
   constructor(
     private authService: AuthService,
     private router: Router,
+    private route: ActivatedRoute,
   ) {}
 
   ngOnInit(): void {
+    if (this.route.snapshot.queryParamMap.get('motivo') === 'sessao-expirada') {
+      this.erro.set('Sua sessão expirou. Faça login de novo.');
+      return;
+    }
     if (this.authService.estaLogado()) {
       this.router.navigate(['/home']);
     }

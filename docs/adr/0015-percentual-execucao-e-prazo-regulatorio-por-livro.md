@@ -74,6 +74,38 @@ livro contra `prazo_reg_livros`, livro sem par = null/"não avaliado", nunca 0):
 - **Tabelas de detalhe**: coluna "Prazo regulatório" só em `escopo === 'leiturarelitura'`
   (não existe pra massiva, mesma razão de sempre); `'—'` quando `null`.
 
+## Adendo — releitura entrava incorretamente na conta; rural já ficava de fora, mas agora explícito
+
+Usuário esclareceu: massiva, releitura e etapa rural (21-38) devem ficar **de fora** do
+cálculo/contagem de prazo regulatório — só leitura urbana (01-19) conta.
+
+Investigado antes de corrigir: `prazo_reg_livros.etapa` já só contém 01-19 na prática (0
+linhas rurais nas ~270k combinações testadas), então o JOIN por número do livro nunca batia
+com etapa rural — essa parte já estava correta, só não era uma regra *explícita*, dependia
+de a planilha nunca ter tido etapa rural por coincidência. Já releitura era um problema real:
+o JOIN é só por número do livro, sem olhar `tipoServico` — e o **mesmo** número de livro pode
+aparecer como leitura numa consulta e releitura em outra (o livro já foi lido, depois voltou
+como releitura). Confirmado contra dado real: dos ~1330 livros com correspondência no último
+lote, 275 eram releitura — entravam incorretamente na conta de `<27/33/34+ dias`.
+
+Corrigido embutindo a condição na própria expressão `EFETIVO_PRAZO_REG_SQL`
+(`massivasService.js`), que agora só calcula o valor quando `TIPO_SERVICO_CONTR_SQL =
+'leitura' AND ${ETAPA_URBANA_CONTR_SQL}` — fora disso, `NULL` explícito. Como a expressão é
+compartilhada pelas três consumidoras (`obterFaixasDias`, `detalheContr`, e o equivalente em
+JS de `atividadeColaboradoresService.js`), a correção propagou pras três de uma vez sem
+precisar duplicar a regra: em `obterFaixasDias`, `NULL` cai fora do `WHERE faixa IS NOT
+NULL`; em `detalheContr`, a linha continua aparecendo na tabela, só que com `—` na coluna
+Prazo regulatório; em `atividadeColaboradoresService.js` (JS puro, não reaproveita a
+expressão SQL), a mesma condição foi replicada manualmente (`tipoServico === 'leitura' &&
+etapaUrbana`) antes de consultar o mapa.
+
+Testado ao vivo (JWT de teste): faixas de dias caíram de 14/143/56 pra 14/7/2 (a maioria do
+excesso em `igual33`/`maior34` era releitura); no detalhe, 0 linhas de `releitura` com
+`dias_prazo_regulatorio` preenchido (era >0 antes), 1057 linhas de `leitura` continuam
+corretas; na atividade do Trilho, 0 livros de releitura ou etapa rural com
+`diasPrazoRegulatorio`, 1163 livros de leitura urbana continuam com o valor certo. Suíte de
+isolamento de tenant (12 testes) e build do Angular continuam passando.
+
 ## Consequências
 
 - Testado ao vivo (JWT de teste): lista do Trilho com filtro "Ativo" mostrando ordem

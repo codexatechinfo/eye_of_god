@@ -405,7 +405,24 @@ async function contarTotalMassivaDeduplicado(db, chaves, dataImport, horaImport,
 // Reaproveitada em detalheContr() pro filtro clicável das faixas <27/33/34+
 // dias — mesma fórmula, join com LEFT (não INNER) porque aqui o filtro é
 // opcional: sem faixaDias selecionada, o join não deve excluir nenhum livro.
-const EFETIVO_PRAZO_REG_SQL = `preg.dias_finais::int + (to_date(c.data_import, 'DD/MM/YYYY') - to_date(preg.prazo_calendario, 'YYYY-MM-DD'))`;
+//
+// Confirmado com o usuário: o prazo regulatório 27/33/34+ dias só vale pra
+// LEITURA urbana (etapas 01-19) — releitura e etapa rural (21-38) ficam de
+// fora do cálculo inteiramente, mesmo quando o número do livro bate com uma
+// linha de prazo_reg_livros (o que pode acontecer: o mesmo livro de leitura
+// pode reaparecer como releitura depois). Verificado contra dado real: 275
+// dos ~1330 livros com correspondência no último lote eram releitura — sem
+// esse filtro, entravam incorretamente na conta. prazo_reg_livros.etapa já
+// só tem 01-19 na prática (conferido: 0 linhas rurais no join), então o
+// filtro de etapa aqui é defensivo (não muda o resultado hoje, mas deixa a
+// regra de negócio explícita em vez de depender só de a planilha nunca ter
+// etapa rural por acaso).
+const EFETIVO_PRAZO_REG_SQL = `
+  CASE WHEN ${TIPO_SERVICO_CONTR_SQL} = 'leitura' AND ${ETAPA_URBANA_CONTR_SQL}
+    THEN preg.dias_finais::int + (to_date(c.data_import, 'DD/MM/YYYY') - to_date(preg.prazo_calendario, 'YYYY-MM-DD'))
+    ELSE NULL
+  END
+`;
 
 function joinPrazoRegLivros() {
   return `LEFT JOIN prazo_reg_livros preg

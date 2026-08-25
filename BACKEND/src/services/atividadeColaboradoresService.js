@@ -42,8 +42,15 @@ function classificarTipoServico(dataRecebimento, dataPrevistaLimite) {
 // juntar prazo_reg_livros numa query que já processa todas as linhas cruas
 // do dia. prazo_reg_livros é só consulta (nunca fonte de linha, mesma regra
 // da ADR 0012) — livro sem correspondência no mapa fica null, "não
-// avaliado", nunca 0. Só vale pra leitura/releitura (livro de massiva não
-// tem essa correspondência — nunca fez sentido pra esse escopo).
+// avaliado", nunca 0.
+//
+// Confirmado com o usuário: só vale pra LEITURA urbana (etapa 01-19) —
+// releitura e etapa rural (21-38) ficam de fora mesmo quando o número do
+// livro bate (o mesmo livro pode ter sido leitura antes e virar releitura
+// depois); massiva nunca teve essa correspondência. Quem chama este mapa
+// (listarAtividadeHoje) precisa checar tipoServico === 'leitura' e etapa
+// urbana antes de usar o valor — ver massivasService.js pro mesmo filtro em
+// SQL.
 async function obterMapaPrazoRegulatorio(db) {
   const { rows } = await db.query(`
     SELECT livro, dias_finais, prazo_calendario
@@ -223,7 +230,9 @@ async function listarAtividadeHoje(db) {
         ultimaMudancaColaborador = ultimaMudancaLivro;
       }
 
-      const prazoRegulatorio = mapaPrazoRegulatorio.get(Number(livro));
+      const tipoServico = classificarTipoServico(ultima.dataRecebimento, ultima.dataPrevistaLimite);
+      const etapaUrbana = Number(ultima.etapa) >= 1 && Number(ultima.etapa) <= 19;
+      const prazoRegulatorio = tipoServico === 'leitura' && etapaUrbana ? mapaPrazoRegulatorio.get(Number(livro)) : null;
 
       livros.push({
         livro,
@@ -231,7 +240,7 @@ async function listarAtividadeHoje(db) {
         situacaoAtual: ultima.situacao,
         digitados: ultima.digitados,
         naoDigitados: ultima.naoDigitados,
-        tipoServico: classificarTipoServico(ultima.dataRecebimento, ultima.dataPrevistaLimite),
+        tipoServico,
         diasPrazoRegulatorio: prazoRegulatorio
           ? calcularDiasPrazoRegulatorio(hoje, prazoRegulatorio.prazoCalendario, prazoRegulatorio.diasFinais)
           : null,

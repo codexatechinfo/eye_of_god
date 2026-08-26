@@ -55,10 +55,14 @@ export class MassivasView implements OnInit {
     this.massivasService.iniciar(this.escopo);
   }
 
-  // Barra de resumo (anexo2) — "em campo" é MONITOR de fora (cargo próprio,
-  // sempre "na base") e LEITURISTA/LEITURISTA MOTOCICLISTA com atividade
-  // registrada hoje em contr_execucao_leitura (mesmo dado que a aba Trilho
-  // já usa pra Ativo/Parado/Sem sincronismo).
+  // Barra de resumo (anexo2) — "em campo" é qualquer colaborador (incluindo
+  // MONITOR) com atividade registrada hoje em contr_execucao_leitura/massiva
+  // (mesmo dado que a aba Trilho já usa pra Ativo/Parado/Sem sincronismo);
+  // "na base" é MONITOR sem atividade hoje. Usuário corrigiu a suposição
+  // anterior (MONITOR = sempre na base, nunca contava em "em campo" mesmo
+  // tendo ido a campo): monitor também vai a campo, então só entra em "na
+  // base" quando não teve nenhuma atividade hoje, igual a qualquer outro
+  // cargo cai em "sem serviço" na aba Trilho.
   totalAtivos(): number {
     return this.colaboradoresService.colaboradores().length;
   }
@@ -66,7 +70,7 @@ export class MassivasView implements OnInit {
   private agentesEmCampoLista() {
     return this.colaboradoresService
       .colaboradores()
-      .filter(c => c.cargo !== 'MONITOR' && this.colaboradoresService.atividadeDe(c.colaborador));
+      .filter(c => this.colaboradoresService.atividadeDe(c.colaborador));
   }
 
   agentesEmCampo(): number {
@@ -81,8 +85,17 @@ export class MassivasView implements OnInit {
     return this.agentesEmCampoLista().filter(c => c.cargo === 'LEITURISTA').length;
   }
 
+  // MONITOR com atividade hoje — foi a campo, não fica mais em "na base".
+  agentesMonitorEmCampo(): number {
+    return this.agentesEmCampoLista().filter(c => c.cargo === 'MONITOR').length;
+  }
+
+  // MONITOR sem atividade hoje — "na base" deixou de ser todo MONITOR
+  // incondicionalmente (ver comentário acima).
   agentesNaBase(): number {
-    return this.colaboradoresService.colaboradores().filter(c => c.cargo === 'MONITOR').length;
+    return this.colaboradoresService
+      .colaboradores()
+      .filter(c => c.cargo === 'MONITOR' && !this.colaboradoresService.atividadeDe(c.colaborador)).length;
   }
 
   comunicacaoOk(): number {

@@ -399,6 +399,26 @@ colaborador(es) em campo sem transmitir dados", cada linha mostrando nome, etapa
 sem repetição (ex.: "Etapas 12, 13, 18 · 397 a realizar") e o tempo formatado; botão de
 fechar (X) testado e funcionando. `npx tsc --noEmit` sem erros.
 
+## Adendo 11 — MONITOR também pode ir a campo: "na base" deixou de ser incondicional
+
+Usuário apontou (a partir da pergunta "o que classificou como na base?"): monitor também vai
+a campo, não é sempre "na base". O código (`agentesEmCampoLista()`/`agentesNaBase()` em
+`massivas-view.ts`) partia da suposição contrária — `cargo !== 'MONITOR'` excluía todo
+MONITOR de "Agentes em campo" incondicionalmente, e `agentesNaBase()` contava todo MONITOR
+incondicionalmente, mesmo com atividade registrada hoje.
+
+Corrigido pra usar a mesma checagem de atividade já usada pra LEITURISTA/LEITURISTA
+MOTOCICLISTA (`colaboradoresService.atividadeDe()`, mesma fonte da aba Trilho): MONITOR com
+atividade hoje conta em "Agentes em campo" (badge novo "Monitor", só aparece quando > 0);
+MONITOR sem atividade hoje conta em "Na base". `progressoContagens()` (Progresso de
+atividades) usa a mesma lista privada `agentesEmCampoLista()`, então passou a incluir
+monitores em campo automaticamente, sem mudança própria.
+
+Testado ao vivo (JWT de teste local, aba Massivas): antes da correção "289 em campo / Na
+base 3"; depois, "292 em campo / Moto 235 / A pé 54 / Monitor 3 / Na base 0" — os 3
+monitores tinham atividade hoje e passaram de "na base" pra "em campo" corretamente
+(235+54+3 = 292, soma bate). `npx tsc --noEmit` sem erros.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries
@@ -420,3 +440,5 @@ fechar (X) testado e funcionando. `npx tsc --noEmit` sem erros.
   `<=`/`>`) em `massivasService.js` e `atividadeColaboradoresService.js`.
 - **Adendo 10**: modal "sem comunicar há mais de 30 min" com etapas e a realizar por
   colaborador, testado ao vivo.
+- **Adendo 11**: MONITOR com atividade hoje conta em "Agentes em campo" (badge próprio),
+  não mais sempre em "Na base".

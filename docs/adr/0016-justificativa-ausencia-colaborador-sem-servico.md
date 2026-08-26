@@ -63,3 +63,45 @@ aplicável.
   aparecem como "sem serviço" com o indicador, o que é o comportamento correto (eles
   continuam vinculados à empresa, só ausentes por período definido/indefinido), mas aumenta
   o total de colaboradores listado em relação a antes desta mudança.
+
+## Adendo — toggle "Afastados" separado de "Sem serviço", terceira fonte `suspensao`
+
+Usuário pediu: um quinto toggle "Afastados" na barra de filtros do Trilho (ao lado de
+Parado/Sem serviço/Ativo/Sem sincronismo), contendo só quem está sem serviço **e** tem
+justificativa (atestado, afastamento ou suspensão, cujo intervalo contemple hoje) — e "Sem
+serviço" deve passar a conter só quem está de fato sem serviço, sem justificativa nenhuma
+(os dois grupos, antes misturados, viram mutuamente exclusivos).
+
+### Terceira fonte: tabela `suspensao`
+
+Além de `atestados` e `ativos_inativos.situacao` (já implementadas acima), o usuário incluiu
+`suspensao` no pedido. Diferente das outras duas, essa tabela (importada manualmente via
+planilha — `importacaoConfig.js`, modo `substituir`) tem uma coluna `data_falta` (data
+única, não um par início/fim) — o schema sugere uma linha por dia de falta justificada, não
+um período contínuo. `obterSuspensoesHoje(db)` (nova, mesmo arquivo) segue o mesmo padrão
+das outras duas fontes: "contempla hoje" = existe uma linha com `data_falta` igual a hoje;
+`motivoAfastamento` vem de `justificativa`/`observacao` da própria linha. Mesclada em
+`listarAtividadeHoje` com prioridade mais baixa que as outras duas (atestado > licença >
+suspensão — só preenche quem ainda não tem entrada). `AfastamentoInfo.origem` ganhou
+`'suspensao'`.
+
+**Não validado com dados reais**: a tabela `suspensao` estava vazia no ambiente desta sessão
+(nenhuma planilha importada ainda) — a lógica de `data_falta === hoje` é uma interpretação
+razoável do schema (coluna singular, não um par de datas), mas não foi possível confirmar
+contra uma linha real. Vale conferir quando houver uma primeira importação de suspensões.
+
+### Categoria nova no FRONTEND
+
+`CategoriaAtividade` ganhou `'afastado'`; `categoriaDe()` passou a receber também o
+`AfastamentoInfo` do colaborador (antes só recebia `AtividadeColaborador`) — quando não há
+atividade hoje, retorna `'afastado'` se houver justificativa, senão `'semServico'` (antes
+retornava sempre `'semServico'` nesse caso, sem diferenciar). Único ponto de chamada
+(`colaboradoresOrdenados` computed em `colaboradores.service.ts`) atualizado pra passar
+`this.afastamentosHoje()[nome]`. `OPCOES_CATEGORIA` ganhou `{ valor: 'afastado', rotulo:
+'Afastados' }` — o toggle aparece sozinho via `*ngFor`, sem mudança de template.
+
+Testado ao vivo (JWT de teste local, aba Trilho): toggle "Afastados" filtrou para 9
+colaboradores (todos com ícone/card de justificativa já existente); toggle "Sem serviço"
+filtrou para 59, lista sem sobreposição com os 9 de "Afastados" — confirmando que os dois
+grupos, antes misturados sob "sem serviço", agora são mutuamente exclusivos. `npx tsc
+--noEmit` sem erros; suíte de isolamento de tenant (12 testes) passando.

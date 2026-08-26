@@ -7,6 +7,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Toggle "Afastados" na barra de filtros do Trilho (5º, ao lado de Parado/Sem serviço/
+  Ativo/Sem sincronismo): mostra só quem está sem serviço e tem justificativa (atestado,
+  licença ou suspensão cobrindo hoje). "Sem serviço" passou a mostrar só quem está de fato
+  sem nenhuma justificativa — os dois grupos, antes misturados, agora são mutuamente
+  exclusivos. Nova terceira fonte de justificativa, tabela `suspensao` (além de `atestados`
+  e `ativos_inativos.situacao` já existentes). Ver Adendo da
+  [ADR 0016](docs/adr/0016-justificativa-ausencia-colaborador-sem-servico.md).
 - Modal "sem comunicar há mais de 30 min" na barra de resumo das abas Massivas/Monitoramento
   de Livros — clique no texto vermelho abre a lista de colaboradores em campo sem transmitir
   dados, com etapas (agregadas, sem repetição) e quantidade a realizar de cada um, ordenada

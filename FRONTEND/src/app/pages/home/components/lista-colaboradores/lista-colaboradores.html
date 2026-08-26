@@ -331,7 +331,7 @@
               <span class="text-[11px] font-bold text-blue-700">Ausência justificada</span>
             </div>
             <p class="text-[11px] text-blue-700 leading-snug">
-              {{ af.motivoAfastamento || (af.origem === 'licenca' ? 'Licença/afastamento' : 'Atestado/afastamento') }}
+              {{ af.motivoAfastamento || (af.origem === 'licenca' ? 'Licença/afastamento' : af.origem === 'suspensao' ? 'Suspensão/falta justificada' : 'Atestado/afastamento') }}
               <span *ngIf="af.afastadoInss === 'SIM'" class="font-semibold"> (afastado pelo INSS)</span>
             </p>
             <p class="text-[10.5px] text-blue-500 mt-0.5 tabular-nums">

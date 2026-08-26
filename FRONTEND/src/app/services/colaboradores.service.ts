@@ -81,8 +81,10 @@ export interface AtividadeColaborador {
 export interface AfastamentoInfo {
   // 'atestado' vem da tabela atestados (tem motivo/INSS); 'licenca' vem de
   // ativos_inativos.situacao ("A2 - DD/MM/YYYY") — RH não registra motivo
-  // nem INSS por esse caminho, só o período.
-  origem: 'atestado' | 'licenca';
+  // nem INSS por esse caminho, só o período; 'suspensao' vem da tabela
+  // suspensao (planilha), uma linha por dia de falta justificada, não um
+  // período com início/fim.
+  origem: 'atestado' | 'licenca' | 'suspensao';
   dataAfastamento: string;
   // null = licença com volta_afastamento "INDETERMINADO" — ver
   // motivoAfastamento nesse caso ("Afastado por tempo indeterminado").
@@ -154,19 +156,26 @@ function pontuacaoDestaque(atividade: AtividadeColaborador | undefined): number 
   return criticidade;
 }
 
-// As quatro categorias dos toggles. "semServico" é quem não tem nenhum
-// registro de atividade hoje (não está no mapa atividadeHoje).
-export type CategoriaAtividade = 'parado' | 'semServico' | 'ativo' | 'semSincronismo';
+// As cinco categorias dos toggles. "semServico" é quem não tem nenhum
+// registro de atividade hoje E não tem justificativa de ausência — usuário
+// pediu pra separar quem está sem serviço "de fato, sem motivo" de quem tem
+// atestado/licença/suspensão cobrindo hoje (categoria "afastado" nova);
+// antes os dois ficavam misturados em "semServico".
+export type CategoriaAtividade = 'parado' | 'semServico' | 'ativo' | 'semSincronismo' | 'afastado';
 
 export const OPCOES_CATEGORIA: { valor: CategoriaAtividade; rotulo: string }[] = [
   { valor: 'parado', rotulo: 'Parado' },
   { valor: 'semServico', rotulo: 'Sem serviço' },
   { valor: 'ativo', rotulo: 'Ativo' },
   { valor: 'semSincronismo', rotulo: 'Sem sincronismo' },
+  { valor: 'afastado', rotulo: 'Afastados' },
 ];
 
-export function categoriaDe(atividade: AtividadeColaborador | undefined | null): CategoriaAtividade {
-  if (!atividade) return 'semServico';
+export function categoriaDe(
+  atividade: AtividadeColaborador | undefined | null,
+  afastamento?: AfastamentoInfo | null,
+): CategoriaAtividade {
+  if (!atividade) return afastamento ? 'afastado' : 'semServico';
   if (atividade.semSincronismo) return 'semSincronismo';
   if (atividade.parado) return 'parado';
   return 'ativo';
@@ -217,12 +226,13 @@ export class ColaboradoresService {
   // está ativo, filtrada só para quem está naquela categoria.
   colaboradoresOrdenados = computed(() => {
     const atividade = this.atividadeHoje();
+    const afastamentos = this.afastamentosHoje();
     const filtro = this.filtroCategoria();
     const lista = [...this.colaboradores()].sort(
       (a, b) => pontuacaoDestaque(atividade[b.colaborador]) - pontuacaoDestaque(atividade[a.colaborador]),
     );
     if (!filtro) return lista;
-    return lista.filter(c => categoriaDe(atividade[c.colaborador]) === filtro);
+    return lista.filter(c => categoriaDe(atividade[c.colaborador], afastamentos[c.colaborador]) === filtro);
   });
 
   alternarFiltroCategoria(categoria: CategoriaAtividade): void {

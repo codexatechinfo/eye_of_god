@@ -327,14 +327,18 @@ async function listarAtividadeHoje(db) {
     }
   }
 
-  // Duas fontes de justificativa de ausência — atestados primeiro (tem
-  // motivo/INSS, mais detalhado), licença de ativos_inativos só preenche
-  // quem não tinha nada em atestados.
-  const [afastamentosHoje, licencasHoje] = await Promise.all([
+  // Três fontes de justificativa de ausência — atestados primeiro (tem
+  // motivo/INSS, mais detalhado), licença de ativos_inativos e suspensão da
+  // tabela suspensao só preenchem quem não tinha nada nas fontes anteriores.
+  const [afastamentosHoje, licencasHoje, suspensoesHoje] = await Promise.all([
     obterAfastamentosHoje(db),
     obterLicencasAtivosInativosHoje(db),
+    obterSuspensoesHoje(db),
   ]);
   for (const [nome, info] of Object.entries(licencasHoje)) {
+    if (!afastamentosHoje[nome]) afastamentosHoje[nome] = info;
+  }
+  for (const [nome, info] of Object.entries(suspensoesHoje)) {
     if (!afastamentosHoje[nome]) afastamentosHoje[nome] = info;
   }
 
@@ -429,6 +433,40 @@ async function obterLicencasAtivosInativosHoje(db) {
       qtdDiasAfastado: null,
       afastadoInss: null,
       motivoAfastamento: indeterminado ? 'Afastado por tempo indeterminado' : null,
+    };
+  }
+
+  return porColaborador;
+}
+
+// Terceira fonte de justificativa de ausência: tabela suspensao (importada
+// manualmente por planilha, ver importacaoConfig.js — modo "substituir",
+// recarrega tudo a cada import), uma linha por dia de falta justificada
+// (data_falta), não um período com início/fim como atestado/licença. "Hoje
+// contempla" aqui é: existe uma linha com data_falta = hoje. Igual às outras
+// duas fontes, só preenche quem ainda não tem entrada (prioridade menor).
+async function obterSuspensoesHoje(db) {
+  const agora = new Date();
+  const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+
+  const { rows: linhas } = await db.query(`
+    SELECT colaborador, data_falta, justificativa, observacao
+    FROM suspensao
+  `);
+
+  const porColaborador = {};
+
+  for (const linha of linhas) {
+    const data = paraDataIso(linha.data_falta);
+    if (!data || data !== hojeIso) continue;
+
+    porColaborador[linha.colaborador] = {
+      origem: 'suspensao',
+      dataAfastamento: data,
+      dataRetorno: data,
+      qtdDiasAfastado: '1',
+      afastadoInss: null,
+      motivoAfastamento: linha.justificativa || linha.observacao || 'Suspensão/falta justificada',
     };
   }
 

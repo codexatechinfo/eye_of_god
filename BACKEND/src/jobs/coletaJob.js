@@ -25,13 +25,20 @@ async function executarUmCiclo() {
   }
   emAndamento = true;
   console.log('[Coleta Acomp] ⏰ Iniciando ciclo...');
-  const client = await abrirContextoTenant({ empresaId: EMPRESA_JOB_ID, nivel: 'ADMINISTRADOR' });
+  // abrirContextoTenant() também dentro do try: se ela lançar (ex.: erro
+  // transitório de conexão), a exceção escapava do try/catch, propagava pra
+  // fora do while em loopContinuo() e travava o loop pro resto do dia sem
+  // nunca resetar loopAtivo — sintoma real observado em produção junto com
+  // o node-cron perdendo o disparo das 07h (ver watchdog em
+  // iniciarJobColeta abaixo).
+  let client;
   try {
+    client = await abrirContextoTenant({ empresaId: EMPRESA_JOB_ID, nivel: 'ADMINISTRADOR' });
     await executarColetaCopel(client, EMPRESA_JOB_ID);
     await fecharContextoTenant(client, true);
   } catch (erro) {
     console.error('[Coleta Acomp] ❌ Erro na coleta:', erro);
-    await fecharContextoTenant(client, false);
+    if (client) await fecharContextoTenant(client, false);
   } finally {
     emAndamento = false;
   }
@@ -51,6 +58,17 @@ async function loopContinuo() {
   console.log('[Coleta Acomp] 🌙 Fora da janela (19h), loop pausado até amanhã às 07h.');
 }
 
+// node-cron não faz retry quando perde o disparo agendado (log real visto em
+// produção: "[NODE-CRON][WARN] missed execution at ... Possible blocking IO
+// or high CPU" — acontece quando o processo reinicia bem no minuto do
+// agendamento, ex.: nodemon reiniciando por causa de deploy/edição bem às
+// 07h). Sem watchdog, a coleta fica parada até o dia seguinte sem ninguém
+// perceber além de olhar a tela. Checa a cada 2 minutos se deveria estar
+// dentro da janela mas não está rodando nem processando, e reinicia sozinho
+// — loopContinuo() já é idempotente (`if (loopAtivo) return`), então chamar
+// de novo enquanto já está rodando não faz nada.
+const INTERVALO_WATCHDOG_MS = 2 * 60 * 1000;
+
 function iniciarJobColeta() {
   if (!EMPRESA_JOB_ID) {
     console.error('[Coleta Acomp] ❌ EMPRESA_PRINCIPAL_ID não definido no .env — job não iniciado.');
@@ -62,6 +80,13 @@ function iniciarJobColeta() {
   if (dentroDaJanela()) {
     loopContinuo();
   }
+
+  setInterval(() => {
+    if (dentroDaJanela() && !loopAtivo && !emAndamento) {
+      console.warn('[Coleta Acomp] 🩹 Watchdog: deveria estar rodando (dentro da janela) mas não estava — reiniciando o loop.');
+      loopContinuo();
+    }
+  }, INTERVALO_WATCHDOG_MS);
 }
 
 function obterStatus() {

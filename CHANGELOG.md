@@ -7,6 +7,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Watchdog nos loops de coleta (`coletaJob.js`/`coletaMassivasJob.js`): checa a cada 2min
+  se deveria estar rodando (dentro da janela 07h–19h) mas não está, e reinicia sozinho.
+  Cobre o caso de `node-cron` perder o disparo agendado das 07h (sem retry nativo — visto
+  ao vivo: reinícios do processo coincidindo com o minuto exato do agendamento faziam a
+  coleta ficar parada o dia inteiro sem ninguém notar). Ver
+  [ADR 0017](docs/adr/0017-watchdog-loop-coleta.md).
 - Cards "Realizadas" (verde) e "A realizar" (vermelho) na aba Trilho (lista de
   colaboradores e painel de detalhe do livro), destacados dos demais cards que continuam
   azuis; gradiente ainda mais discreto (opacidade 10%, era 20%).
@@ -88,6 +94,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- `abrirContextoTenant()` fora do `try/catch` em `executarUmCiclo()` (`coletaJob.js`/
+  `coletaMassivasJob.js`): se lançasse, travava o loop de coleta pro resto do dia sem nunca
+  resetar `loopAtivo`. Corrigido junto com o watchdog acima. Ver
+  [ADR 0017](docs/adr/0017-watchdog-loop-coleta.md).
 - Ordenação por percentual da lista do Trilho "reiniciava" ao trocar de categoria (ex.: de
   "ativo" pra "sem sincronismo") — causa real: o desempate por `minutosParado` (tempo sem
   sincronizar, tipicamente centenas de minutos pra quem está "sem sincronismo") tinha peso

@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T08:10:00.000Z",
+  "atualizado_em": "2026-08-26T12:35:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "24dd371",
   "seguranca": {
@@ -478,6 +478,13 @@
       "skill": "/projeto-novo",
       "evento": "Cards Realizadas/A realizar ganharam cor própria (verde/vermelho) na aba Trilho",
       "detalhe": "Usuário pediu pra destacar os cards 'Realizadas' (verde) e 'A realizar' (vermelho) na aba Trilho, diminuindo ainda mais a opacidade do gradiente. Trocado nos dois lugares que têm esses cards (lista-colaboradores.html e livro-detalhe.html, mesmo padrão visual nos dois): borda/ícone/label/valor de blue-100/blue-600/blue-400/blue-700 para emerald-*/red-* respectivamente; gradiente de from-{cor}-100/20 para from-{cor}-100/10 (opacidade pela metade). Os demais cards da mesma tela continuam azuis, sem mudança. Testado ao vivo (JWT de teste): card Realizadas do colaborador confirmado com classes border-emerald-100/bg-gradient-to-br from-emerald-100/10 to-emerald-50; A realizar com border-red-100/from-red-100/10; mesmas classes confirmadas no painel de detalhe do livro. Build do Angular passando; suíte de isolamento de tenant (12 testes) também (mudança só de FRONTEND)."
+    },
+    {
+      "data": "2026-08-26T12:35:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Watchdog nos loops de coleta — node-cron perdia o disparo das 07h sem retry",
+      "detalhe": "Usuário reportou header mostrando 'Coleta parada' (vermelho) achando estranho já que a coleta 'estava rodando normalmente' na percepção dele. Investigado ao vivo, não por suposição: GET /coleta/status retornou dentroDaJanela:true mas ativo:false — o frontend estava reportando fielmente um estado real. Nos logs do processo apareceu a causa explícita: '[NODE-CRON][WARN] missed execution at Wed Aug 26 2026 07:00:00 GMT-0300! Possible blocking IO or high CPU'. ativo é uma variável em memória do processo (loopAtivo), só reativada no boot (se já dentro da janela) ou via cron.schedule('0 7 * * *', loopContinuo) — que dispara uma vez por dia, sem retry se perder o horário exato. Nesta sessão, vários reinícios do nodemon (causados pelas próprias edições de arquivo ao longo do trabalho) coincidiram com a janela das 07h e o cron perdeu o disparo — sem retry, a coleta ficou parada até alguém notar. Não é exclusivo de dev: em produção, qualquer reinício do processo perto das 07h (deploy, crash, restart do host) causaria o mesmo silêncio. Resolvido de duas formas: 1) resolução imediata — reiniciei o backend manualmente (boot-check reativou os dois loops na hora, confirmado via /coleta/status e logs '🔁 Iniciando loop contínuo' pros dois jobs). 2) correção definitiva, com aprovação do usuário (perguntado via AskUserQuestion antes de implementar, já que mexe em lógica de job crítica de produção): watchdog novo em coletaJob.js/coletaMassivasJob.js — setInterval de 2min que checa dentroDaJanela() && !loopAtivo && !emAndamento e reinicia sozinho (loopContinuo() já era idempotente, seguro chamar de novo). De passagem, corrigido um bug relacionado: abrirContextoTenant() estava fora do try/catch em executarUmCiclo() — se lançasse, travava o loop pro resto do dia sem nunca resetar loopAtivo (produziria o sintoma oposto do observado: ativo preso em true pra sempre). Testado: sintaxe ok, suíte de isolamento de tenant (12 testes) passando, coleta confirmada rodando de novo ao vivo (login, extração de etapas nos logs, /coleta/status com ativo:true/emAndamento:true pros dois jobs). Watchdog em si não foi observado disparando ao vivo (precisaria esperar 2min ociosos), mas o mesmo caminho de código (loopContinuo() chamado quando !loopAtivo dentro da janela) já foi exercitado pelo boot-check nesta sessão. Ver ADR 0017."
     }
   ]
 }

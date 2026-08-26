@@ -52,15 +52,41 @@
       "
     >
       <span class="flex-1 min-w-0">
-        <span
-          class="truncate block"
-          [title]="
-            !colaboradoresService.atividadeDe(colaborador.colaborador)
-              ? colaborador.colaborador + ' — sem serviço hoje'
-              : colaborador.colaborador
-          "
-        >
-          {{ colaborador.colaborador }}
+        <span class="flex items-center gap-1">
+          <span
+            class="truncate"
+            [title]="
+              !colaboradoresService.atividadeDe(colaborador.colaborador)
+                ? colaborador.colaborador + ' — sem serviço hoje'
+                : colaborador.colaborador
+            "
+          >
+            {{ colaborador.colaborador }}
+          </span>
+          <!-- Só pra "sem serviço" — indica de cara (sem precisar expandir)
+               que a ausência tem justificativa (atestado ou licença de
+               ativos_inativos). Roxo + negrito quando é afastamento pelo
+               INSS, azul nos demais casos. -->
+          <svg
+            *ngIf="!colaboradoresService.atividadeDe(colaborador.colaborador) && colaboradoresService.afastamentoDe(colaborador.colaborador) as afIndicador"
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-3 w-3 shrink-0"
+            [ngClass]="afIndicador.afastadoInss === 'SIM' ? 'text-violet-500' : 'text-blue-400'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            [title]="
+              (afIndicador.motivoAfastamento || 'Ausência justificada') +
+              (afIndicador.afastadoInss === 'SIM' ? ' (INSS)' : '')
+            "
+          >
+            <path d="M9 11H3v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9h-6" />
+            <path d="M9 11V7a3 3 0 0 1 6 0v4" />
+            <path d="M12 15v3" />
+          </svg>
         </span>
         <!-- Barra de % de execução do dia — mesma métrica que agora ordena
              a lista (mais críticos = menor % primeiro). Só aparece quando
@@ -305,12 +331,13 @@
               <span class="text-[11px] font-bold text-blue-700">Ausência justificada</span>
             </div>
             <p class="text-[11px] text-blue-700 leading-snug">
-              {{ af.motivoAfastamento || 'Atestado/afastamento' }}
+              {{ af.motivoAfastamento || (af.origem === 'licenca' ? 'Licença/afastamento' : 'Atestado/afastamento') }}
               <span *ngIf="af.afastadoInss === 'SIM'" class="font-semibold"> (afastado pelo INSS)</span>
             </p>
             <p class="text-[10.5px] text-blue-500 mt-0.5 tabular-nums">
-              {{ af.dataAfastamento | date: 'dd/MM/yyyy':'UTC' }} até {{ af.dataRetorno | date: 'dd/MM/yyyy':'UTC' }}
-              · {{ af.qtdDiasAfastado }} dia{{ af.qtdDiasAfastado === '1' ? '' : 's' }}
+              {{ af.dataAfastamento | date: 'dd/MM/yyyy':'UTC' }}
+              <ng-container *ngIf="af.dataRetorno">até {{ af.dataRetorno | date: 'dd/MM/yyyy':'UTC' }}</ng-container>
+              <ng-container *ngIf="af.qtdDiasAfastado"> · {{ af.qtdDiasAfastado }} dia{{ af.qtdDiasAfastado === '1' ? '' : 's' }}</ng-container>
             </p>
           </div>
         </ng-container>

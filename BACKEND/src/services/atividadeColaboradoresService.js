@@ -325,7 +325,16 @@ async function listarAtividadeHoje(db) {
     }
   }
 
-  const afastamentosHoje = await obterAfastamentosHoje(db);
+  // Duas fontes de justificativa de ausência — atestados primeiro (tem
+  // motivo/INSS, mais detalhado), licença de ativos_inativos só preenche
+  // quem não tinha nada em atestados.
+  const [afastamentosHoje, licencasHoje] = await Promise.all([
+    obterAfastamentosHoje(db),
+    obterLicencasAtivosInativosHoje(db),
+  ]);
+  for (const [nome, info] of Object.entries(licencasHoje)) {
+    if (!afastamentosHoje[nome]) afastamentosHoje[nome] = info;
+  }
 
   return { data: hoje, ultimaHoraGeral, colaboradores, afastamentosHoje };
 }
@@ -370,11 +379,54 @@ async function obterAfastamentosHoje(db) {
     if (!(inicio <= hojeIso && hojeIso < fim)) continue;
 
     porColaborador[linha.colaborador] = {
+      origem: 'atestado',
       dataAfastamento: inicio,
       dataRetorno: fim,
       qtdDiasAfastado: linha.qtd_dias_afastado,
       afastadoInss: linha.afastado_INSS,
       motivoAfastamento: linha.motivo_afastamento,
+    };
+  }
+
+  return porColaborador;
+}
+
+// Segunda fonte de justificativa de ausência, além de atestados: RH marca
+// licença/afastamento em ativos_inativos.situacao no formato "A2 -
+// DD/MM/YYYY" (data de início), com volta_afastamento trazendo a data de
+// retorno ("YYYY-MM-DD") ou o texto "INDETERMINADO" quando ainda não
+// definida. Só entra se hoje já está dentro do período — data de início já
+// chegou e (retorno indeterminado OU ainda não chegou a data de retorno).
+async function obterLicencasAtivosInativosHoje(db) {
+  const agora = new Date();
+  const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+
+  const { rows: linhas } = await db.query(`
+    SELECT colaborador, situacao, volta_afastamento
+    FROM ativos_inativos
+    WHERE situacao ILIKE 'A2 - %'
+  `);
+
+  const porColaborador = {};
+
+  for (const linha of linhas) {
+    const match = /^A2\s*-\s*(\d{2})\/(\d{2})\/(\d{4})$/.exec((linha.situacao || '').trim());
+    if (!match) continue;
+    const inicio = `${match[3]}-${match[2]}-${match[1]}`;
+    if (hojeIso < inicio) continue;
+
+    const voltaTexto = (linha.volta_afastamento || '').trim();
+    const indeterminado = voltaTexto.toUpperCase() === 'INDETERMINADO';
+    const fim = indeterminado ? null : paraDataIso(voltaTexto);
+    if (!indeterminado && fim && hojeIso >= fim) continue;
+
+    porColaborador[linha.colaborador] = {
+      origem: 'licenca',
+      dataAfastamento: inicio,
+      dataRetorno: fim,
+      qtdDiasAfastado: null,
+      afastadoInss: null,
+      motivoAfastamento: indeterminado ? 'Afastado por tempo indeterminado' : null,
     };
   }
 

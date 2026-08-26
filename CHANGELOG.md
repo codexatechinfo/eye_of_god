@@ -7,6 +7,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Indicador de ausência justificada na lista do Trilho: colaborador "sem serviço" com
+  justificativa (atestado ou licença de `ativos_inativos.situacao`, formato "A2 -
+  DD/MM/YYYY") ganha um ícone ao lado do nome, visível sem precisar expandir — roxo quando
+  é afastamento pelo INSS, azul nos demais casos. Colaboradores afastados por licença
+  passam a aparecer na lista do Trilho (antes eram excluídos por completo). Ver
+  [ADR 0016](docs/adr/0016-justificativa-ausencia-colaborador-sem-servico.md).
 - Barra de % de execução abaixo do nome de cada colaborador na lista do Trilho; a lista
   passa a ordenar por 3 tiers, valendo em todos os filtros e na lista sem filtro nenhum: 1)
   colaborador com livro em prazo regulatório extremo (`>33` dias em qualquer status, ou

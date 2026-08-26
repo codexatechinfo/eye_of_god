@@ -79,10 +79,16 @@ export interface AtividadeColaborador {
 }
 
 export interface AfastamentoInfo {
+  // 'atestado' vem da tabela atestados (tem motivo/INSS); 'licenca' vem de
+  // ativos_inativos.situacao ("A2 - DD/MM/YYYY") — RH não registra motivo
+  // nem INSS por esse caminho, só o período.
+  origem: 'atestado' | 'licenca';
   dataAfastamento: string;
-  dataRetorno: string;
-  qtdDiasAfastado: string;
-  afastadoInss: string;
+  // null = licença com volta_afastamento "INDETERMINADO" — ver
+  // motivoAfastamento nesse caso ("Afastado por tempo indeterminado").
+  dataRetorno: string | null;
+  qtdDiasAfastado: string | null;
+  afastadoInss: string | null;
   motivoAfastamento: string | null;
 }
 

@@ -217,6 +217,46 @@ que a ordenação master prevalece dentro do filtro); últimos 5 da lista sem fi
 todos "sem serviço" (sem barra de %). Suíte de isolamento de tenant (12 testes) e build do
 Angular continuam passando.
 
+## Adendo 5 — causa real do "reinício da ordenação"; visual de status removido da lista
+
+Usuário mandou dois prints comparando o resultado atual (com ícones/cores por categoria —
+triângulo vermelho + nome em negrito vermelho pra "sem sincronismo", fundo âmbar pra
+"parado") contra o visual que queria (nomes simples, sem ícone, sem fundo colorido — só
+barra + %), e apontou que a ordenação "reiniciava" ao trocar de "ativo" pra "sem
+sincronismo".
+
+**Causa raiz confirmada com dado ao vivo, não suposição.** `pontuacaoDestaque()` (Adendo 4)
+ainda usava `minutosParado` como desempate dentro do tier 2 (`(100 - percentual) * 1000 +
+minutosParado`). Consultando `/colaboradores/atividade-hoje` direto: colaboradores "sem
+sincronismo" tinham `minutosParado` de até 658 — não é raro, é praticamente garantido pela
+própria definição da categoria (ficou muito tempo sem sincronizar). Com desempate de escala
+`*1000`, um `minutosParado` de 658 é grande o bastante pra "vazar" pra cima de uma diferença
+real de 0,6 ponto percentual entre duas pessoas de categorias diferentes — ex.: alguém
+"ativo" a 13,0% (score 87005) aparecendo DEPOIS de alguém "sem sincronismo" a 13,5% com
+`minutosParado=658` (score 87158), quando o "ativo" tinha o % mais crítico (menor) e deveria
+vir primeiro. Isso é exatamente a sensação de "a ordenação reinicia" — o critério de %
+parece válido por um trecho, "quebra" quando entra gente de outra categoria com
+`minutosParado` alto, retoma depois. Corrigido removendo `minutosParado` da fórmula por
+completo — o pedido original ("críticos em percentual de execução") nunca mencionou tempo
+parado como critério, só percentual. Verificado ao vivo: de 286 colaboradores ordenados, só
+1 "violação" de monotonicidade nos percentuais — exatamente a fronteira entre tier 1
+(crítico, termina em 42%) e tier 2 (reinicia do zero), esperada por serem tiers diferentes
+por design; zero inversões dentro do próprio tier.
+
+**Visual de categoria removido da lista colapsada.** `[ngClass]` do `<button>` de cada
+colaborador simplificado pra só 2 estados (selecionado / não selecionado) — os 3 ícones
+(ponto âmbar de "parado", retângulo tracejado de "sem serviço", triângulo vermelho de "sem
+sincronismo") e as classes condicionais no nome (`text-red-600`, `font-bold`, `italic`)
+saíram do template. A barra de % abaixo do nome continua com cor própria por faixa de
+percentual (`corBarra()`, inalterada — vermelho/âmbar/verde conforme o valor, não a
+categoria), que é exatamente o visual do anexo de referência do usuário. O tooltip
+"— sem serviço hoje" continua no `title` do nome, só sem destaque visual.
+
+Testado ao vivo: nenhum `<svg>` de status nem ponto âmbar de categoria nos itens da lista
+(só o chevron); classes do botão uniformes fora do estado selecionado; barra de progresso
+continua colorida por faixa de %. Suíte de isolamento de tenant (12 testes) e build do
+Angular continuam passando.
+
 ## Consequências
 
 - Testado ao vivo (JWT de teste): lista do Trilho com filtro "Ativo" mostrando ordem

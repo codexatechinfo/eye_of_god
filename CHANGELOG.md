@@ -79,6 +79,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Ordenação por percentual da lista do Trilho "reiniciava" ao trocar de categoria (ex.: de
+  "ativo" pra "sem sincronismo") — causa real: o desempate por `minutosParado` (tempo sem
+  sincronizar, tipicamente centenas de minutos pra quem está "sem sincronismo") tinha peso
+  grande o bastante pra inverter a ordem correta por %. Removido — o critério agora é só
+  percentual, como pedido. Ícones e cores por categoria (parado/sem serviço/sem sincronismo)
+  também saíram da lista colapsada — só a barra de % (cor por faixa de percentual, não por
+  categoria) continua. Ver Adendo 5 da
+  [ADR 0015](docs/adr/0015-percentual-execucao-e-prazo-regulatorio-por-livro.md).
 - Ordenação por criticidade da lista do Trilho só valia dentro do filtro "Ativo" — "Sem
   sincronismo" e a lista sem filtro nenhum continuavam ordenados só por tempo parado, sem o
   percentual de execução. Unificado num único cálculo de criticidade reaproveitado pelos 3

@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T07:15:00.000Z",
+  "atualizado_em": "2026-08-26T07:35:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "c19e350",
   "seguranca": {
@@ -457,6 +457,13 @@
       "skill": "/projeto-novo",
       "evento": "Ordenação master de 3 tiers na lista do Trilho, substituindo a hierarquia por categoria",
       "detalhe": "Usuário redefiniu a ordem master: colaboradores com livros com mais de 33 dias e livros em execução com menos de 27 dias primeiro, depois críticos em percentual de execução independente se é classificado como parado/ativo/sem sincronismo, e por último colaboradores sem serviços atribuídos. Isso substitui a hierarquia anterior (sem sincronismo > parado > ativo, cada um ordenado por % dentro do próprio tier) por 3 tiers onde as 3 categorias somem como critério de ordenação e viram um grupo só. temLivroCritico() nova em colaboradores.service.ts: verdadeiro quando o colaborador tem QUALQUER livro com diasPrazoRegulatorio > 33 (não importa o status) OU algum livro 'Em Execução' com diasPrazoRegulatorio < 27 (assimetria intencional: livro Pendente com <27 é só o normal esperado; livro já Em Execução com <27 é incomum o bastante pra merecer atenção) — mesmos limiares já usados no destaque de cor da tabela de detalhe. Tier 2: todo mundo com atividade hoje por % ascendente, minutosParado desempatando. Tier 3: sem serviço, sempre por último. Os 4 toggles continuam filtrando exatamente como antes (categoriaDe() intocada), só a ordem mudou, e vale mesmo com filtro de categoria ativo. Testado ao vivo (JWT de teste): lista sem filtro nenhum com ADAILSON PETRANSKI (7%) primeiro, confirmado via expansão que ele tem o livro 021689 com 34d (>33); mais 4 colaboradores também com livro crítico antes do resto por %; com filtro Sem sincronismo ativo, os MESMOS 5 colaboradores críticos continuam no topo (prova que a ordenação master prevalece dentro do filtro); últimos 5 da lista sem filtro são todos sem serviço. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver adendo 4 da ADR 0015."
+    },
+    {
+      "data": "2026-08-26T07:35:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Causa real do 'reinício da ordenação' corrigida; visual de status removido da lista do Trilho",
+      "detalhe": "Usuário mandou dois prints comparando o resultado atual (ícones/cores por categoria — triângulo vermelho pra sem sincronismo, fundo âmbar pra parado) contra o visual desejado (nomes simples, sem ícone, sem fundo colorido, só barra+%), e apontou que a ordenação 'reiniciava' ao trocar de ativo pra sem sincronismo. Causa raiz confirmada com dado ao vivo (não suposição): pontuacaoDestaque() ainda usava minutosParado como desempate dentro do tier 2. Consultando a API direto: colaboradores sem sincronismo tinham minutosParado de até 658 — praticamente garantido pela própria definição da categoria. Com desempate de escala *1000, esse valor era grande o bastante pra vazar pra cima de uma diferença real de percentual entre pessoas de categorias diferentes — ex.: ativo a 13,0% (score 87005) aparecendo DEPOIS de sem sincronismo a 13,5% com minutosParado=658 (score 87158), quando o ativo tinha o % mais crítico e deveria vir primeiro. Corrigido removendo minutosParado da fórmula por completo — o pedido original nunca mencionou tempo parado como critério, só percentual. Verificado ao vivo: de 286 colaboradores ordenados, só 1 violação de monotonicidade nos percentuais — exatamente a fronteira entre tier 1 (crítico) e tier 2 (reinicia do zero), esperada por serem tiers diferentes; zero inversões dentro do próprio tier. Visual: [ngClass] do botão de cada colaborador simplificado pra só 2 estados (selecionado/não selecionado) — os 3 ícones (ponto âmbar de parado, retângulo tracejado de sem serviço, triângulo vermelho de sem sincronismo) e as classes condicionais no nome (text-red-600, font-bold, italic) saíram do template; a barra de % continua com cor própria por faixa de percentual (não por categoria), que é o visual pedido. Testado ao vivo: nenhum svg de status nem ponto âmbar nos itens da lista, classes uniformes fora do estado selecionado. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver adendo 5 da ADR 0015."
     }
   ]
 }

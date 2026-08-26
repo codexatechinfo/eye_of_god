@@ -45,69 +45,19 @@
       type="button"
       (click)="selecionar(colaborador.colaborador)"
       class="w-full flex items-start gap-2 px-2.5 py-2 text-left text-xs font-medium rounded-md border-l-2 transition-colors cursor-pointer"
-      [ngClass]="{
-        'bg-blue-50 text-blue-700 border-blue-500': colaboradoresService.colaboradorSelecionado() === colaborador.colaborador,
-        'text-slate-700 border-transparent hover:bg-slate-50 hover:text-blue-700':
-          colaboradoresService.colaboradorSelecionado() !== colaborador.colaborador &&
-          !colaboradoresService.atividadeDe(colaborador.colaborador)?.parado &&
-          colaboradoresService.atividadeDe(colaborador.colaborador),
-        'bg-amber-50 text-amber-700 border-amber-400 hover:bg-amber-100':
-          colaboradoresService.colaboradorSelecionado() !== colaborador.colaborador &&
-          colaboradoresService.atividadeDe(colaborador.colaborador)?.parado,
-        'bg-slate-100/70 text-slate-500 border-slate-300 border-dashed hover:bg-slate-200/70':
-          colaboradoresService.colaboradorSelecionado() !== colaborador.colaborador &&
-          !colaboradoresService.atividadeDe(colaborador.colaborador)
-      }"
+      [ngClass]="
+        colaboradoresService.colaboradorSelecionado() === colaborador.colaborador
+          ? 'bg-blue-50 text-blue-700 border-blue-500'
+          : 'text-slate-700 border-transparent hover:bg-slate-50 hover:text-blue-700'
+      "
     >
-      <span
-        *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador)?.parado"
-        class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5"
-        title="Parado: tem serviço hoje mas ainda não realizou nenhuma leitura"
-      ></span>
-      <svg
-        *ngIf="!colaboradoresService.atividadeDe(colaborador.colaborador)"
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-3 w-3 text-slate-400 shrink-0 mt-0.5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        title="Sem serviço: nenhuma atividade registrada hoje"
-      >
-        <rect x="2" y="7" width="20" height="14" rx="2" />
-        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
-        <line x1="2" y1="12" x2="22" y2="12" />
-      </svg>
-      <svg
-        *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador)?.semSincronismo"
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-3 w-3 text-red-500 shrink-0 mt-0.5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        title="Sem sincronismo: já realizou leituras, mas o último sincronismo foi há muito tempo"
-      >
-        <path d="M12 9v4" />
-        <path d="M12 17h.01" />
-        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-      </svg>
       <span class="flex-1 min-w-0">
         <span
           class="truncate block"
-          [class.text-red-600]="colaboradoresService.atividadeDe(colaborador.colaborador)?.semSincronismo"
-          [class.font-bold]="colaboradoresService.atividadeDe(colaborador.colaborador)?.semSincronismo"
-          [class.italic]="!colaboradoresService.atividadeDe(colaborador.colaborador)"
           [title]="
-            colaboradoresService.atividadeDe(colaborador.colaborador)?.semSincronismo
-              ? colaborador.colaborador + ' — sem sincronismo'
-              : !colaboradoresService.atividadeDe(colaborador.colaborador)
-                ? colaborador.colaborador + ' — sem serviço hoje'
-                : colaborador.colaborador
+            !colaboradoresService.atividadeDe(colaborador.colaborador)
+              ? colaborador.colaborador + ' — sem serviço hoje'
+              : colaborador.colaborador
           "
         >
           {{ colaborador.colaborador }}

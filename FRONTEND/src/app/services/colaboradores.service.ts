@@ -126,14 +126,24 @@ function temLivroCritico(atividade: AtividadeColaborador | undefined): boolean {
 //      (temLivroCritico) — não importa se está parado/ativo/sem sincronismo.
 //   2. Todo mundo com atividade hoje, por percentual de execução ascendente
 //      (menor % primeiro) — parado/ativo/semSincronismo tratados como UM só
-//      grupo aqui, não mais como tiers separados; minutosParado desempata
-//      dentro da mesma faixa de %.
+//      grupo aqui, não mais como tiers separados.
 //   3. Sem serviço (nenhuma atividade hoje) — sempre por último.
 // categoriaDe()/os 4 toggles continuam funcionando normalmente pra FILTRAR
 // a lista — só a ORDEM mudou.
+//
+// minutosParado NÃO entra mais como desempate: usuário reportou (print) a
+// ordem "reiniciando" ao trocar de ativo pra sem sincronismo — causa real,
+// confirmada com dado ao vivo: minutosParado de quem está "sem sincronismo"
+// passa facilmente de 600 (horas sem sincronizar, por definição da própria
+// categoria), e um desempate de escala *1000 não é grande o bastante pra
+// evitar que esse valor "vaze" pra cima da diferença real de percentual
+// entre duas pessoas de categorias diferentes — ex.: ativo a 13,0% (score
+// 87005) aparecendo DEPOIS de alguém sem sincronismo a 13,5% com
+// minutosParado=658 (score 87158), quando deveria vir antes por ter menos
+// % feito. Critério agora é só percentual, como o usuário pediu.
 function pontuacaoDestaque(atividade: AtividadeColaborador | undefined): number {
   if (!atividade) return -1;
-  const criticidade = (100 - percentualExecucao(atividade)) * 1000 + atividade.minutosParado;
+  const criticidade = 100 - percentualExecucao(atividade);
   if (temLivroCritico(atividade)) return 2_000_000 + criticidade;
   return criticidade;
 }

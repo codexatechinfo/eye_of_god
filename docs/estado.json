@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T07:00:00.000Z",
+  "atualizado_em": "2026-08-26T07:15:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "e5779ce",
   "seguranca": {
@@ -450,6 +450,13 @@
       "skill": "/projeto-novo",
       "evento": "Ordenação por criticidade em todos os tiers do Trilho; coluna Recebido em nas tabelas",
       "detalhe": "Dois pedidos na mesma mensagem, com print mostrando o problema do primeiro. 1) Usuário reportou (print) o filtro Sem sincronismo com percentuais fora de ordem (1%, 14%, 26%, 13%, 3%, 48%...) e confirmou que a lista sem filtro nenhum também não refletia a ordenação por criticidade — só o tier 'ativo' tinha sido corrigido no ciclo anterior. Corrigido calculando criticidade = (100 - percentualExecucao) * 1000 + minutosParado uma vez só em pontuacaoDestaque() e somando o offset de cada tier em cima dela (sem sincronismo/parado/ativo continuam na mesma ordem de gravidade de sempre, mas agora todos ordenam por percentual dentro do próprio tier). Em 'parado' isso não muda nada na prática (todo mundo tem 0% por definição), mas elimina a duplicação de fórmula. 2) Coluna 'Recebido em' nova nas duas tabelas de detalhe — dado já existia nas tabelas de origem (contr_execucao_leitura.data_recebimento/hora_recebimento pra leitura/releitura; pendentes_im/atribuidas_im/em_execucao_im.dt_rec_abertura pra massiva, já pronto como 'DD/MM/YYYY HH:MM'). detalheContr()/detalheMassiva() (massivasService.js) passaram a expor data_recebimento; FRONTEND ganhou a coluna entre Tipo e Data limite, com ordenação convertendo a string brasileira pra epoch antes de comparar. Testado ao vivo (JWT de teste): filtro Sem sincronismo com percentuais em ordem crescente (1%, 0%, 1%, 2%, 3%, 5%, 5%, 6%...); lista sem filtro nenhum com os mesmos primeiros nomes; coluna Recebido em presente nas duas abas ('05/08/2026 06:38' em Livros, '20/08/2026 12:54' em Massivas). Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver adendo 3 da ADR 0015."
+    },
+    {
+      "data": "2026-08-26T07:15:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Ordenação master de 3 tiers na lista do Trilho, substituindo a hierarquia por categoria",
+      "detalhe": "Usuário redefiniu a ordem master: colaboradores com livros com mais de 33 dias e livros em execução com menos de 27 dias primeiro, depois críticos em percentual de execução independente se é classificado como parado/ativo/sem sincronismo, e por último colaboradores sem serviços atribuídos. Isso substitui a hierarquia anterior (sem sincronismo > parado > ativo, cada um ordenado por % dentro do próprio tier) por 3 tiers onde as 3 categorias somem como critério de ordenação e viram um grupo só. temLivroCritico() nova em colaboradores.service.ts: verdadeiro quando o colaborador tem QUALQUER livro com diasPrazoRegulatorio > 33 (não importa o status) OU algum livro 'Em Execução' com diasPrazoRegulatorio < 27 (assimetria intencional: livro Pendente com <27 é só o normal esperado; livro já Em Execução com <27 é incomum o bastante pra merecer atenção) — mesmos limiares já usados no destaque de cor da tabela de detalhe. Tier 2: todo mundo com atividade hoje por % ascendente, minutosParado desempatando. Tier 3: sem serviço, sempre por último. Os 4 toggles continuam filtrando exatamente como antes (categoriaDe() intocada), só a ordem mudou, e vale mesmo com filtro de categoria ativo. Testado ao vivo (JWT de teste): lista sem filtro nenhum com ADAILSON PETRANSKI (7%) primeiro, confirmado via expansão que ele tem o livro 021689 com 34d (>33); mais 4 colaboradores também com livro crítico antes do resto por %; com filtro Sem sincronismo ativo, os MESMOS 5 colaboradores críticos continuam no topo (prova que a ordenação master prevalece dentro do filtro); últimos 5 da lista sem filtro são todos sem serviço. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver adendo 4 da ADR 0015."
     }
   ]
 }

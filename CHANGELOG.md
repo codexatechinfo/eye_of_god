@@ -8,8 +8,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 ### Adicionado
 
 - Barra de % de execução abaixo do nome de cada colaborador na lista do Trilho; a lista
-  passa a ordenar todos os filtros (Parado/Sem serviço/Ativo/Sem sincronismo e a lista sem
-  filtro nenhum) pelos mais críticos primeiro (menor % dentro de cada categoria). Coluna
+  passa a ordenar por 3 tiers, valendo em todos os filtros e na lista sem filtro nenhum: 1)
+  colaborador com livro em prazo regulatório extremo (`>33` dias em qualquer status, ou
+  `<27` dias num livro já "Em Execução") primeiro, não importa se está parado/ativo/sem
+  sincronismo; 2) resto com atividade hoje, por % de execução ascendente (parado/ativo/sem
+  sincronismo tratados como um grupo só pra ordenação); 3) sem serviço, sempre por último.
+  Coluna
   "Progresso" (barra + %) nova na tabela "Detalhe por livro" das duas abas. Coluna "Prazo
   regulatório" (dias efetivos frente a `prazo_reg_livros`) nova na tabela de Monitoramento de
   Livros e badge "Nd" na lista "Livros de hoje" do Trilho — vale só pra leitura urbana

@@ -104,22 +104,37 @@ export function percentualExecucao(atividade: AtividadeColaborador | undefined |
   return total > 0 ? (atividade.totalRealizadas / total) * 100 : 0;
 }
 
-// Ordem de gravidade: sem sincronismo > sem serviço (nenhuma atividade hoje)
-// > parado > ativo — esses tiers continuam intocados (é o que já separa os
-// 4 toggles). DENTRO de cada tier, a pontuação é pelo percentual de
-// execução: quanto MENOR o % concluído, mais crítico, então aparece
-// primeiro — vale pros 4 filtros e pra lista sem filtro nenhum (usuário
-// reportou que só tinha funcionado dentro de "Ativo"; "Sem sincronismo" e a
-// lista completa continuavam ordenadas só por minutosParado). minutosParado
-// desempata dentro da mesma faixa de %. Em "parado", todo mundo tem 0% por
-// definição (totalRealizadas === 0), então a fórmula vira uma constante
-// ali e minutosParado acaba sendo o único critério real de qualquer forma —
-// não precisa de caso especial.
+// Livro com prazo regulatório extremo (mesmos limiares de destaque da
+// tabela de detalhe — ver corPrazoRegulatorio em massivas-view.ts):
+// >33 dias em QUALQUER status (já estourou o prazo, crítico não importa o
+// que esteja acontecendo com o livro) ou <27 dias mas só em livro já "Em
+// Execução" (livro sendo trabalhado que ainda nem chegou nos 27 dias
+// costuma ser incomum o bastante pra merecer atenção — livro "Pendente"
+// com <27 dias é só o normal esperado, não é sinal de nada).
+function temLivroCritico(atividade: AtividadeColaborador | undefined): boolean {
+  if (!atividade) return false;
+  return atividade.livros.some(livro => {
+    if (livro.diasPrazoRegulatorio === null) return false;
+    if (livro.diasPrazoRegulatorio > 33) return true;
+    return livro.diasPrazoRegulatorio < 27 && livro.situacaoAtual === 'Em Execução';
+  });
+}
+
+// Ordenação master da lista (pedido explícito do usuário, substitui a
+// hierarquia anterior baseada só em parado/ativo/semSincronismo):
+//   1. Colaborador com pelo menos um livro em prazo regulatório extremo
+//      (temLivroCritico) — não importa se está parado/ativo/sem sincronismo.
+//   2. Todo mundo com atividade hoje, por percentual de execução ascendente
+//      (menor % primeiro) — parado/ativo/semSincronismo tratados como UM só
+//      grupo aqui, não mais como tiers separados; minutosParado desempata
+//      dentro da mesma faixa de %.
+//   3. Sem serviço (nenhuma atividade hoje) — sempre por último.
+// categoriaDe()/os 4 toggles continuam funcionando normalmente pra FILTRAR
+// a lista — só a ORDEM mudou.
 function pontuacaoDestaque(atividade: AtividadeColaborador | undefined): number {
-  if (!atividade) return 1_500_000;
+  if (!atividade) return -1;
   const criticidade = (100 - percentualExecucao(atividade)) * 1000 + atividade.minutosParado;
-  if (atividade.semSincronismo) return 2_000_000 + criticidade;
-  if (atividade.parado) return 1_000_000 + criticidade;
+  if (temLivroCritico(atividade)) return 2_000_000 + criticidade;
   return criticidade;
 }
 

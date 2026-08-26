@@ -180,6 +180,43 @@ Testado ao vivo (JWT de teste): filtro "Sem sincronismo" com percentuais em orde
 "Recebido em" presente nas duas abas ("05/08/2026 06:38" em Livros, "20/08/2026 12:54" em
 Massivas). Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando.
 
+## Adendo 4 — ordenação master de 3 tiers, substituindo a hierarquia por categoria
+
+Usuário redefiniu a ordem master da lista do Trilho: "colaboradores com livros com mais de
+33 dias e livros em execução com menos de 27 dias, depois críticos em percentual de
+execução independente se é classificado como parado ou ativo ou sem sincronismo e por
+último colaboradores sem serviços atribuídos". Isso substitui a hierarquia anterior (sem
+sincronismo > parado > ativo, cada um ordenado por % dentro do próprio tier, Adendo 3) por
+algo mais simples e diferente: **3 tiers**, e dentro do segundo, as três categorias somem
+como critério de ordenação (viram um grupo só).
+
+1. **Tier 1 — livro em prazo regulatório extremo.** `temLivroCritico()` nova em
+   `colaboradores.service.ts`: verdadeiro quando o colaborador tem QUALQUER livro com
+   `diasPrazoRegulatorio > 33` (não importa o status do livro — já estourou o prazo, é
+   crítico de qualquer forma), OU algum livro **"Em Execução"** com `diasPrazoRegulatorio <
+   27` (a assimetria é intencional: livro "Pendente" com `<27` é só o normal esperado, sem
+   sinal de nada; livro que já está "Em Execução" mas ainda não chegou nos 27 dias efetivos é
+   incomum o bastante pra merecer atenção). Mesmos limiares 27/33 já usados no destaque de
+   cor da tabela de detalhe (Adendo 3 da ADR 0015).
+2. **Tier 2 — todo mundo com atividade hoje, por % de execução.** Parado/ativo/sem
+   sincronismo deixam de ser tiers separados aqui — um colaborador "parado" com % baixo
+   (sempre 0%, por definição) pode aparecer misturado entre "ativos" com % também baixo, sem
+   distinção por categoria. `minutosParado` continua desempatando dentro da mesma faixa de %.
+3. **Tier 3 — sem serviço.** Sempre por último, incondicionalmente.
+
+Os 4 toggles (Parado/Sem serviço/Ativo/Sem sincronismo) continuam filtrando exatamente como
+antes (`categoriaDe()` intocada) — só a ORDEM mudou, e vale mesmo com um filtro de categoria
+ativo: um colaborador "sem sincronismo" com livro crítico ainda aparece antes de outro "sem
+sincronismo" sem livro crítico, dentro do próprio filtro.
+
+Testado ao vivo (JWT de teste): lista sem filtro nenhum com ADAILSON PETRANSKI (7%) primeiro
+— confirmado que ele tem o livro `021689` com `34d` (>33, dispara o tier 1) — seguido de mais
+4 colaboradores também com livro crítico (25%/28%/30%/42%), depois o resto por %; com o
+filtro "Sem sincronismo" ativo, os MESMOS 5 colaboradores críticos continuam no topo (prova
+que a ordenação master prevalece dentro do filtro); últimos 5 da lista sem filtro nenhum são
+todos "sem serviço" (sem barra de %). Suíte de isolamento de tenant (12 testes) e build do
+Angular continuam passando.
+
 ## Consequências
 
 - Testado ao vivo (JWT de teste): lista do Trilho com filtro "Ativo" mostrando ordem

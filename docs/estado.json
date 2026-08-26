@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T12:35:00.000Z",
+  "atualizado_em": "2026-08-26T12:54:01.883Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "5e218cc",
+  "commit": "26b125f",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -153,7 +153,10 @@
   "operacional": {
     "tabelas_sem_rls": 0,
     "tabelas_negocio": 16,
-    "indice_tenant": { "ok": 16, "total": 16 },
+    "indice_tenant": {
+      "ok": 16,
+      "total": 16
+    },
     "cobertura_testes": null
   },
   "custo": {
@@ -485,6 +488,13 @@
       "skill": "/projeto-novo",
       "evento": "Watchdog nos loops de coleta — node-cron perdia o disparo das 07h sem retry",
       "detalhe": "Usuário reportou header mostrando 'Coleta parada' (vermelho) achando estranho já que a coleta 'estava rodando normalmente' na percepção dele. Investigado ao vivo, não por suposição: GET /coleta/status retornou dentroDaJanela:true mas ativo:false — o frontend estava reportando fielmente um estado real. Nos logs do processo apareceu a causa explícita: '[NODE-CRON][WARN] missed execution at Wed Aug 26 2026 07:00:00 GMT-0300! Possible blocking IO or high CPU'. ativo é uma variável em memória do processo (loopAtivo), só reativada no boot (se já dentro da janela) ou via cron.schedule('0 7 * * *', loopContinuo) — que dispara uma vez por dia, sem retry se perder o horário exato. Nesta sessão, vários reinícios do nodemon (causados pelas próprias edições de arquivo ao longo do trabalho) coincidiram com a janela das 07h e o cron perdeu o disparo — sem retry, a coleta ficou parada até alguém notar. Não é exclusivo de dev: em produção, qualquer reinício do processo perto das 07h (deploy, crash, restart do host) causaria o mesmo silêncio. Resolvido de duas formas: 1) resolução imediata — reiniciei o backend manualmente (boot-check reativou os dois loops na hora, confirmado via /coleta/status e logs '🔁 Iniciando loop contínuo' pros dois jobs). 2) correção definitiva, com aprovação do usuário (perguntado via AskUserQuestion antes de implementar, já que mexe em lógica de job crítica de produção): watchdog novo em coletaJob.js/coletaMassivasJob.js — setInterval de 2min que checa dentroDaJanela() && !loopAtivo && !emAndamento e reinicia sozinho (loopContinuo() já era idempotente, seguro chamar de novo). De passagem, corrigido um bug relacionado: abrirContextoTenant() estava fora do try/catch em executarUmCiclo() — se lançasse, travava o loop pro resto do dia sem nunca resetar loopAtivo (produziria o sintoma oposto do observado: ativo preso em true pra sempre). Testado: sintaxe ok, suíte de isolamento de tenant (12 testes) passando, coleta confirmada rodando de novo ao vivo (login, extração de etapas nos logs, /coleta/status com ativo:true/emAndamento:true pros dois jobs). Watchdog em si não foi observado disparando ao vivo (precisaria esperar 2min ociosos), mas o mesmo caminho de código (loopContinuo() chamado quando !loopAtivo dentro da janela) já foi exercitado pelo boot-check nesta sessão. Ver ADR 0017."
+    },
+    {
+      "data": "2026-08-26T13:00:00.000Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Monitoramento de Livros levando ~26s pra carregar — índice ausente + vazamento de transação no middleware",
+      "detalhe": "Usuário reportou (print, tela travada em 'Carregando...') que a aba Monitoramento de Livros estava demorando muito pra apresentar os dados, com a coleta rodando normalmente ao lado. Medido via curl com JWT local: /massivas/resumo 26,7s, /massivas/detalhe 25,9s, /massivas/opcoes-filtro 0,16s. Isolado o problema no LEFT JOIN prazo_reg_livros (joinPrazoRegLivros(), tornado incondicional no Adendo 4 da ADR 0012): rodando a mesma query direto no Postgres, com e sem o JOIN, 26.408ms vs 360ms no mesmo lote de dados. Causa: prazo_reg_livros não tinha índice em livro (só pkey em id e um índice em empresa_id); como a comparação é preg.livro::int = c.livro::int (livro vem com/sem zero à esquerda nas duas tabelas), nenhum índice comum serve — precisa ser funcional. Sem índice, nested loop de ~2.032 x 13.880 ≈ 28 milhões de comparações. Corrigido criando CREATE INDEX CONCURRENTLY idx_prazo_reg_livros_livro_mesref ON prazo_reg_livros ((livro::int), mes_ref), rodado como postgres dentro do container supabase-db (app_user não é dono da tabela). O CONCURRENTLY não travou escrita, mas precisou esperar toda transação aberta na tabela terminar antes de validar — e não terminava. Investigando por quê, pg_stat_activity mostrou 8 sessões idle in transaction (algumas há mais de 10min), todas rastreáveis às minhas próprias chamadas de diagnóstico com curl contra a query lenta. Causa raiz real, não só efeito do teste: authMiddleware.js (anexarContextoTenant) fechava a transação em res.on('finish', ...), que só dispara quando a resposta termina de ser enviada com sucesso — se o cliente desconecta antes disso (timeout, aba fechada, proxy), finish nunca dispara e a transação Postgres fica presa em idle in transaction pra sempre, segurando um snapshot MVCC vivo. Em produção isso seria um vazamento silencioso de conexões a cada request lento ou abortado. Corrigido trocando para res.on('close', ...) (dispara nos dois casos), com res.writableFinished na condição de commit e uma guarda pra não fechar duas vezes. Encerradas manualmente (pg_terminate_backend) as 8 sessões presas — todas leitura, sem risco — liberando o CREATE INDEX CONCURRENTLY, que terminou com sucesso (confirmado via pg_indexes). Validação de timing end-to-end com dados reais pós-fix ficou pendente porque contr_execucao_leitura esvaziou durante uma janela de truncate/recarga da coleta, ela mesma reiniciada várias vezes pelo nodemon por causa das minhas próprias edições de arquivo durante a investigação (mesmo padrão do ADR 0017) — a query real com o JOIN e o índice novo, contra o próximo lote completo, ainda precisa ser cronometrada. Ver Adendo 8 da ADR 0012."
     }
   ]
 }

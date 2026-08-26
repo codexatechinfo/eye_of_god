@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T16:33:43.893Z",
+  "atualizado_em": "2026-08-26T16:36:48.073Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "db8b42e",
+  "commit": "9250d55",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -509,6 +509,13 @@
       "skill": "/projeto-novo",
       "evento": "MONITOR passa a contar em Agentes em campo quando tem atividade hoje, nao mais sempre Na base",
       "detalhe": "Usuario perguntou o que o card classificava como Na base, depois apontou que monitor tambem pode ir a campo e estava sendo ocultado dessa contagem. Codigo em massivas-view.ts assumia cargo === MONITOR sempre na base incondicionalmente, excluindo monitor de Agentes em campo mesmo com atividade registrada hoje. Corrigido para usar colaboradoresService.atividadeDe() (mesma fonte ja usada pra leituristas e pra aba Trilho): MONITOR com atividade hoje conta em Agentes em campo (badge novo Monitor, so aparece quando > 0), sem atividade conta em Na base. progressoContagens() usa a mesma lista privada agentesEmCampoLista(), entao passou a incluir monitores em campo automaticamente. Testado ao vivo via JWT de teste local na aba Massivas: antes 289 em campo / Na base 3, depois 292 em campo / Moto 235 / A pe 54 / Monitor 3 / Na base 0 - os 3 monitores tinham atividade hoje e passaram corretamente de na base pra em campo (soma 235+54+3=292 bate). npx tsc --noEmit sem erros. Ver Adendo 11 da ADR 0012."
+    },
+    {
+      "data": "2026-08-26T13:36:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Badge Na base removido do card Agentes em campo",
+      "detalhe": "Logo apos corrigir a contagem de MONITOR (Adendo 11 da ADR 0012), usuario pediu pra remover o badge Na base por completo do card Agentes em campo (Massivas/Monitoramento de Livros). Removido o elemento do template e o metodo agentesNaBase() em massivas-view.ts (nao usado em mais nenhum lugar). Card final mostra Agentes em campo: N de M com badges Moto/A pe/Monitor, este ultimo so aparece quando > 0. Testado ao vivo via JWT de teste local: 292 em campo / Moto 235 / A pe 54 / Monitor 3, sem Na base. npx tsc --noEmit sem erros."
     }
   ]
 }

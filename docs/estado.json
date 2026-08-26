@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T16:18:46.033Z",
+  "atualizado_em": "2026-08-26T16:33:43.893Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "6b88675",
+  "commit": "db8b42e",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -502,6 +502,13 @@
       "skill": "/projeto-novo",
       "evento": "Operador leitura/releitura corrigido (>=) + modal \"sem comunicar >30min\" com etapas e a realizar",
       "detalhe": "Usuário reportou (print) livros 'EM EXECUÇÃO'/'LEITURA' com badge de 34 dias que pela regra de negócio já são releitura. Investigação revelou que condicaoTipoServico/TIPO_SERVICO_CONTR_SQL (massivasService.js) e classificarTipoServico (atividadeColaboradoresService.js, aba Trilho) usavam <=/> (recebido até o próprio dia do prazo, inclusive, contava como leitura). Usuário confirmou explicitamente a regra correta: 'data_recebimento => data_prevista_limite é releitura' — recebido no dia exato do prazo já é releitura, não só estritamente depois. Corrigido nos dois arquivos para </>=  . Efeito esperado: livros que escapavam da exclusão de releitura no cálculo de dias do prazo regulatório (válido só pra leitura urbana) devem parar de contar dias, tanto em Monitoramento de Livros quanto na aba Trilho. Nota separada registrada no ADR: a coluna 'Data limite' exibida na tabela não é o campo bruto data_prevista_limite usado na decisão de tipo — é um valor recalculado (PRAZO_CONTR_SQL), o que pode gerar confusão visual ao comparar contra 'Recebido em'; não alterado nesta correção. Também usuário apontou que o arquivo massivasService.js hospeda tanto a lógica de Massivas quanto a de Monitoramento de Livros/leitura-releitura no mesmo módulo (nome do arquivo é histórico/enganoso) — confirmado que a mudança só afeta as funções *Contr* (fonte contr_execucao_leitura), não a fonte massiva. Em seguida, usuário pediu pra tornar clicável o texto 'X sem comunicar há mais de 30 min' da barra de resumo (Massivas/Monitoramento de Livros), abrindo uma lista com quem são esses colaboradores, etapas de cada um e quantas leituras a realizar ainda têm. Implementado 100% client-side em massivas-view.ts/.html, sem endpoint novo — dados já disponíveis via colaboradoresService.atividadeDe() (mesma fonte de comunicacaoOk()/semComunicar30()). listaSemComunicar() filtra os mesmos colaboradores (minutosParado >= LIMITE_COMUNICACAO_MINUTOS), agrega etapas distintas via Set sobre atividade.livros[].etapa, usa atividade.totalPendentes como 'a realizar', ordenado por mais tempo sem comunicar primeiro. Modal centralizado (mesmo padrão visual do modal de histórico de livro já existente na tela — fixed inset-0 z-50 com backdrop, fechar por X ou clique fora), escolhido em vez de dropdown ancorado porque a lista pode ter mais de cem colaboradores (164 no teste ao vivo). Testado ao vivo via JWT de teste local na aba Massivas: clique abriu modal com '164 colaborador(es) em campo sem transmitir dados', cada linha com nome/etapas agregadas/a realizar/tempo formatado (ex.: 'AILTON CESAR DE OLIVEIRA — Etapas 13, 18 · 509 a realizar — 4h 14min'); botão fechar testado e funcionando (verificado via DOM diretamente já que o Browser pane não estava com compositing ativo nesta sessão, screenshot indisponível — usado dispatchEvent de MouseEvent real no elemento, mais leitura de innerText/outerHTML pra confirmar o resultado, não apenas 'não deu erro'). npx tsc --noEmit sem erros. Suíte de isolamento de tenant (12 testes) passando. Ver Adendos 9 e 10 da ADR 0012."
+    },
+    {
+      "data": "2026-08-26T13:33:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "MONITOR passa a contar em Agentes em campo quando tem atividade hoje, nao mais sempre Na base",
+      "detalhe": "Usuario perguntou o que o card classificava como Na base, depois apontou que monitor tambem pode ir a campo e estava sendo ocultado dessa contagem. Codigo em massivas-view.ts assumia cargo === MONITOR sempre na base incondicionalmente, excluindo monitor de Agentes em campo mesmo com atividade registrada hoje. Corrigido para usar colaboradoresService.atividadeDe() (mesma fonte ja usada pra leituristas e pra aba Trilho): MONITOR com atividade hoje conta em Agentes em campo (badge novo Monitor, so aparece quando > 0), sem atividade conta em Na base. progressoContagens() usa a mesma lista privada agentesEmCampoLista(), entao passou a incluir monitores em campo automaticamente. Testado ao vivo via JWT de teste local na aba Massivas: antes 289 em campo / Na base 3, depois 292 em campo / Moto 235 / A pe 54 / Monitor 3 / Na base 0 - os 3 monitores tinham atividade hoje e passaram corretamente de na base pra em campo (soma 235+54+3=292 bate). npx tsc --noEmit sem erros. Ver Adendo 11 da ADR 0012."
     }
   ]
 }

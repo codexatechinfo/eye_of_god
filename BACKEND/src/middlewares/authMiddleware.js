@@ -24,12 +24,25 @@ function autenticarToken(req, res, next) {
 // Abre a transação com o contexto de tenant (empresa_id/nível) do usuário do
 // token e a fecha no fim da resposta — commit em sucesso, rollback em erro.
 // Precisa rodar depois de autenticarToken.
+//
+// Usa 'close', não 'finish': 'finish' só dispara quando a resposta termina de
+// ser enviada. Se o cliente desconectar antes disso (timeout, aba fechada,
+// proxy), 'finish' nunca dispara e a transação fica presa em "idle in
+// transaction" pra sempre — descoberto ao vivo quando várias das minhas
+// próprias chamadas de diagnóstico (curl contra uma query lenta) deixaram
+// exatamente esse rastro em pg_stat_activity, e ainda bloquearam um
+// CREATE INDEX CONCURRENTLY (que espera todas as transações abertas na
+// tabela terminarem antes de validar). 'close' dispara nos dois casos —
+// resposta concluída ou conexão abortada pelo cliente.
 function anexarContextoTenant(req, res, next) {
   abrirContextoTenant({ empresaId: req.usuario?.empresaId, nivel: req.usuario?.nivel })
     .then(client => {
       req.db = client;
-      res.on('finish', () => {
-        fecharContextoTenant(client, res.statusCode < 400).catch(erro =>
+      let fechado = false;
+      res.on('close', () => {
+        if (fechado) return;
+        fechado = true;
+        fecharContextoTenant(client, res.statusCode < 400 && res.writableFinished).catch(erro =>
           console.error('❌ Erro ao encerrar contexto de tenant:', erro),
         );
       });

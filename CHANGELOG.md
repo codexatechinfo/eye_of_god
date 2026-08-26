@@ -94,6 +94,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Monitoramento de Livros levando ~26s pra carregar (`/massivas/resumo` e
+  `/massivas/detalhe`): `prazo_reg_livros` não tinha índice em `livro`, forçando um nested
+  loop de ~2.032 × 13.880 comparações no JOIN incondicional introduzido no Adendo 4 da ADR
+  0012. Criado índice funcional `((livro::int), mes_ref)`. No caminho, achado e corrigido um
+  segundo bug real: `anexarContextoTenant` (`authMiddleware.js`) só fechava a transação em
+  `res.on('finish', ...)`, que não dispara se o cliente desconecta antes da resposta
+  terminar (ex.: timeout de um request lento) — deixava a transação presa em "idle in
+  transaction" indefinidamente, o que por sua vez travou a criação do índice acima. Trocado
+  para `res.on('close', ...)`. Ver Adendo 8 da
+  [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
 - `abrirContextoTenant()` fora do `try/catch` em `executarUmCiclo()` (`coletaJob.js`/
   `coletaMassivasJob.js`): se lançasse, travava o loop de coleta pro resto do dia sem nunca
   resetar `loopAtivo`. Corrigido junto com o watchdog acima. Ver

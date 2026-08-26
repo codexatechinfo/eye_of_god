@@ -281,6 +281,73 @@ tabela normalmente; aba Monitoramento de Livros com o dropdown de faixas de dias
 Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando — mudança só
 de template, nenhum backend tocado.
 
+## Adendo 8 — Monitoramento de Livros levando ~26s pra carregar: índice ausente + vazamento de transação
+
+Usuário reportou (print, tela travada em "Carregando...") que a aba Monitoramento de Livros
+"está demorando muito para apresentar os dados", com a coleta rodando normalmente ao lado.
+
+### Diagnóstico
+
+Medido direto via `curl` com JWT local (sem depender do navegador): `/massivas/resumo`
+26,7s, `/massivas/detalhe` 25,9s, `/massivas/opcoes-filtro` 0,16s — isolando o problema nas
+duas rotas que usam `joinPrazoRegLivros()` (Adendo 4 deste ADR tornou esse JOIN
+incondicional). Confirmado rodando a query com e sem o JOIN direto no Postgres, fora da
+camada HTTP: 26.408ms com, 360ms sem — ~73x de diferença, mesmo lote de dados.
+
+Causa: `prazo_reg_livros` não tinha índice em `livro` (só `pkey` em `id` e um índice em
+`empresa_id`). Como `preg.livro::int = c.livro::int` (necessário porque `contr_execucao_leitura.livro`
+vem com zero à esquerda e `prazo_reg_livros.livro` não), nenhum índice b-tree comum na
+coluna crua serve — precisa ser um índice funcional. Sem ele, o planner caía em nested loop
+completo: ~2.032 linhas do lote × 13.880 linhas de `prazo_reg_livros` ≈ 28 milhões de
+comparações.
+
+### Correção
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_prazo_reg_livros_livro_mesref
+  ON public.prazo_reg_livros ((livro::int), mes_ref);
+```
+
+Rodado como `postgres` dentro do container `supabase-db` (`app_user` não é dono da tabela —
+mesmo padrão já registrado nos ADRs de RLS deste projeto). `CONCURRENTLY` evita lock
+exclusivo de escrita, mas precisa esperar toda transação aberta que referencia a tabela
+terminar antes de validar o índice — o comando ficou mais de 60s rodando.
+
+### Segundo bug encontrado no caminho: vazamento de transação em `anexarContextoTenant`
+
+Investigando por que o `CREATE INDEX CONCURRENTLY` não terminava, `pg_stat_activity` mostrou
+oito sessões em `idle in transaction`, várias com mais de 10 minutos — todas rastreáveis às
+minhas próprias chamadas de diagnóstico (`curl` contra a query lenta). Causa raiz real, não
+só efeito colateral do teste: `BACKEND/src/middlewares/authMiddleware.js` fechava a
+transação em `res.on('finish', ...)`, evento que só dispara quando a resposta termina de ser
+**enviada com sucesso**. Se o cliente desconecta antes disso (timeout do `curl`, aba
+fechada, proxy) — exatamente o que acontece quando uma rota demora 26s — `finish` nunca
+dispara, e a transação Postgres fica presa em `idle in transaction` indefinidamente,
+segurando um snapshot MVCC vivo. Em produção isso seria um vazamento silencioso de conexões
+a cada request lento ou abortado, e foi exatamente o que travou o `CONCURRENTLY` acima:
+ele só valida depois que toda transação preexistente na tabela termina.
+
+Corrigido trocando para `res.on('close', ...)`, que dispara nos dois casos (resposta
+concluída ou conexão abortada), com `res.writableFinished` na condição de commit — só
+commita se a resposta realmente terminou de ser enviada; qualquer desconexão no meio vira
+rollback. Guard `fechado` evita fechar a transação duas vezes (já que `close` também dispara
+após um `finish` normal).
+
+Com o middleware corrigido, encerradas manualmente (`pg_terminate_backend`) as oito sessões
+presas — todas leitura, sem risco de perda de dado — o que liberou o `CREATE INDEX
+CONCURRENTLY` para terminar.
+
+### Verificação
+
+Índice confirmado via `pg_indexes` (`idx_prazo_reg_livros_livro_mesref` presente). `EXPLAIN`
+da query com o JOIN passou a ter o índice disponível para o planner considerar; a
+comparação com/sem JOIN no mesmo lote de dados não pôde ser refeita com números ao vivo
+nesta sessão porque `contr_execucao_leitura` ficou vazia durante uma janela de
+truncate/recarga da coleta (ela mesma reiniciada várias vezes pelo `nodemon`, por causa das
+minhas próprias edições de arquivo durante a investigação — mesmo padrão do ADR 0017).
+Validação end-to-end (`/massivas/resumo`/`/massivas/detalhe` via `curl` e a tela ao vivo)
+fica pendente para o próximo ciclo de coleta completo.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries
@@ -295,3 +362,6 @@ de template, nenhum backend tocado.
   os números batem com o que ele espera ver — se não bater, o mais provável é a tabela
   `prazo_reg_livros` conter também livros já concluídos/fechados que deveriam ser excluídos
   do cálculo, o que exigiria uma coluna de status que ainda não foi mapeada.
+- **Adendo 8**: índice funcional criado em `prazo_reg_livros`; vazamento de transação
+  corrigido em `authMiddleware.js` (`anexarContextoTenant` agora usa `res.on('close', ...)`).
+  Validação de timing end-to-end com dados reais pendente do próximo ciclo de coleta.

@@ -135,7 +135,11 @@
           <span class="text-2xl font-extrabold text-slate-800 tabular-nums">{{ comunicacaoOk() }}</span>
           <span class="text-xs font-medium text-slate-400">{{ comunicacaoPercent() | number: '1.1-1' }}% dos {{ agentesEmCampo() }}</span>
         </div>
-        <div class="text-[11px] mt-1.5" [ngClass]="semComunicar30() > 0 ? 'text-red-500 font-semibold' : 'text-slate-400'">
+        <div
+          class="text-[11px] mt-1.5"
+          [ngClass]="semComunicar30() > 0 ? 'text-red-500 font-semibold cursor-pointer hover:underline' : 'text-slate-400'"
+          (click)="abrirSemComunicar()"
+        >
           {{ semComunicar30() }} sem comunicar há mais de 30 min
         </div>
       </div>
@@ -548,6 +552,57 @@
             </div>
           </li>
         </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lista de colaboradores sem comunicar há mais de 30 min — aberta ao
+       clicar no texto vermelho da barra de resumo. Mesmo padrão de modal do
+       histórico de livro acima. -->
+  <div
+    *ngIf="mostrarSemComunicar()"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+    (click)="fecharSemComunicar()"
+  >
+    <div
+      class="w-full max-w-lg max-h-[80vh] flex flex-col rounded-xl bg-white shadow-xl overflow-hidden"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-slate-800">Sem comunicar há mais de 30 min</h3>
+          <p class="text-[11px] text-slate-400">{{ semComunicar30() }} colaborador(es) em campo sem transmitir dados</p>
+        </div>
+        <button
+          type="button"
+          (click)="fecharSemComunicar()"
+          class="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto px-5 py-2">
+        <div class="text-center text-slate-400 text-sm py-10" *ngIf="!listaSemComunicar().length">
+          Nenhum colaborador sem comunicar no momento.
+        </div>
+        <div class="divide-y divide-slate-100">
+          <div class="py-3 flex items-center justify-between gap-3" *ngFor="let c of listaSemComunicar()">
+            <div class="min-w-0">
+              <div class="text-xs font-semibold text-slate-700 truncate">{{ c.nome }}</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">
+                Etapa{{ c.etapas.length > 1 ? 's' : '' }} {{ c.etapas.join(', ') || '—' }}
+                · <span class="tabular-nums">{{ c.aRealizar }}</span> a realizar
+              </div>
+            </div>
+            <span class="shrink-0 text-[11px] font-bold text-red-600 tabular-nums bg-red-50 px-2 py-1 rounded-full">
+              {{ formatarTempoParado(c.minutosParado) }}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

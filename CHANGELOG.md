@@ -7,6 +7,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Modal "sem comunicar há mais de 30 min" na barra de resumo das abas Massivas/Monitoramento
+  de Livros — clique no texto vermelho abre a lista de colaboradores em campo sem transmitir
+  dados, com etapas (agregadas, sem repetição) e quantidade a realizar de cada um, ordenada
+  por mais tempo parado primeiro. Ver Adendo 10 da
+  [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
 - Watchdog nos loops de coleta (`coletaJob.js`/`coletaMassivasJob.js`): checa a cada 2min
   se deveria estar rodando (dentro da janela 07h–19h) mas não está, e reinicia sozinho.
   Cobre o caso de `node-cron` perder o disparo agendado das 07h (sem retry nativo — visto
@@ -94,6 +99,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Classificação leitura/releitura usava `<=`/`>` (recebido até o próprio dia do prazo
+  contava como leitura) — usuário confirmou que `data_recebimento >= data_prevista_limite`
+  já é releitura. Corrigido em `massivasService.js` (Monitoramento de Livros) e
+  `atividadeColaboradoresService.js` (aba Trilho), os dois lugares que replicam a regra.
+  Livros que escapavam da exclusão de releitura no cálculo de "dias do prazo regulatório"
+  devem parar de contar dias nas duas telas. Ver Adendo 9 da
+  [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
 - Monitoramento de Livros levando ~26s pra carregar (`/massivas/resumo` e
   `/massivas/detalhe`): `prazo_reg_livros` não tinha índice em `livro`, forçando um nested
   loop de ~2.032 × 13.880 comparações no JOIN incondicional introduzido no Adendo 4 da ADR

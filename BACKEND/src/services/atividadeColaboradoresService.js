@@ -23,15 +23,17 @@ function paraDataOrdenavel(dataStr) {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 
-// Mesma regra da ADR 0006 (massivasService.js, condicaoTipoServico): sem
-// data_recebimento ainda, não dá pra saber se vai virar leitura ou
-// releitura; recebido até o prazo é leitura, depois do prazo é releitura.
+// Mesma regra de massivasService.js (condicaoTipoServico/TIPO_SERVICO_CONTR_SQL,
+// ADR 0012 Adendo 8): sem data_recebimento ainda, não dá pra saber se vai
+// virar leitura ou releitura; recebido antes do prazo é leitura, recebido no
+// prazo ou depois já é releitura (usuário confirmou: data_recebimento >=
+// data_prevista_limite é releitura, não só estritamente depois).
 function classificarTipoServico(dataRecebimento, dataPrevistaLimite) {
   if (!dataRecebimento) return null;
   const recebimento = paraDataOrdenavel(dataRecebimento);
   const prevista = paraDataOrdenavel((dataPrevistaLimite || '').split(' ')[0]);
   if (!recebimento || !prevista) return null;
-  return recebimento <= prevista ? 'leitura' : 'releitura';
+  return recebimento < prevista ? 'leitura' : 'releitura';
 }
 
 // "Dias do prazo regulatório" por livro — mesma fonte/fórmula de

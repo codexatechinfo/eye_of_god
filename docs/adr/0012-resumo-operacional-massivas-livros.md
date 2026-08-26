@@ -348,6 +348,57 @@ minhas próprias edições de arquivo durante a investigação — mesmo padrão
 Validação end-to-end (`/massivas/resumo`/`/massivas/detalhe` via `curl` e a tela ao vivo)
 fica pendente para o próximo ciclo de coleta completo.
 
+## Adendo 9 — leitura/releitura: `data_recebimento >= data_prevista_limite` também é releitura
+
+Usuário reportou (print) livros "Em Execução"/"LEITURA" com badge de 34+ dias que, pela
+regra de negócio, já são releitura — apontando que o operador estava errado: a condição de
+`condicaoTipoServico`/`TIPO_SERVICO_CONTR_SQL` usava `<=`/`>` (recebido **até** o prazo,
+inclusive no próprio dia do prazo, contava como leitura). Usuário confirmou explicitamente:
+"`data_recebimento => data_prevista_limite` é releitura" — ou seja, recebido no dia exato do
+prazo já vira releitura, não só estritamente depois.
+
+Corrigido nos dois lugares que replicam essa regra: `condicaoTipoServico`/
+`TIPO_SERVICO_CONTR_SQL` em `massivasService.js` (usado por Monitoramento de Livros) e
+`classificarTipoServico` em `atividadeColaboradoresService.js` (usado pela aba Trilho, ver
+ADR 0015) — agora `<` pra leitura, com o `ELSE 'releitura'` cobrindo `>=` automaticamente.
+Efeito indireto esperado: livros que antes escapavam da exclusão de releitura no cálculo de
+"dias do prazo regulatório" (válido só pra leitura urbana, ver Adendo 4) devem parar de
+aparecer com dias contados, tanto em Monitoramento de Livros quanto na aba Trilho.
+
+Nota separada, ainda sob investigação no momento desta edição: a coluna "Data limite"
+exibida na tabela de Monitoramento de Livros não é o campo bruto `data_prevista_limite` (o
+que a regra de classificação usa) — é `PRAZO_CONTR_SQL`, um valor já recalculado a partir do
+tipo (calendário se leitura, recebimento+24h/48h se releitura). Comparar visualmente a
+coluna exibida contra "Recebido em" pode não bater com o campo bruto real usado na decisão
+de tipo; isso não foi alterado nesta correção e pode merecer ajuste futuro se continuar
+causando confusão.
+
+## Adendo 10 — lista de colaboradores "sem comunicar há mais de 30 min"
+
+Usuário pediu, a partir do texto clicável "X sem comunicar há mais de 30 min" da barra de
+resumo (Adendo 3): abrir uma lista mostrando quem são esses colaboradores, há quanto tempo
+cada um está sem transmitir, quais etapas cada um tem e quantas leituras ainda tem a
+realizar.
+
+Implementado 100% client-side (`massivas-view.ts`/`.html`), sem endpoint novo — os dados já
+estavam disponíveis via `colaboradoresService.atividadeDe()` (mesma fonte que
+`comunicacaoOk()`/`semComunicar30()` já usavam): `listaSemComunicar()` filtra os mesmos
+colaboradores de `semComunicar30()` (`minutosParado >= LIMITE_COMUNICACAO_MINUTOS`),
+juntando as etapas distintas dos livros de cada um (`Set` sobre `atividade.livros[].etapa`)
+e `atividade.totalPendentes` como "a realizar", ordenado por mais tempo sem comunicar
+primeiro.
+
+Modal centralizado (`mostrarSemComunicar` signal), mesmo padrão visual/estrutural do modal
+de histórico de livro já existente nesta tela (`fixed inset-0 z-50` com backdrop, fechar por
+X ou clique fora) — escolhido em vez de dropdown ancorado porque a lista pode ter mais de
+cem colaboradores (chegou a 164 no teste ao vivo), o que não cabe bem num popover pequeno.
+Tempo formatado com `formatarTempoParado()` (min / Xh Ymin / Xd).
+
+Testado ao vivo (JWT de teste local, aba Massivas): clique no texto abriu o modal com "164
+colaborador(es) em campo sem transmitir dados", cada linha mostrando nome, etapas agregadas
+sem repetição (ex.: "Etapas 12, 13, 18 · 397 a realizar") e o tempo formatado; botão de
+fechar (X) testado e funcionando. `npx tsc --noEmit` sem erros.
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries
@@ -365,3 +416,7 @@ fica pendente para o próximo ciclo de coleta completo.
 - **Adendo 8**: índice funcional criado em `prazo_reg_livros`; vazamento de transação
   corrigido em `authMiddleware.js` (`anexarContextoTenant` agora usa `res.on('close', ...)`).
   Validação de timing end-to-end com dados reais pendente do próximo ciclo de coleta.
+- **Adendo 9**: operador de classificação leitura/releitura corrigido (`<`/`>=` em vez de
+  `<=`/`>`) em `massivasService.js` e `atividadeColaboradoresService.js`.
+- **Adendo 10**: modal "sem comunicar há mais de 30 min" com etapas e a realizar por
+  colaborador, testado ao vivo.

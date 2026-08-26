@@ -28,15 +28,17 @@ const LEITURISTA_CONTR_SQL = `
 `;
 
 // ── leitura vs releitura: só a data manda, independente da situação ──
-// tudo que foi recebido até o prazo é leitura; depois do prazo é releitura;
-// sem data_recebimento ainda (situação em aberto) não bate em nenhum dos
-// dois quando o filtro pede um tipo específico — só aparece em "todos".
+// recebido antes do prazo é leitura; recebido no prazo ou depois é releitura
+// (usuário confirmou: data_recebimento >= data_prevista_limite já é
+// releitura, não só estritamente depois); sem data_recebimento ainda
+// (situação em aberto) não bate em nenhum dos dois quando o filtro pede um
+// tipo específico — só aparece em "todos".
 function condicaoTipoServico(tipo) {
   if (tipo === 'leitura') {
-    return `c.data_recebimento IS NOT NULL AND to_date(c.data_recebimento, 'DD/MM/YYYY') <= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')`;
+    return `c.data_recebimento IS NOT NULL AND to_date(c.data_recebimento, 'DD/MM/YYYY') < to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')`;
   }
   if (tipo === 'releitura') {
-    return `c.data_recebimento IS NOT NULL AND to_date(c.data_recebimento, 'DD/MM/YYYY') > to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')`;
+    return `c.data_recebimento IS NOT NULL AND to_date(c.data_recebimento, 'DD/MM/YYYY') >= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')`;
   }
   return null;
 }
@@ -46,7 +48,7 @@ function condicaoTipoServico(tipo) {
 const TIPO_SERVICO_CONTR_SQL = `
   CASE
     WHEN c.data_recebimento IS NULL THEN NULL
-    WHEN to_date(c.data_recebimento, 'DD/MM/YYYY') <= to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') THEN 'leitura'
+    WHEN to_date(c.data_recebimento, 'DD/MM/YYYY') < to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY') THEN 'leitura'
     ELSE 'releitura'
   END
 `;

@@ -101,6 +101,44 @@ export class MassivasView implements OnInit {
     return this.agentesEmCampo() - this.comunicacaoOk();
   }
 
+  mostrarSemComunicar = signal(false);
+
+  abrirSemComunicar(): void {
+    if (this.semComunicar30() > 0) this.mostrarSemComunicar.set(true);
+  }
+
+  fecharSemComunicar(): void {
+    this.mostrarSemComunicar.set(false);
+  }
+
+  // Lista pro modal aberto em abrirSemComunicar(): mesmos colaboradores de
+  // semComunicar30() (minutosParado >= LIMITE_COMUNICACAO_MINUTOS), com as
+  // etapas distintas dos livros que cada um tem hoje e o total ainda a
+  // realizar (naoDigitados agregado — mesma fonte de totalPendentes).
+  // Ordenado por mais tempo sem comunicar primeiro (mais crítico no topo).
+  listaSemComunicar(): { nome: string; minutosParado: number; etapas: string[]; aRealizar: number }[] {
+    return this.agentesEmCampoLista()
+      .map(c => {
+        const atividade = this.colaboradoresService.atividadeDe(c.colaborador);
+        return { colaborador: c.colaborador, atividade };
+      })
+      .filter(({ atividade }) => (atividade?.minutosParado ?? Infinity) >= LIMITE_COMUNICACAO_MINUTOS)
+      .map(({ colaborador, atividade }) => ({
+        nome: colaborador,
+        minutosParado: atividade?.minutosParado ?? 0,
+        etapas: [...new Set((atividade?.livros ?? []).map(l => l.etapa))].sort((a, b) => Number(a) - Number(b)),
+        aRealizar: atividade?.totalPendentes ?? 0,
+      }))
+      .sort((a, b) => b.minutosParado - a.minutosParado);
+  }
+
+  formatarTempoParado(minutos: number): string {
+    if (minutos >= 24 * 60) return `${Math.floor(minutos / (24 * 60))}d`;
+    const h = Math.floor(minutos / 60);
+    const m = Math.round(minutos % 60);
+    return h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`;
+  }
+
   // atividade.totalRealizadas/totalPendentes soma TODOS os livros do
   // colaborador (leitura+releitura+massiva juntos, desde a ADR 0013, que
   // passou a mesclar massiva na mesma lista de atividade). Aqui precisa ser

@@ -85,17 +85,9 @@ export class MassivasView implements OnInit {
     return this.agentesEmCampoLista().filter(c => c.cargo === 'LEITURISTA').length;
   }
 
-  // MONITOR com atividade hoje — foi a campo, não fica mais em "na base".
+  // MONITOR com atividade hoje — foi a campo, entra no total de "em campo".
   agentesMonitorEmCampo(): number {
     return this.agentesEmCampoLista().filter(c => c.cargo === 'MONITOR').length;
-  }
-
-  // MONITOR sem atividade hoje — "na base" deixou de ser todo MONITOR
-  // incondicionalmente (ver comentário acima).
-  agentesNaBase(): number {
-    return this.colaboradoresService
-      .colaboradores()
-      .filter(c => c.cargo === 'MONITOR' && !this.colaboradoresService.atividadeDe(c.colaborador)).length;
   }
 
   comunicacaoOk(): number {

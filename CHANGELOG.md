@@ -102,8 +102,8 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 - Card "Agentes em campo" (Massivas/Monitoramento de Livros) tratava todo colaborador com
   cargo MONITOR como "na base" incondicionalmente, mesmo com atividade registrada hoje.
   Agora usa a mesma checagem de atividade já usada para leituristas: MONITOR com atividade
-  hoje conta em "Agentes em campo" (badge próprio "Monitor"), sem atividade conta em
-  "Na base". Ver Adendo 11 da
+  hoje conta em "Agentes em campo" (badge próprio "Monitor"). Badge "Na base" removido a
+  pedido do usuário. Ver Adendo 11 da
   [ADR 0012](docs/adr/0012-resumo-operacional-massivas-livros.md).
 - Classificação leitura/releitura usava `<=`/`>` (recebido até o próprio dia do prazo
   contava como leitura) — usuário confirmou que `data_recebimento >= data_prevista_limite`

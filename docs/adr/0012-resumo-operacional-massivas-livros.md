@@ -419,6 +419,13 @@ base 3"; depois, "292 em campo / Moto 235 / A pé 54 / Monitor 3 / Na base 0" �
 monitores tinham atividade hoje e passaram de "na base" pra "em campo" corretamente
 (235+54+3 = 292, soma bate). `npx tsc --noEmit` sem erros.
 
+Em seguida, usuário pediu pra remover o badge "Na base" por completo (não fazia mais
+sentido mostrar um contador que já tinha ficado 0 na maioria dos dias, já que monitor
+normalmente tem atividade). Removido o badge e o método `agentesNaBase()` (não usado em
+mais nenhum lugar). Card final: "Agentes em campo: N de M" com badges Moto/A pé/Monitor
+(este último só aparece quando > 0). Testado ao vivo de novo: "292 em campo / Moto 235 /
+A pé 54 / Monitor 3", sem "Na base".
+
 ## Consequências
 
 - Testado ao vivo nas duas abas (JWT de teste local): números batendo com o que as queries

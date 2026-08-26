@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T16:36:48.073Z",
+  "atualizado_em": "2026-08-26T16:44:02.847Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "9250d55",
+  "commit": "7fe7879",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -516,6 +516,13 @@
       "skill": "/projeto-novo",
       "evento": "Badge Na base removido do card Agentes em campo",
       "detalhe": "Logo apos corrigir a contagem de MONITOR (Adendo 11 da ADR 0012), usuario pediu pra remover o badge Na base por completo do card Agentes em campo (Massivas/Monitoramento de Livros). Removido o elemento do template e o metodo agentesNaBase() em massivas-view.ts (nao usado em mais nenhum lugar). Card final mostra Agentes em campo: N de M com badges Moto/A pe/Monitor, este ultimo so aparece quando > 0. Testado ao vivo via JWT de teste local: 292 em campo / Moto 235 / A pe 54 / Monitor 3, sem Na base. npx tsc --noEmit sem erros."
+    },
+    {
+      "data": "2026-08-26T13:43:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Toggle Afastados criado separando de Sem servico + terceira fonte suspensao",
+      "detalhe": "Usuario pediu um quinto toggle Afastados na barra de filtros do Trilho (ao lado de Parado/Sem servico/Ativo/Sem sincronismo) mostrando so quem esta sem servico E tem justificativa (atestado, afastamento ou suspensao cujo intervalo contemple hoje) - Sem servico deveria passar a conter so os aptos sem motivo. Adicionada terceira fonte de justificativa alem de atestados e ativos_inativos.situacao ja existentes (ADR 0016): tabela suspensao, importada manualmente via planilha (modo substituir), com coluna data_falta unica (nao um par inicio/fim) - obterSuspensoesHoje() considera contempla hoje quando existe linha com data_falta igual a hoje, mesclada com prioridade mais baixa que atestado/licenca. Tabela suspensao estava vazia no ambiente desta sessao, entao a logica nao pode ser validada com dados reais, so a estrutura foi testada. No FRONTEND, CategoriaAtividade ganhou afastado; categoriaDe() passou a receber tambem o AfastamentoInfo do colaborador, retornando afastado quando sem atividade mas com justificativa, em vez de sempre semServico. Testado ao vivo via JWT de teste local na aba Trilho: toggle Afastados filtrou 9 colaboradores, toggle Sem servico filtrou 59, sem sobreposicao entre as duas listas - confirmando que os grupos antes misturados agora sao mutuamente exclusivos. npx tsc --noEmit sem erros, suite de isolamento de tenant (12 testes) passando. Ver Adendo da ADR 0016."
     }
   ]
 }

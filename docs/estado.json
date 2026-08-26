@@ -4,7 +4,7 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-26T08:00:00.000Z",
+  "atualizado_em": "2026-08-26T08:10:00.000Z",
   "atualizado_por": "/projeto-novo",
   "commit": "82b4f09",
   "seguranca": {
@@ -471,6 +471,13 @@
       "skill": "/projeto-novo",
       "evento": "Indicador de ausência justificada na lista do Trilho, com segunda fonte de dados (ativos_inativos)",
       "detalhe": "Três pedidos relacionados: 1) colaborador sem serviço com justificativa deve ter indicador visível sem expandir; 2) segunda fonte além de atestados: ativos_inativos.situacao no formato 'A2 - DD/MM/YYYY' indica afastamento a partir dessa data, volta_afastamento tem a data de retorno ou o texto 'INDETERMINADO', só conta se hoje cai dentro do período; 3) destaque quando atestados.afastado_INSS = 'SIM'. Conferido contra dado real antes de implementar: situacao só tem 3 padrões (ATIVO/INATIVO/'A2 - DD/MM/YYYY'), volta_afastamento tem datas YYYY-MM-DD ou o literal INDETERMINADO. Nova função obterLicencasAtivosInativosHoje() em atividadeColaboradoresService.js, mesma estrutura de obterAfastamentosHoje (atestados) — as duas fontes mescladas em listarAtividadeHoje, atestados com prioridade (tem motivo/INSS). AfastamentoInfo (FRONTEND) ganhou origem: 'atestado'|'licenca' e campos nullable. Bug descoberto no meio do caminho: testado ao vivo e o ícone não aparecia pra ninguém da nova fonte — causa: colaboradoresService.js (listarAtivos, a lista BASE de colaboradores do Trilho) filtra WHERE situacao = 'ATIVO', então colaborador com 'A2 - ...' nunca entrava na lista, o indicador não tinha onde aparecer. Corrigido incluindo também quem está afastado E o afastamento vale hoje (CONDICAO_AFASTADO_HOJE, mesma regra replicada em SQL, compartilhada com listarOpcoesFiltro pra cargo/regional de afastados aparecerem nos filtros também). Indicador visual: ícone de documento (mesmo já usado no card expandido) ao lado do nome, só quando sem serviço E tem justificativa — azul por padrão, roxo quando INSS. Testado ao vivo (JWT de teste): 11 afastamentos hoje (6 atestados, 5 licença); EMERSON RENATO SASTRE (licença indeterminada) passou a aparecer na lista com ícone azul 'Afastado por tempo indeterminado' (antes da correção do filtro base não aparecia em lugar nenhum); LUCIANO HENRIQUE DE MATTOS (atestado, INSS) com ícone roxo 'Ausência justificada (INSS)'. Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando. Ver ADR 0016."
+    },
+    {
+      "data": "2026-08-26T08:10:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Cards Realizadas/A realizar ganharam cor própria (verde/vermelho) na aba Trilho",
+      "detalhe": "Usuário pediu pra destacar os cards 'Realizadas' (verde) e 'A realizar' (vermelho) na aba Trilho, diminuindo ainda mais a opacidade do gradiente. Trocado nos dois lugares que têm esses cards (lista-colaboradores.html e livro-detalhe.html, mesmo padrão visual nos dois): borda/ícone/label/valor de blue-100/blue-600/blue-400/blue-700 para emerald-*/red-* respectivamente; gradiente de from-{cor}-100/20 para from-{cor}-100/10 (opacidade pela metade). Os demais cards da mesma tela continuam azuis, sem mudança. Testado ao vivo (JWT de teste): card Realizadas do colaborador confirmado com classes border-emerald-100/bg-gradient-to-br from-emerald-100/10 to-emerald-50; A realizar com border-red-100/from-red-100/10; mesmas classes confirmadas no painel de detalhe do livro. Build do Angular passando; suíte de isolamento de tenant (12 testes) também (mudança só de FRONTEND)."
     }
   ]
 }

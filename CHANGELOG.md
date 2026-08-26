@@ -7,6 +7,9 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Cards "Realizadas" (verde) e "A realizar" (vermelho) na aba Trilho (lista de
+  colaboradores e painel de detalhe do livro), destacados dos demais cards que continuam
+  azuis; gradiente ainda mais discreto (opacidade 10%, era 20%).
 - Indicador de ausência justificada na lista do Trilho: colaborador "sem serviço" com
   justificativa (atestado ou licença de `ativos_inativos.situacao`, formato "A2 -
   DD/MM/YYYY") ganha um ícone ao lado do nome, visível sem precisar expandir — roxo quando

@@ -91,30 +91,30 @@
       </div>
 
       <!-- Realizadas -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-emerald-100 bg-gradient-to-br from-emerald-100/10 to-emerald-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="4" width="14" height="17" rx="2" />
             <path d="m9 13 2 2 4-4" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Realizadas</div>
-          <div class="text-xs font-bold text-blue-700 tabular-nums">{{ sel.livro.digitados }}</div>
+          <div class="text-[8.5px] font-semibold text-emerald-500 uppercase tracking-wide truncate">Realizadas</div>
+          <div class="text-xs font-bold text-emerald-700 tabular-nums">{{ sel.livro.digitados }}</div>
         </div>
       </div>
 
       <!-- A realizar -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-red-100 bg-gradient-to-br from-red-100/10 to-red-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-red-100 text-red-600 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="4" width="14" height="17" rx="2" />
             <path d="M9 9h6M9 13h6" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">A realizar</div>
-          <div class="text-xs font-bold text-blue-700 tabular-nums">{{ sel.livro.naoDigitados }}</div>
+          <div class="text-[8.5px] font-semibold text-red-500 uppercase tracking-wide truncate">A realizar</div>
+          <div class="text-xs font-bold text-red-700 tabular-nums">{{ sel.livro.naoDigitados }}</div>
         </div>
       </div>
 

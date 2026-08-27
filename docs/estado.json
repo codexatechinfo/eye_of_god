@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T17:09:17.429Z",
+  "atualizado_em": "2026-08-27T17:14:53.528Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "5f8b7df",
+  "commit": "3bd1a71",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -600,6 +600,13 @@
       "skill": "/projeto-novo",
       "evento": "Confirmado: etapa 15 processou 2/2 livros com sucesso. Adicionado log de progresso por livro",
       "detalhe": "Usuario rodou npm run dev de novo e confirmou: etapa 15 (2 livros) processou 2/2 com sucesso, 14 UCs - a correcao garantirEtapaVisivel (Adendo 7) funcionou. Na etapa 16 (66 livros), o log mostrou a mensagem tabela nao esta visivel... reabrindo repetida a cada livro (1/66, 2/66, 3/66...), sempre resolvendo na 1a tentativa - comportamento esperado (o site recolhe a etapa a cada CANCELAR), mas sem nenhuma confirmacao de sucesso entre um aviso e outro. Usuario reportou: visualmente estava abrindo corretamente e quando voltava abria o livro seguinte, mas pelo console parece que nao estava coletando - o codigo estava funcionando corretamente (contador avancando 1 a 9/66), so a falta de log por livro individual dava a impressao de travamento numa etapa com dezenas/centenas de livros (so havia 1 linha de resumo no FINAL da etapa inteira). Duas melhorias de clareza em copelScraperService.js, sem mudar comportamento funcional: 1) log por livro processado com sucesso (Livro X - N UCs, M/Total da etapa Y) logo apos incrementar os contadores; 2) mensagem de reabrindo a etapa trocada de console.warn para console.log, com texto explicando que e comportamento normal do site (antes soava como falha repetida). npm test (12 testes) continua passando. Ver Adendo 8 da ADR 0018."
+    },
+    {
+      "data": "2026-08-27T17:14:53.527Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Fix: removidas esperas networkidle redundantes que atrasavam o scraper sem necessidade",
+      "detalhe": "Usuario reportou: a pagina nitidamente ja carregou e ainda fica esperando um tempo a mais desnecessario, acabo perdendo tempo no processo na aba acompanhamento assim que entra nela e assim que volta pra ela depois de coletar as ucs. Investigado: o Adendo 4 (remocao dos waitForTimeout fixos) tinha adicionado page.waitForLoadState(networkidle, {timeout: N}) DEPOIS de ja esperar o elemento certo (waitForSelector/waitFor) ficar visivel, em 5 lugares diferentes. networkidle so resolve quando nao ha nenhuma requisicao de rede por um periodo - se o portal tiver qualquer atividade de fundo (polling, heartbeat, analytics) que nunca some de verdade, essa espera nunca resolve antes do proprio timeout, e como estava com catch, o codigo ficava preso o tempo INTEIRO do timeout (15s, 20s) mesmo com a pagina ja pronta e o elemento relevante ja visivel ha tempo. Removidas as 5 ocorrencias em copelScraperService.js: depois do login/busca inicial, depois de abrir uma etapa, dentro de garantirEtapaVisivel() (Adendo 7), dentro de fecharTelaDetalheMesmaPagina(), e no fim do loop de etapas (esse ultimo nem tinha um waitFor de elemento antes - a proxima volta do loop externo ja espera a tabela da etapa seguinte). Em todos os casos o waitForSelector/waitFor state visible que ja existia continua como unico sinal de pronto pra continuar, sem mudanca de comportamento funcional, so eliminando a espera redundante. npm test (12 testes) continua passando. Nao validado ao vivo de novo - fica pra proxima execucao do usuario. Ver Adendo 9 da ADR 0018."
     }
   ]
 }

@@ -111,6 +111,16 @@ Com `digitados`/`nao_digitados` fixos em `0` para a fonte leitura/releitura:
 Isso é esperado e temporário — fica assim até o usuário indicar de onde vêm as 7 colunas
 novas e como a nova lógica de progresso deve ser calculada a partir delas.
 
+## Adendo — coluna `smart`
+
+Usuário pediu mais uma coluna: `smart` (`varchar(255)`, mesmo padrão das demais). Adicionada
+com `ALTER TABLE public.contr_execucao_leitura ADD COLUMN smart character varying(255);`,
+mesmo processo (como `postgres` dentro do `supabase-db`). Confirmada via
+`information_schema.columns`.
+
+Mesma situação das 7 colunas do Adendo original: não populada pelo scraper ainda (nenhum
+código toca nela), origem/uso não especificados no pedido — fica pendente de instrução.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

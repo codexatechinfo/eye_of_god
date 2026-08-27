@@ -7,6 +7,19 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de Massivas (`copelMassivasScraperService.js`): removidos 9 `waitForTimeout` fixos
+  (login, troca de aba, cascata de filtros dependentes, pós-busca) que somavam >30s de
+  espera garantida por ciclo mesmo com a página já carregada — mesma causa do "tempo
+  desnecessário parado" já corrigido no scraper de Acompanhamento (Adendo 9 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md)), mas esse
+  arquivo tinha ficado de fora daquela limpeza. Trocados por esperas reais: `aguardarOpcao()`
+  (espera a `<option>` do próximo select em cascata existir, em vez de tempo fixo depois de
+  cada `selectOption`), `aguardarFormularioFiltros()` (espera o select de concessionária
+  ficar visível ao trocar de aba) e `aguardarEstabilizar()` (poll na contagem de linhas da
+  tabela até estabilizar, mesmo padrão do `aguardarTabelaEstabilizar` já usado no outro
+  scraper). Restam só 2 `waitForTimeout`: o próprio poll de `aguardarEstabilizar` e o
+  intervalo entre tentativas de busca (retry backoff, não espera de carregamento). Não
+  validado ao vivo nesta sessão.
 - Jobs `coletaJob.js` (Coleta Acomp) e `coletaMassivasJob.js` (Massivas) crashavam e
   reiniciavam do zero no meio de uma etapa (`locator.click: Timeout 30000ms exceeded`
   esperando `a.color:has-text("ETAPA")`) — causa raiz: os dois rodam concorrentemente o dia

@@ -36,15 +36,51 @@ const INDICES_COLUNAS = Object.keys(COLUNAS_MAP).map(Number).sort((a, b) => a - 
 const NOMES_COLUNAS = INDICES_COLUNAS.map(i => COLUNAS_MAP[i]);
 const NOMES_COLUNAS_ATRIBUIDAS = [...NOMES_COLUNAS, 'leiturista'];
 
+// Cada select depende do anterior (AJAX popula as <option> do próximo campo
+// só depois da escolha atual) — espera a option que vamos escolher existir de
+// verdade no DOM, em vez de um tempo fixo que ou sobra (formulário já pronto)
+// ou falta (AJAX mais lento que o normal num dia de rede ruim).
+async function aguardarOpcao(page, seletorSelect, valor, timeoutMs = 15000) {
+  await page.waitForFunction(
+    ({ seletor, valor: v }) => {
+      const select = document.querySelector(seletor);
+      if (!select) return false;
+      return Array.from(select.options).some(o => o.value === v);
+    },
+    { seletor: seletorSelect, valor },
+    { timeout: timeoutMs },
+  );
+}
+
 async function selecionarFiltros(page) {
   console.log('Aplicando filtros...');
   await page.selectOption("select[name='searchConcessionariaId']", { value: '2' });
-  await page.waitForTimeout(2000);
+  await aguardarOpcao(page, "select[name='searchEmpreiteiraId']", '24');
   await page.selectOption("select[name='searchEmpreiteiraId']", { value: '24' });
-  await page.waitForTimeout(2000);
+  await aguardarOpcao(page, "select[name='searchTipoTarefasId']", '16');
   await page.selectOption("select[name='searchTipoTarefasId']", { value: '16' });
-  await page.waitForTimeout(2000);
   console.log('Filtros aplicados');
+}
+
+// Tabela pode popular as linhas de forma assíncrona depois do elemento
+// aparecer — poll na contagem até estabilizar (2 leituras iguais seguidas),
+// em vez de um tempo fixo depois do resultado já visível.
+async function aguardarEstabilizar(page, seletorLinhas, { intervaloMs = 500, timeoutMs = 15000 } = {}) {
+  const inicio = Date.now();
+  let anterior = -1;
+  let estavel = 0;
+  while (Date.now() - inicio < timeoutMs) {
+    const atual = await page.locator(seletorLinhas).count();
+    if (atual === anterior) {
+      estavel++;
+      if (estavel >= 2) return atual;
+    } else {
+      estavel = 0;
+    }
+    anterior = atual;
+    await page.waitForTimeout(intervaloMs);
+  }
+  return anterior;
 }
 
 async function buscarComTentativas(page, seletorEspera, maxTentativas = 3, timeoutMs = 30000) {
@@ -56,6 +92,8 @@ async function buscarComTentativas(page, seletorEspera, maxTentativas = 3, timeo
       return true;
     } catch (erro) {
       console.log(`Nenhum resultado apareceu na tentativa ${tentativa}.`);
+      // Pequena folga ANTES de tentar buscar de novo (não é espera de
+      // carregamento — é intervalo entre retries).
       await page.waitForTimeout(2000);
     }
   }
@@ -118,6 +156,14 @@ function paraObjetos(linhas, nomesColunas) {
   });
 }
 
+// page.fill()/click() do Playwright já auto-esperam o elemento existir e
+// ficar acionável — não precisa de tempo fixo antes deles. Isso só espera o
+// formulário de filtros (select de concessionária) estar pronto depois de
+// entrar numa aba nova (pendentes/atribuídas/em execução).
+async function aguardarFormularioFiltros(page) {
+  await page.waitForSelector("select[name='searchConcessionariaId']", { state: 'visible', timeout: 20000 });
+}
+
 async function coletarMassivas() {
   const browser = await chromium.launch({ headless: true, slowMo: 300 });
   const page = await browser.newPage();
@@ -125,31 +171,35 @@ async function coletarMassivas() {
   try {
     console.log('Abrindo site...');
     await page.goto(URL_LOGIN);
-    await page.waitForTimeout(3000);
 
     console.log('Realizando login...');
+    // fill() já espera o campo existir e ficar acionável — sem necessidade
+    // de tempo fixo depois do goto.
     await page.fill("input[name='j_username']", process.env.COPEL_USERNAME.toUpperCase());
     await page.fill("input[name='j_password']", process.env.COPEL_PASSWORD);
     await page.locator("input[type='submit']").click();
-    await page.waitForTimeout(8000);
-    console.log('Login concluído. URL:', page.url());
 
     // Pendentes
     console.log('Abrindo pendentes...');
     try {
-      await page.waitForSelector("a[href='pendentesAction.do']", { timeout: 15000 });
+      // Esse waitForSelector já É a espera real de "login concluído" — o
+      // waitForTimeout(8000) fixo que existia antes dele só atrasava sem
+      // necessidade (mesma causa raiz corrigida no Adendo 9 do scraper de
+      // Acompanhamento).
+      await page.waitForSelector("a[href='pendentesAction.do']", { timeout: 30000 });
     } catch (erroLogin) {
       await salvarDiagnostico(page, 'login_falhou');
       throw erroLogin;
     }
+    console.log('Login concluído. URL:', page.url());
     await page.locator("a[href='pendentesAction.do']").click();
-    await page.waitForTimeout(5000);
+    await aguardarFormularioFiltros(page);
 
     await selecionarFiltros(page);
 
     let dadosPendentes = [];
     if (await buscarComTentativas(page, 'table#item tbody tr')) {
-      await page.waitForTimeout(2000);
+      await aguardarEstabilizar(page, 'table#item > tbody > tr');
       dadosPendentes = await extrairPendentes(page);
     }
     console.log(`${dadosPendentes.length} linhas extraídas (pendentes)`);
@@ -157,12 +207,12 @@ async function coletarMassivas() {
     // Atribuídas
     console.log('Abrindo atribuídas...');
     await page.goto(URL_ATRIBUIDAS);
-    await page.waitForTimeout(3000);
+    await aguardarFormularioFiltros(page);
     await selecionarFiltros(page);
 
     let dadosAtribuidas = [];
     if (await buscarComTentativas(page, 'table.tableQuebraEquipe')) {
-      await page.waitForTimeout(2000);
+      await aguardarEstabilizar(page, 'table.tableQuebraEquipe table#item > tbody > tr');
       dadosAtribuidas = await extrairPorColaborador(page);
     }
     console.log(`${dadosAtribuidas.length} linhas extraídas (atribuídas)`);
@@ -170,12 +220,12 @@ async function coletarMassivas() {
     // Em execução
     console.log('Abrindo em execução...');
     await page.goto(URL_EM_EXECUCAO);
-    await page.waitForTimeout(3000);
+    await aguardarFormularioFiltros(page);
     await selecionarFiltros(page);
 
     let dadosEmExecucao = [];
     if (await buscarComTentativas(page, 'table.tableQuebraEquipe')) {
-      await page.waitForTimeout(2000);
+      await aguardarEstabilizar(page, 'table.tableQuebraEquipe table#item > tbody > tr');
       dadosEmExecucao = await extrairPorColaborador(page);
     }
     console.log(`[Massivas] ${dadosEmExecucao.length} linhas extraídas (em execução)`);

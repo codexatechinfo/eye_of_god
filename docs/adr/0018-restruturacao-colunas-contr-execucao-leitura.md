@@ -516,6 +516,42 @@ volta do loop externo já espera a tabela da etapa seguinte). Em todos os casos 
 `npm test` (12 testes) continua passando. Não validado ao vivo de novo — fica pra próxima
 execução do usuário.
 
+## Adendo 10 — a mesma limpeza tinha ficado de fora do scraper de Massivas
+
+Usuário reportou de novo, em ciclo posterior, "a página está nitidamente carregada mas
+ainda fica um tempo desnecessário parado" — dessa vez não no scraper de Acompanhamento (já
+limpo nos Adendos 4 e 9), mas em `copelMassivasScraperService.js`, que nunca tinha passado
+por essa limpeza: 13 `waitForTimeout` fixos (login, troca de aba, cascata de selects de
+filtro dependentes, pós-busca), somando mais de 30s de espera garantida por ciclo completo,
+independente de quão rápido o portal realmente respondesse.
+
+Cada um foi trocado pela condição real que ele deveria estar esperando:
+
+- **Cascata de filtros** (`selectOption` de concessionária → empreiteira → tipo de tarefa,
+  cada select popula as `<option>` do próximo via AJAX): `aguardarOpcao()` faz
+  `page.waitForFunction` até a `<option>` que será escolhida existir no select seguinte, em
+  vez de um tempo fixo que ou sobrava (formulário já pronto) ou faltava (AJAX mais lento que
+  o normal).
+- **Pós-login**: o `waitForTimeout(3000)` depois do `goto` era redundante — `page.fill()` já
+  auto-espera o campo existir e ficar acionável. O `waitForTimeout(8000)` depois do clique em
+  submit também era redundante — o código já tinha, logo depois, um
+  `waitForSelector("a[href='pendentesAction.do']")` real (com diagnóstico automático se
+  falhar), que é a espera de "login concluído" de verdade.
+- **Troca de aba** (pendentes/atribuídas/em execução): `aguardarFormularioFiltros()` espera o
+  select de concessionária ficar visível, em vez de tempo fixo depois do `goto`.
+- **Pós-busca**: `aguardarEstabilizar()` faz poll na contagem de linhas da tabela até
+  estabilizar (2 leituras iguais seguidas) — mesmo padrão do `aguardarTabelaEstabilizar()` já
+  usado no scraper de Acompanhamento, adaptado aqui pros dois formatos de tabela (`table#item`
+  direto, ou aninhada dentro de cada bloco `table.tableQuebraEquipe` por leiturista).
+
+Restam só 2 `waitForTimeout` no arquivo: o próprio intervalo de poll dentro de
+`aguardarEstabilizar()` (parte do mecanismo, não uma espera arbitrária) e o intervalo entre
+tentativas de busca em `buscarComTentativas()` (retry backoff — não é espera de
+carregamento, é folga proposital entre uma tentativa e outra).
+
+`npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
+próxima execução do usuário.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

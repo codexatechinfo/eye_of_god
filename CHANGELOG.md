@@ -5,6 +5,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Corrigido
+
+- Jobs `coletaJob.js` (Coleta Acomp) e `coletaMassivasJob.js` (Massivas) crashavam e
+  reiniciavam do zero no meio de uma etapa (`locator.click: Timeout 30000ms exceeded`
+  esperando `a.color:has-text("ETAPA")`) — causa raiz: os dois rodam concorrentemente o dia
+  inteiro e fazem login na MESMA conta Copel; o portal aparenta usar sessão única por
+  usuário, então o login de um derrubava a sessão do outro no meio da operação. Nova fila de
+  exclusão mútua (`copelSessaoLock.js`) serializa as duas coletas — nunca mais logam ao
+  mesmo tempo. Ver [ADR 0019](docs/adr/0019-lock-sessao-copel-entre-jobs.md).
+
 ### Alterado
 
 - Scraper de acompanhamento: log de progresso por livro coletado (`📖 Livro 'X' — N UCs

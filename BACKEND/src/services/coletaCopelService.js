@@ -2,10 +2,11 @@ const { coletarDadosAcompanhamento } = require('./copelScraperService');
 const { importarParaPostgres } = require('./copelImportService');
 const { calcularLeituraUrbana } = require('./leituraUrbanaService');
 const dashboardCache = require('./dashboardCacheService');
+const { comSessaoExclusiva } = require('./copelSessaoLock');
 
 async function executarColetaCopel(db, empresaId) {
   console.log('[Coleta Acomp] 🟡 Iniciando coleta de acompanhamento...');
-  const registros = await coletarDadosAcompanhamento();
+  const registros = await comSessaoExclusiva(() => coletarDadosAcompanhamento());
   const resultado = await importarParaPostgres(db, registros, empresaId);
 
   try {

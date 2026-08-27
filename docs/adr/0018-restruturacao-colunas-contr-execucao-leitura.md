@@ -333,6 +333,46 @@ Não validado ao vivo de novo depois desta correção (usuário pediu pra parar 
 andamento antes de eu poder acompanhar um ciclo completo) — fica pra próxima execução.
 `npm test` (12 testes) continua passando.
 
+## Adendo 5 — causa raiz real: `#item` é um id repetido, uma tabela por etapa
+
+A Correção do Adendo 4 reduziu o sintoma (de "1/76, 1/259..." pra "1/1" — o `while` interno
+processava exatamente 1 livro e saía limpo, sem log de erro), mas o problema de fundo
+continuava: só 1 livro por etapa. Usuário reiniciou o backend com `COPEL_HEADLESS=false`,
+observou visualmente e mandou um print da tabela `#item` **real**, que revelou a causa:
+cada etapa expandida (clique em "ETAPA N - (M)") mostra sua própria tabela de livros logo
+abaixo do cabeçalho, e **todas essas tabelas ficam empilhadas na mesma página com o mesmo
+`id="item"`** (etapa 15 e etapa 16 visíveis ao mesmo tempo no print, cada uma com sua
+própria `<table id="item">`).
+
+Isso é HTML tecnicamente inválido (id deveria ser único), mas o navegador tolera — e um
+seletor CSS `#item` **sempre resolve pra primeira ocorrência no documento**. Depois de
+processar a etapa 15 e abrir a etapa 16, todo `page.locator('table#item:visible tbody
+tr')`/`page.waitForSelector('table#item:visible', ...)` continuava mirando na tabela da
+etapa 15 (a primeira do DOM) — o que também explica o "1/1" da correção anterior: o código
+processava (com sucesso, sem erro) o único livro da etapa 15 que ainda não estava no
+`livrosProcessados`, mesmo pensando estar na etapa 16, e depois via a lista "esgotada"
+(todos os livros da 15 já marcados) mesmo a etapa 16 ter centenas de livros nunca tocados.
+Usuário confirmou exatamente isso: "abriu a etapa seguinte sem nem ter terminado a
+anterior... quando clicou de novo na etapa atual clicou no mesmo número os novamente".
+
+O print também confirmou o índice usado para o link "número da OS" (célula 3, contando o
+checkbox) — isso já estava certo; o problema nunca foi ali.
+
+### Correção
+
+Nova função `tabelaDaEtapa(etapaLink)`, que usa XPath relativo ao link da etapa —
+`etapaLink.locator('xpath=following::table[@id="item"][1]')` — a **primeira** tabela
+`#item` que aparece **depois** do link daquela etapa específica no documento, em vez de um
+seletor `#item` global. Essa referência (`tabelaAtual`) é capturada uma vez ao abrir a etapa
+e reutilizada em todo o processamento dela: contagem inicial de livros, releitura do loop
+`while`, espera de carregamento, e a lógica de "reabrir se a lista sumir" (Adendo 4) — que
+provavelmente nunca vai mais disparar na prática (não era o problema real), mas fica como
+salvaguarda. `fecharTelaDetalheMesmaPagina` passou a receber `tabelaAtual` como parâmetro
+pelo mesmo motivo, em vez de esperar por qualquer `#item` visível na página.
+
+Não validado ao vivo de novo — fica pra próxima execução. `npm test` (12 testes) continua
+passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

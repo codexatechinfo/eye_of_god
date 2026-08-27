@@ -133,6 +133,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de acompanhamento: causa raiz real de só processar 1 livro por etapa — cada etapa
+  expandida mostra sua própria tabela de livros, mas **todas compartilham o mesmo
+  `id="item"`** (confirmado por print do usuário); um seletor CSS `#item` sempre resolve pra
+  primeira ocorrência no documento, então depois de abrir a etapa 16 o código continuava
+  mirando na tabela da etapa 15. Trocado por busca via XPath relativo ao link de cada etapa
+  (`tabelaDaEtapa`), escopando a tabela certa em vez de um seletor global. Ver Adendo 5 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de acompanhamento: só processava o **primeiro livro de cada etapa**, pulando o
   resto em silêncio (sem nenhum log de erro) — confirmado ao vivo (`1/76`, `1/259`, `1/376`
   livros...) e visualmente pelo usuário. Causa: `page.goBack()` não restaura o estado AJAX da

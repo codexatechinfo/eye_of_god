@@ -59,16 +59,19 @@ async function extrairLinhasDetalheOs(paginaDetalhe) {
 // inacessíveis/errados. "CANCELAR" é o mecanismo que o próprio site
 // oferece pra fechar a tela e devolve a lista no estado certo. Fallback
 // pra goBack() só se o botão não existir.
-async function fecharTelaDetalheMesmaPagina(page) {
+async function fecharTelaDetalheMesmaPagina(page, tabelaAtual) {
   const botaoCancelar = page.getByRole('button', { name: /cancelar/i }).or(
     page.locator('input[type="button"][value*="CANCELAR" i], input[type="submit"][value*="CANCELAR" i]'),
   );
   if ((await botaoCancelar.count()) > 0) {
     await botaoCancelar.first().click();
   } else {
+    console.warn('[Coleta Acomp] ⚠️ Botão CANCELAR não encontrado — usando page.goBack() como fallback.');
     await page.goBack().catch(() => {});
   }
-  await page.waitForSelector('table#item:visible', { timeout: 15000 }).catch(() => {});
+  // Espera a tabela DESTA etapa especificamente (não qualquer #item — ver
+  // tabelaDaEtapa) voltar a ficar visível.
+  await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 }
 
@@ -102,6 +105,21 @@ async function lerCabecalhoLinha(linha, etapa) {
 
   if (!Object.values(cabecalho).some(v => v && String(v).trim())) return null;
   return cabecalho;
+}
+
+// Cada etapa expandida (clique em "ETAPA X - (N)") mostra sua própria
+// tabela de livros — mas TODAS essas tabelas compartilham o mesmo
+// id="item" (confirmado no print do usuário: várias tabelas empilhadas na
+// mesma página, uma por etapa, cada uma com seu cabeçalho "ETAPA N - (M)"
+// acima). Um seletor CSS `#item` sempre resolve pra PRIMEIRA ocorrência
+// desse id no documento — foi a causa real de um bug ao vivo: depois de
+// processar a etapa 15 e abrir a etapa 16, o código continuava clicando
+// nos livros da etapa 15 (a primeira tabela #item do DOM), porque nunca
+// escopava a busca pra tabela da etapa certa. Usa XPath relativo ao link
+// da etapa ("following::table[@id='item'][1]" — a primeira tabela #item
+// que aparece DEPOIS do link no documento) em vez de um seletor global.
+function tabelaDaEtapa(etapaLink) {
+  return etapaLink.locator('xpath=following::table[@id="item"][1]');
 }
 
 async function contarLinhasTabFixedHeader(paginaDetalhe) {
@@ -173,20 +191,23 @@ async function coletarDadosAcompanhamento() {
       const count = await etapas.count();
       if (etapaIndex >= count) break;
 
-      const etapa = (await etapas.nth(etapaIndex).innerText()).trim();
+      const etapaLink = etapas.nth(etapaIndex);
+      const etapa = (await etapaLink.innerText()).trim();
       if (etapasProcessadas.has(etapa)) {
         etapaIndex++;
         continue;
       }
 
       console.log(`[Coleta Acomp] ➡️ Processando etapa ${etapaIndex + 1}/${count}: ${etapa}`);
-      await etapas.nth(etapaIndex).click();
-      // Nada de tempo fixo: espera a tabela de livros existir de verdade e
-      // a rede (AJAX de carregar a etapa) ficar ociosa antes de continuar.
-      await page.waitForSelector('table#item:visible', { timeout: 30000 }).catch(() => {});
+      await etapaLink.click();
+      // Nada de tempo fixo: espera a tabela de livros DESTA etapa (não
+      // qualquer #item — ver tabelaDaEtapa) existir e a rede (AJAX de
+      // carregar a etapa) ficar ociosa antes de continuar.
+      const tabelaAtual = tabelaDaEtapa(etapaLink);
+      await tabelaAtual.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
       await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 
-      const totalLivrosInicial = await page.locator('table#item:visible tbody tr').count();
+      const totalLivrosInicial = await tabelaAtual.locator('tbody tr').count();
       console.log(`[Coleta Acomp] 📄 ${totalLivrosInicial} livros na etapa '${etapa}' — abrindo cada OS...`);
 
       // Processa livro a livro RELENDO A LISTA DO ZERO a cada vez, rastreando
@@ -204,10 +225,18 @@ async function coletarDadosAcompanhamento() {
       // acontecer no fluxo normal, mas é melhor abortar com log claro do
       // que travar o processo indefinidamente numa etapa.
       const limiteLivros = totalLivrosInicial + 50;
+      // "CANCELAR" fecha a tela de detalhe, mas pode devolver uma tela sem
+      // a etapa expandida (lista de livros com 0 linhas visíveis) em vez de
+      // devolver direto a lista — confirmado ao vivo: livrosProcessados
+      // sempre parava em 1, e a tabela ficava com 0 linhas na releitura
+      // seguinte. Se isso acontecer, tenta re-clicar no link da etapa pra
+      // reabrir a lista antes de desistir; poucas tentativas (não é pra
+      // ficar reabrindo pra sempre se a etapa genuinamente acabou).
+      const MAX_TENTATIVAS_REABRIR_ETAPA = 3;
 
       while (true) {
-        const linhasAtuais = page.locator('table#item:visible tbody tr');
-        const totalAtual = await linhasAtuais.count();
+        let linhasAtuais = tabelaAtual.locator('tbody tr');
+        let totalAtual = await linhasAtuais.count();
 
         let linhaAlvo = null;
         let cabecalhoAlvo = null;
@@ -220,7 +249,58 @@ async function coletarDadosAcompanhamento() {
           break;
         }
 
-        if (!linhaAlvo) break; // nenhum livro pendente sobrou na lista atual
+        if (!linhaAlvo && totalAtual === 0 && livrosProcessados.size < totalLivrosInicial) {
+          for (
+            let tentativa = 0;
+            tentativa < MAX_TENTATIVAS_REABRIR_ETAPA && totalAtual === 0;
+            tentativa++
+          ) {
+            console.warn(
+              `[Coleta Acomp] ⚠️ Etapa '${etapa}': lista de livros sumiu depois de fechar a OS ` +
+                `(${livrosProcessados.size}/${totalLivrosInicial} processados) — reabrindo a etapa ` +
+                `(tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
+            );
+            await etapaLink.click().catch(() => {});
+            await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+            await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+            linhasAtuais = tabelaAtual.locator('tbody tr');
+            totalAtual = await linhasAtuais.count();
+          }
+          for (let i = 0; i < totalAtual && !linhaAlvo; i++) {
+            const cabecalho = await lerCabecalhoLinha(linhasAtuais.nth(i), etapa);
+            if (!cabecalho) continue;
+            if (livrosProcessados.has(cabecalho.livro)) continue;
+            linhaAlvo = linhasAtuais.nth(i);
+            cabecalhoAlvo = cabecalho;
+          }
+        }
+
+        if (!linhaAlvo) {
+          // totalAtual > 0 mas nenhuma linha "bateu" (nem vazia nem já
+          // processada) — sinal de que a lista existe mas está num estado
+          // inesperado (linhas vazias, ou o "número do livro" mudou de
+          // valor entre leituras). Loga e salva diagnóstico pra investigar,
+          // já que a contagem esperada (totalLivrosInicial) não bate com o
+          // que foi de fato processado.
+          if (livrosProcessados.size < totalLivrosInicial && !diagnosticoOsSalvo) {
+            const amostra =
+              totalAtual > 0
+                ? await linhasAtuais
+                    .nth(0)
+                    .locator('td')
+                    .allInnerTexts()
+                    .catch(() => ['<falhou ao ler>'])
+                : [];
+            console.error(
+              `[Coleta Acomp] ❌ Etapa '${etapa}': parou em ${livrosProcessados.size} livros ` +
+                `processados (esperado ${totalLivrosInicial}), tabela com ${totalAtual} linhas ` +
+                `visíveis depois de tentar reabrir. 1ª linha: ${JSON.stringify(amostra)}`,
+            );
+            diagnosticoOsSalvo = true;
+            await salvarDiagnostico(page, `lista_travada_${etapa.replace(/[^\w-]/g, '_')}`);
+          }
+          break; // nenhum livro pendente sobrou na lista atual
+        }
 
         if (livrosProcessados.size >= limiteLivros) {
           console.error(
@@ -311,7 +391,7 @@ async function coletarDadosAcompanhamento() {
           if (popup) {
             await popup.close().catch(() => {});
           } else if (usouMesmaPagina) {
-            await fecharTelaDetalheMesmaPagina(page);
+            await fecharTelaDetalheMesmaPagina(page, tabelaAtual);
           }
         }
       }
@@ -322,7 +402,7 @@ async function coletarDadosAcompanhamento() {
       );
 
       etapasProcessadas.add(etapa);
-      await etapas.nth(etapaIndex).click();
+      await etapaLink.click(); // recolhe a etapa atual antes de ir pra próxima
       etapaIndex++;
       await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     }

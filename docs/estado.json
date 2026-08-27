@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T13:19:50.474Z",
+  "atualizado_em": "2026-08-27T14:07:14.037Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "5057f53",
+  "commit": "beaefc9",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -537,6 +537,13 @@
       "skill": "/projeto-novo",
       "evento": "Coluna smart adicionada em contr_execucao_leitura",
       "detalhe": "Usuario pediu mais uma coluna: smart (varchar(255), mesmo padrao das demais). Adicionada via ALTER TABLE ADD COLUMN como postgres dentro do supabase-db, confirmada via information_schema.columns. Mesma situacao das 7 colunas do Adendo original da ADR 0018: nao populada pelo scraper ainda, origem/uso nao especificados no pedido, fica pendente de instrucao futura."
+    },
+    {
+      "data": "2026-08-27T14:07:14.036Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Scraper de acompanhamento reescrito: clica em cada OS pra coletar UCs (uc/codigo/equipamento/tipo_especificacao/faturamento/leitura_atual)",
+      "detalhe": "Usuario indicou de onde vem as 7 colunas que ficaram pendentes na ADR 0018 (Adendo original): na tabela de livros de cada etapa, a coluna numero da OS tem um link (javascript:update(ID, editarTarefasLeituraAction.do?acompanhamento=S)) que abre uma tabela por UC/medidor do livro. Confirmado com o usuario via pergunta direta: abre em popup/nova aba, nao navega na mesma pagina. Reescrito copelScraperService.js: antes 1 livro = 1 linha extraida em lote via page.evaluate da table#item inteira; agora, pra cada linha da lista de livros, clica no link da celula de indice 3 (mesma posicao de numero_os no parser antigo), captura o popup via waitForEvent(popup) em paralelo ao clique, extrai a tabela #tabFixedHeader de dentro do popup (indices confirmados contra HTML real fornecido: 1=UC, 2=equip., 3=tipo espec., 5=faturar?, 7=leit. atual e 8=mensagem 1 sao inputs readonly, valor no atributo value nao no innerText), fecha o popup, segue pro proximo livro sem goBack (lista continua intacta ao fundo). Falha por livro isolada (try/catch) nao trava a etapa inteira - importante dado o volume (uma etapa tinha 274 livros no print do usuario). O scraper agora retorna array de objetos (nao mais arrays posicionais) - copelImportService.js reescrito pra receber campos nomeados direto, com parseSituacaoColaborador() nova (separa Em Execucao (CPO-NOME) em situacao + colaborador, mesma regex de SITUACAO_REGEX ja usada em atividadeColaboradoresService.js) e batching do INSERT em lotes de 300 linhas (um livro pode gerar dezenas de linhas agora, volume cresceu bastante em relacao a quando era 1 linha por livro - evita estourar limite de 65535 parametros do Postgres). Testado isoladamente: importarParaPostgres chamado com 2 registros mockados (2 UCs do mesmo livro, dados baseados no print e HTML reais fornecidos pelo usuario) dentro de transacao com rollback, sem persistir dado de teste - resultado bateu exatamente (etapa limpo pra 17, situacao Em Execucao, colaborador WELTON RICARDO VEIGA VIEIRA com prefixo CPO- removido, uc/codigo/equipamento/tipo_especificacao/faturamento/leitura_atual todos corretos). npm test (12 testes) continua passando. NAO testado ao vivo contra o portal Copel real nesta sessao - a extracao de fato (clique real, leitura do popup) so vai ser exercitada no proximo ciclo do job de coleta automatica, dentro da janela 07h-19h; nao foi disparada manualmente pra nao gerar carga extra no sistema de terceiros fora do ciclo ja agendado. Ver Adendo 2 da ADR 0018."
     }
   ]
 }

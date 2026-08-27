@@ -189,6 +189,34 @@ se o popup não abrir como esperado, ou os índices de coluna estiverem errados,
 mostrar `0 UCs` mesmo com livros presentes, ou os logs de erro por livro (`⚠️ Falha ao abrir
 OS...`) vão aparecer em volume.
 
+### Correção pós-primeiro-ciclo-real: popup nunca abre, era "mesma página"
+
+O primeiro ciclo automático depois desta mudança rodou contra o portal real e confirmou
+exatamente o cenário de risco acima: `Etapa 'ETAPA 15 - (6)': 0/6 livros com OS aberta, 0 UCs
+coletadas`, com `⚠️ Falha ao abrir OS do livro '021674'... Timeout 15000ms exceeded while
+waiting for event "popup"` repetido nos 6 livros. O clique acontecia (sem erro no `.click()`
+em si), mas o evento `popup` do Playwright nunca disparava — sinal de que a "nova tela" que o
+usuário via na prática é um modal/iframe carregado via AJAX **na mesma página** (padrão comum
+em telas Struts como esta, apesar da resposta anterior do usuário ter descrito como popup/
+nova aba), não uma janela de verdade.
+
+Corrigido para cobrir os dois casos ao mesmo tempo: dispara `page.waitForEvent('popup', {timeout:
+10000})` e `page.waitForSelector('#tabFixedHeader', {timeout: 10000, state: 'visible'})` em
+paralelo, e usa `Promise.any` (não `Promise.race`) — resolve assim que **qualquer uma** tiver
+sucesso, só rejeita se as duas falharem (com `Promise.race`, a que expira primeiro derrubaria
+a tentativa mesmo que a outra estivesse a caminho de funcionar). Se veio de `#tabFixedHeader`
+na mesma página, extrai de `page` em vez de `popup`, e faz `page.goBack()` depois (o caso
+popup só fecha a popup, sem precisar voltar). Se nenhuma das duas vier, salva um diagnóstico
+(screenshot + texto — `salvarDiagnostico`, já existente para falha de login) **só na primeira
+falha da execução inteira**, não uma captura por livro, para não gerar centenas de arquivos se
+o problema for sistêmico.
+
+Não validado ao vivo de novo depois desta correção — fica para o próximo ciclo automático.
+Se o diagnóstico salvo em `BACKEND/diagnosticos/acomp_os_<livro>_falhou_*.png/.txt` mostrar
+algo diferente do esperado (ex.: nem popup nem `#tabFixedHeader` — talvez a função `update()`
+dependa de outro estado, ou o índice da célula do link esteja errado), é o próximo ponto a
+investigar.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

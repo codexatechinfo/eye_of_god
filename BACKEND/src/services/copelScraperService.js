@@ -81,6 +81,10 @@ async function coletarDadosAcompanhamento() {
     const registros = [];
     let etapaIndex = 0;
     const etapasProcessadas = new Set();
+    // Só salva um diagnóstico (screenshot + texto) por execução inteira do
+    // scraper, não um por livro que falhar — evita gerar centenas de
+    // capturas se o problema for sistêmico (ex.: popup nunca abre).
+    let diagnosticoOsSalvo = false;
 
     while (true) {
       const etapas = page.locator('a.color:has-text("ETAPA")');
@@ -138,21 +142,44 @@ async function coletarDadosAcompanhamento() {
         // 'editarTarefasLeituraAction.do?acompanhamento=S')">2026...</a>.
         // Clicar de verdade (não simular via fetch) porque a função
         // update() do site pode depender de estado JS/sessão que não dá
-        // pra replicar de fora; usuário confirmou que abre em popup/nova
-        // aba — a lista de livros continua intacta ao fundo, sem precisar
-        // de goBack().
+        // pra replicar de fora.
+        //
+        // Usuário descreveu como "abre em popup/nova aba", mas o primeiro
+        // ciclo real (após esta mudança) deu timeout esperando o evento
+        // 'popup' em todos os livros testados — sinal de que a "nova tela"
+        // pode ser, na prática, um modal/iframe carregado via AJAX dentro
+        // da MESMA página (padrão comum em telas Struts como esta), não uma
+        // janela nova de verdade. Cobre os dois casos: espera popup E
+        // #tabFixedHeader aparecer na própria `page` em paralelo, usa o que
+        // vier primeiro. Se nenhum vier, salva diagnóstico (só na primeira
+        // falha do ciclo, pra não gerar uma captura por livro) e pula.
         const linkOs = linha.locator('td').nth(3).locator('a');
         if ((await linkOs.count()) === 0) continue;
 
         let popup = null;
+        let usouMesmaPagina = false;
         try {
-          [popup] = await Promise.all([
-            page.waitForEvent('popup', { timeout: 15000 }),
-            linkOs.click(),
-          ]);
-          await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+          // Promise.any (não race): resolve assim que QUALQUER uma tiver
+          // sucesso, e só rejeita se as DUAS falharem. Com race, a que
+          // expira primeiro derrubaria a tentativa mesmo que a outra ainda
+          // estivesse a caminho de dar certo.
+          const esperaPopup = page.waitForEvent('popup', { timeout: 10000 }).then(p => ({ tipo: 'popup', p }));
+          const esperaMesmaPagina = page
+            .waitForSelector('#tabFixedHeader', { timeout: 10000, state: 'visible' })
+            .then(() => ({ tipo: 'mesmaPagina' }));
 
-          const linhasUc = await extrairLinhasDetalheOs(popup);
+          await linkOs.click();
+          const resultado = await Promise.any([esperaPopup, esperaMesmaPagina]);
+
+          if (resultado.tipo === 'popup') {
+            popup = resultado.p;
+            await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+          } else {
+            usouMesmaPagina = true;
+          }
+
+          const paginaDetalhe = popup || page;
+          const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
           for (const uc of linhasUc) {
             registros.push({ ...cabecalho, ...uc });
           }
@@ -164,8 +191,19 @@ async function coletarDadosAcompanhamento() {
           console.error(
             `[Coleta Acomp] ⚠️ Falha ao abrir OS do livro '${cabecalho.livro}' (etapa ${etapa}): ${erroOs.message}`,
           );
+          if (!diagnosticoOsSalvo) {
+            diagnosticoOsSalvo = true;
+            await salvarDiagnostico(page, `os_${cabecalho.livro}_falhou`);
+          }
         } finally {
-          if (popup) await popup.close().catch(() => {});
+          if (popup) {
+            await popup.close().catch(() => {});
+          } else if (usouMesmaPagina) {
+            // Voltou na mesma página (sem popup) — precisa voltar pra lista
+            // de livros da etapa antes do próximo clique.
+            await page.goBack().catch(() => {});
+            await page.waitForTimeout(1000);
+          }
         }
       }
 

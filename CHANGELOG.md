@@ -129,6 +129,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de acompanhamento: clique no link "número da OS" nunca gerava o evento `popup` do
+  Playwright (timeout em 100% dos livros no primeiro ciclo real pós-mudança) — a tela de UCs
+  abre como modal/iframe na mesma página, não janela nova, apesar de ter sido descrita como
+  popup. Corrigido para aguardar os dois casos em paralelo (`Promise.any`) e usar o que vier;
+  diagnóstico (screenshot) salvo automaticamente na primeira falha da execução. Ver Adendo 2
+  da [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Card "Agentes em campo" (Massivas/Monitoramento de Livros) tratava todo colaborador com
   cargo MONITOR como "na base" incondicionalmente, mesmo com atividade registrada hoje.
   Agora usa a mesma checagem de atividade já usada para leituristas: MONITOR com atividade

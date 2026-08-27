@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T17:00:58.747Z",
+  "atualizado_em": "2026-08-27T17:09:17.429Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "2244296",
+  "commit": "5f8b7df",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -593,6 +593,13 @@
       "skill": "/projeto-novo",
       "evento": "Confirmado: fix do crash funcionou. Novo fix: etapa recolhe sozinha apos fechar OS, detectado por visibilidade",
       "detalhe": "Usuario rodou npm run dev no proprio terminal de novo e confirmou que o crash do Promise.any (Adendo 6) nao aconteceu mais - o erro do 2o livro apareceu como Falha ao abrir OS capturado normalmente pelo catch, sem derrubar o processo, a coleta seguiu pra etapa seguinte normalmente e a aba Massivas (nao alterada) continuou funcionando em paralelo. Investigado o novo erro (locator.click Timeout 30000ms exceeded, element is not visible) usando o diagnostico automatico ja existente (screenshot salvo pelo proprio codigo na falha) - a imagem revelou que depois de fechar a tela de detalhe da OS (CANCELAR), a ETAPA INTEIRA volta RECOLHIDA (so o cabecalho ETAPA 15 - (2) visivel, sem a tabela de livros abaixo), nao uma lista vazia como a checagem anterior (Adendo 4/5, baseada em contagem de linhas) pressupunha. O elemento do proximo livro continua existindo no DOM (provavelmente display:none via CSS), entao count() de tbody tr nunca era zero e a logica de reabertura nunca disparava - o locator.click do Playwright ficava 30s inteiros tentando em vao contra um elemento existente mas invisivel. Corrigido com nova funcao garantirEtapaVisivel(), chamada no INICIO de cada volta do loop while (nao so quando a busca ja tinha falhado) - verifica tabelaAtual.isVisible() e, se false, re-clica em etapaLink ate 3 vezes, aguardando carregamento entre tentativas. Substituiu a logica anterior baseada em contagem. npm test (12 testes) continua passando. Nao validado ao vivo de novo - fica pra proxima execucao do usuario. Ver Adendo 7 da ADR 0018."
+    },
+    {
+      "data": "2026-08-27T17:09:17.429Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Confirmado: etapa 15 processou 2/2 livros com sucesso. Adicionado log de progresso por livro",
+      "detalhe": "Usuario rodou npm run dev de novo e confirmou: etapa 15 (2 livros) processou 2/2 com sucesso, 14 UCs - a correcao garantirEtapaVisivel (Adendo 7) funcionou. Na etapa 16 (66 livros), o log mostrou a mensagem tabela nao esta visivel... reabrindo repetida a cada livro (1/66, 2/66, 3/66...), sempre resolvendo na 1a tentativa - comportamento esperado (o site recolhe a etapa a cada CANCELAR), mas sem nenhuma confirmacao de sucesso entre um aviso e outro. Usuario reportou: visualmente estava abrindo corretamente e quando voltava abria o livro seguinte, mas pelo console parece que nao estava coletando - o codigo estava funcionando corretamente (contador avancando 1 a 9/66), so a falta de log por livro individual dava a impressao de travamento numa etapa com dezenas/centenas de livros (so havia 1 linha de resumo no FINAL da etapa inteira). Duas melhorias de clareza em copelScraperService.js, sem mudar comportamento funcional: 1) log por livro processado com sucesso (Livro X - N UCs, M/Total da etapa Y) logo apos incrementar os contadores; 2) mensagem de reabrindo a etapa trocada de console.warn para console.log, com texto explicando que e comportamento normal do site (antes soava como falha repetida). npm test (12 testes) continua passando. Ver Adendo 8 da ADR 0018."
     }
   ]
 }

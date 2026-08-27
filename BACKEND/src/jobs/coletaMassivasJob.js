@@ -1,20 +1,12 @@
-const cron = require('node-cron');
 const { executarColetaMassivas } = require('../services/coletaMassivasService');
 const { abrirContextoTenant, fecharContextoTenant } = require('../config/db');
 
-const HORA_INICIO = 7;
-const HORA_FIM = 19;
 const PAUSA_ENTRE_CICLOS_MS = 5000;
 
 const EMPRESA_JOB_ID = process.env.EMPRESA_PRINCIPAL_ID;
 
 let emAndamento = false;
 let loopAtivo = false;
-
-function dentroDaJanela() {
-  const hora = new Date().getHours();
-  return hora >= HORA_INICIO && hora < HORA_FIM;
-}
 
 async function executarUmCiclo() {
   if (emAndamento) {
@@ -39,24 +31,25 @@ async function executarUmCiclo() {
   }
 }
 
+// Loop roda 24h enquanto a API estiver no ar — sem janela de horário
+// (removida a pedido do usuário: antes só rodava 07h-19h). executarUmCiclo()
+// já engole qualquer erro (try/catch interno), então este while(true) só
+// para se o processo Node inteiro morrer.
 async function loopContinuo() {
   if (loopAtivo) return;
   loopAtivo = true;
-  console.log('[Massivas] 🔁 Iniciando loop contínuo (07h–19h).');
+  console.log('[Massivas] 🔁 Iniciando loop contínuo (24h, sem janela de horário).');
 
-  while (dentroDaJanela()) {
+  while (true) {
     await executarUmCiclo();
     await new Promise(r => setTimeout(r, PAUSA_ENTRE_CICLOS_MS));
   }
-
-  loopAtivo = false;
-  console.log('[Massivas] 🌙 Fora da janela (19h), loop pausado até amanhã às 07h.');
 }
 
-// Ver mesmo comentário em coletaJob.js — node-cron não faz retry quando
-// perde o disparo agendado (log real visto em produção: node-cron perdeu a
-// execução das 07h porque o processo estava reiniciando naquele exato
-// minuto). Watchdog reinicia sozinho se detectar que deveria estar rodando.
+// Rede de segurança: se por algum motivo o loop parar (não deveria, dado que
+// executarUmCiclo() nunca deixa erro escapar), reinicia sozinho. Checa a
+// cada 2 minutos — loopContinuo() já é idempotente (`if (loopAtivo) return`),
+// então chamar de novo enquanto já está rodando não faz nada.
 const INTERVALO_WATCHDOG_MS = 2 * 60 * 1000;
 
 function iniciarJobMassivas() {
@@ -64,23 +57,18 @@ function iniciarJobMassivas() {
     console.error('[Massivas] ❌ EMPRESA_PRINCIPAL_ID não definido no .env — job não iniciado.');
     return;
   }
-  cron.schedule('0 7 * * *', loopContinuo);
-  console.log('[Massivas] 📅 Loop agendado para iniciar todo dia às 07h e rodar até 19h.');
-
-  if (dentroDaJanela()) {
-    loopContinuo();
-  }
+  loopContinuo();
 
   setInterval(() => {
-    if (dentroDaJanela() && !loopAtivo && !emAndamento) {
-      console.warn('[Massivas] 🩹 Watchdog: deveria estar rodando (dentro da janela) mas não estava — reiniciando o loop.');
+    if (!loopAtivo && !emAndamento) {
+      console.warn('[Massivas] 🩹 Watchdog: loop não estava rodando — reiniciando.');
       loopContinuo();
     }
   }, INTERVALO_WATCHDOG_MS);
 }
 
 function obterStatus() {
-  return { ativo: loopAtivo, emAndamento, dentroDaJanela: dentroDaJanela() };
+  return { ativo: loopAtivo, emAndamento };
 }
 
 module.exports = { iniciarJobMassivas, obterStatus };

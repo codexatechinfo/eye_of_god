@@ -642,6 +642,13 @@
       "skill": "/projeto-novo",
       "evento": "Fix: coleta terminava cedo demais - lista de etapas carrega aos poucos conforme rola a pagina, nao paginada",
       "detalhe": "Usuario reportou que a coleta terminou com sucesso na ETAPA 18 (Extracao concluida, dados inseridos) mas ainda tinham muitas outras etapas que nunca foram tentadas. Perguntado como as etapas seguintes aparecem no portal - usuario confirmou que nao ha paginacao nem botao carregar mais, todas ja estao disponiveis mas so aparecem no DOM conforme a pagina rola pra baixo, mesmo processo manual de antes do scraper existir. O count() de a.color:has-text(ETAPA) so enxergava o que ja tinha sido renderizado, entao o loop while (etapaIndex >= count) break contava como acabou assim que esgotava a primeira leva renderizada. Corrigido com nova funcao aguardarTodasEtapasCarregadas(page) que rola a pagina ate o fim em passos (window.scrollTo), medindo a contagem de links ETAPA a cada passo, parando quando estabiliza (2 leituras iguais seguidas) - chamada no setup inicial e sempre que o loop parece ter chegado ao fim, so decidindo que acabou de verdade depois de confirmar que rolar nao revela mais nada. npm test (12 testes) continua passando. Nao validado ao vivo nesta sessao. Ver Adendo 13 da ADR 0018."
+    },
+    {
+      "data": "2026-08-27T22:38:19.397Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Feature: removida janela de horario 07h-19h dos jobs de coleta - agora rodam continuamente enquanto a API estiver no ar",
+      "detalhe": "Usuario pediu explicitamente para tirar a limitacao de horario e deixar coletar o tempo todo enquanto a API estiver no ar. Removida a logica de janela dos dois jobs (coletaJob.js e coletaMassivasJob.js): dentroDaJanela(), HORA_INICIO/HORA_FIM, e o cron.schedule diario que so existia pra reativar o loop as 07h. Agora iniciarJobColeta()/iniciarJobMassivas() chamam loopContinuo() direto no boot e o while interno roda while(true) em vez de while(dentroDaJanela()) - nunca pausa sozinho. node-cron deixou de ser usado nesses dois arquivos (dependencia mantida no package.json, nao usada em mais nenhum lugar, fora do escopo mexer nisso). Watchdog continua como rede de seguranca, agora checando so se o loop parou, sem depender de janela. Removido o campo dentroDaJanela de obterStatus() e, no frontend, o estado fora-do-horario do indicador de status no header - Home.verificarStatusColeta() simplificado pra so coletando/parada/offline, home.html ajustado pras mesmas classes sem o cinza que nunca mais vai ocorrer. npm test (12 testes) e ng build --configuration production continuam passando. Nao validado ao vivo nesta sessao. Ver Adendo da ADR 0017."
     }
   ]
 }

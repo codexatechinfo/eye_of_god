@@ -160,13 +160,11 @@
           [ngClass]="{
             'bg-emerald-500/10 border-emerald-500/30': statusColeta() === 'coletando',
             'bg-red-500/10 border-red-500/30': statusColeta() === 'parada' || statusColeta() === 'offline',
-            'bg-slate-400/10 border-slate-400/30': statusColeta() === 'fora-do-horario',
             'bg-amber-400/10 border-amber-400/30': statusColeta() === null
           }"
           [title]="
             statusColeta() === 'coletando' ? 'O job de coleta está ativo e importando dados agora' :
-            statusColeta() === 'parada' ? 'Deveria estar coletando (dentro do horário 07h-19h), mas o job não está ativo' :
-            statusColeta() === 'fora-do-horario' ? 'Fora do horário de coleta (07h-19h) — pausa esperada' :
+            statusColeta() === 'parada' ? 'O job de coleta não está ativo' :
             statusColeta() === 'offline' ? 'Não foi possível falar com a API' : 'Verificando...'
           "
         >
@@ -180,7 +178,6 @@
               [ngClass]="{
                 'bg-emerald-500': statusColeta() === 'coletando',
                 'bg-red-500': statusColeta() === 'parada' || statusColeta() === 'offline',
-                'bg-slate-400': statusColeta() === 'fora-do-horario',
                 'bg-amber-400': statusColeta() === null
               }"
             ></span>
@@ -190,14 +187,12 @@
             [ngClass]="{
               'text-emerald-400': statusColeta() === 'coletando',
               'text-red-400': statusColeta() === 'parada' || statusColeta() === 'offline',
-              'text-slate-400': statusColeta() === 'fora-do-horario',
               'text-amber-400': statusColeta() === null
             }"
           >
             {{
               statusColeta() === 'coletando' ? 'Coletando dados' :
               statusColeta() === 'parada' ? 'Coleta parada' :
-              statusColeta() === 'fora-do-horario' ? 'Fora do horário' :
               statusColeta() === 'offline' ? 'API Offline' : 'Verificando...'
             }}
           </span>

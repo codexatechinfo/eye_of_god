@@ -72,3 +72,31 @@ conseguir fechar o contexto se ele chegou a abrir.
   ativo e não está) está confirmado.
 - Suíte de isolamento de tenant (12 testes) continua passando — mudança isolada nos dois
   arquivos de job, sem tocar em rota, controller nem schema.
+
+## Adendo — janela de horário (07h-19h) removida a pedido do usuário
+
+Usuário pediu explicitamente para coletar continuamente enquanto a API estiver no ar, sem
+pausar às 19h e sem esperar até as 07h do dia seguinte.
+
+Removida a lógica de janela nos dois jobs (`dentroDaJanela()`, `HORA_INICIO`/`HORA_FIM`, o
+`cron.schedule('0 7 * * *', ...)` que só existia pra reativar o loop diariamente). Agora
+`iniciarJobColeta()`/`iniciarJobMassivas()` chamam `loopContinuo()` direto no boot, e o
+`while` interno roda `while (true)` em vez de `while (dentroDaJanela())` — nunca pausa
+sozinho. `node-cron` deixou de ser usado nesses dois arquivos (dependência não removida do
+`package.json` — não usada em mais nenhum lugar do projeto, mas não vale a pena mexer nisso
+fora do escopo pedido).
+
+O watchdog (mecanismo principal desta ADR) continua existindo como rede de segurança — antes
+verificava "deveria estar rodando (dentro da janela) mas não está"; agora verifica só "não
+está rodando", já que a expectativa passou a ser sempre ativo. `executarUmCiclo()` já engolia
+todo erro internamente, então na prática o loop nunca deveria parar sozinho — o watchdog cobre
+o cenário residual de o processo Node reiniciar e o boot-check falhar por algum motivo.
+
+Removido também o campo `dentroDaJanela` de `obterStatus()` (não fazia mais sentido existir)
+e, no frontend, o estado `'fora-do-horario'` do indicador "Coletando dados" no header —
+`verificarStatusColeta()` (`FRONTEND/src/app/pages/home/home.ts`) simplificado para só
+`'coletando'`/`'parada'`/`'offline'`, e o template (`home.html`) ajustado para as mesmas 3
+classes de cor/texto, sem o cinza de "fora do horário" que nunca mais vai ocorrer.
+
+`npm test` (12 testes) e `ng build --configuration production` continuam passando. Não
+validado ao vivo nesta sessão — fica pra próxima execução do usuário.

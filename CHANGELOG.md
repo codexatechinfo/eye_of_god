@@ -59,6 +59,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Jobs de coleta (`coletaJob.js`/`coletaMassivasJob.js`): removida a janela de horário
+  (07h-19h) a pedido do usuário — agora rodam continuamente enquanto a API estiver no ar,
+  sem pausar à noite. `node-cron` deixou de ser usado nesses arquivos; o watchdog continua
+  como rede de segurança, agora só checando "o loop parou?" em vez de "deveria estar dentro
+  da janela mas não está". Removido também o estado "Fora do horário" do indicador de
+  status no header (`Home`) — não existe mais esse cenário. Ver Adendo da
+  [ADR 0017](docs/adr/0017-watchdog-loop-coleta.md).
 - Scraper de acompanhamento: log de progresso por livro coletado (`📖 Livro 'X' — N UCs
   (M/Total)`), não só um resumo no final da etapa inteira — dava a impressão de "travado"
   em etapas com dezenas/centenas de livros. Mensagem de "etapa recolheu, reabrindo" (o site

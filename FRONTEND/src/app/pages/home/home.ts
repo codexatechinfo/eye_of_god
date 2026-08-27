@@ -11,7 +11,7 @@ import { MapaBases } from './components/mapa-bases/mapa-bases';
 import { MassivasView } from './components/massivas-view/massivas-view';
 import { ImportacaoView } from './components/importacao-view/importacao-view';
 
-type StatusColeta = 'coletando' | 'parada' | 'fora-do-horario' | 'offline' | null;
+type StatusColeta = 'coletando' | 'parada' | 'offline' | null;
 // 'monitoramento' é a aba Trilho (rótulo mudou, chave não — ver ADR 0006).
 // 'livros' é Monitoramento de Livros (leitura/releitura); 'massivas' é a
 // aba nova, dedicada só a massiva (ver ADR 0010).
@@ -20,7 +20,6 @@ type Aba = 'monitoramento' | 'livros' | 'massivas' | 'importacao';
 interface StatusJob {
   ativo: boolean;
   emAndamento: boolean;
-  dentroDaJanela: boolean;
 }
 
 interface StatusColetaResponse {
@@ -71,13 +70,7 @@ export class Home implements OnInit, OnDestroy {
     this.http.get<StatusColetaResponse>(`${environment.apiUrl}/coleta/status`).subscribe({
       next: resposta => {
         const acomp = resposta.coletaAcomp;
-        if (acomp.dentroDaJanela && acomp.ativo) {
-          this.statusColeta.set('coletando');
-        } else if (acomp.dentroDaJanela && !acomp.ativo) {
-          this.statusColeta.set('parada');
-        } else {
-          this.statusColeta.set('fora-do-horario');
-        }
+        this.statusColeta.set(acomp.ativo ? 'coletando' : 'parada');
         this.ultimoImport.set(resposta.ultimoImport);
       },
       error: () => {

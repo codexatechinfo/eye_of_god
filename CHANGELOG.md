@@ -7,6 +7,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de Acompanhamento: a coleta terminava "com sucesso" cedo demais, sem processar
+  todas as etapas — a lista de etapas não é paginada, mas carrega no DOM aos poucos
+  conforme a página rola pra baixo (confirmado com o usuário: mesmo processo manual de
+  antes do scraper existir); o loop achava que tinha acabado assim que esgotava a primeira
+  leva já renderizada. Nova `aguardarTodasEtapasCarregadas()` rola a página até o fim,
+  parando quando a contagem de etapas estabiliza — chamada no setup inicial e sempre que o
+  loop parece ter chegado ao fim, antes de confirmar de verdade. Ver Adendo 13 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de Acompanhamento: um erro fatal numa etapa (ex.: o clique de recolher no final)
   derrubava a coleta **inteira**, perdendo etapas seguintes que ainda nem tinham sido
   tentadas — visto ao vivo na ETAPA 18 (187 livros): degradou no meio depois de uma falha

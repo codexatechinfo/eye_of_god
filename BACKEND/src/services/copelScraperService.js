@@ -128,6 +128,34 @@ function tabelaDaEtapa(etapaLink) {
   return etapaLink.locator('xpath=following::table[@id="item"][1]');
 }
 
+// A lista de etapas da aba Acompanhamento carrega de forma "preguiçosa": o
+// usuário confirmou que todas as etapas já estão disponíveis, mas só
+// aparecem no DOM conforme a página rola pra baixo — o mesmo processo manual
+// de antes do scraper existir. Sem isso, o loop de etapas parava cedo (ex.:
+// achava que só existiam 18 etapas quando na verdade havia muitas mais mais
+// abaixo) porque `count()` só enxerga o que já foi renderizado. Rola até o
+// fim da página em passos, checando se a contagem de links "ETAPA" ainda
+// está crescendo — para quando ela estabiliza (2 leituras iguais seguidas),
+// não por um tempo fixo.
+async function aguardarTodasEtapasCarregadas(page) {
+  const etapas = page.locator('a.color:has-text("ETAPA")');
+  let anterior = -1;
+  let estavel = 0;
+  for (let tentativa = 0; tentativa < 100; tentativa++) {
+    const atual = await etapas.count();
+    if (atual === anterior) {
+      estavel++;
+      if (estavel >= 2) return atual;
+    } else {
+      estavel = 0;
+    }
+    anterior = atual;
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+  return anterior;
+}
+
 async function contarLinhasTabFixedHeader(paginaDetalhe) {
   return paginaDetalhe
     .locator('#tabFixedHeader tbody tr')
@@ -182,6 +210,7 @@ async function coletarDadosAcompanhamento() {
     await page.selectOption('select[name="searchEmpreiteiraId"]', { label: 'F IMM BRASIL LTDA' });
     await page.click('#botaoBuscar');
     await page.waitForSelector('a.color:has-text("ETAPA")', { timeout: 60000 });
+    await aguardarTodasEtapasCarregadas(page);
 
     const registros = [];
     let etapaIndex = 0;
@@ -197,8 +226,15 @@ async function coletarDadosAcompanhamento() {
 
     while (true) {
       const etapas = page.locator('a.color:has-text("ETAPA")');
-      const count = await etapas.count();
-      if (etapaIndex >= count) break;
+      let count = await etapas.count();
+      if (etapaIndex >= count) {
+        // Pode não ser o fim de verdade — a lista carrega mais etapas
+        // conforme rola pra baixo (ver aguardarTodasEtapasCarregadas). Só
+        // decide que acabou depois de confirmar que rolar até o fim não
+        // revela mais nenhuma etapa nova.
+        count = await aguardarTodasEtapasCarregadas(page);
+        if (etapaIndex >= count) break;
+      }
 
       const etapaLink = etapas.nth(etapaIndex);
       const etapa = (await etapaLink.innerText()).trim();

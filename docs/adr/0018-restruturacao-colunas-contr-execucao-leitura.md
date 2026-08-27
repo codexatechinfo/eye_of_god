@@ -628,6 +628,30 @@ sido tentadas.
 `npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
 próxima execução do usuário.
 
+## Adendo 13 — a coleta parava cedo: lista de etapas carrega aos poucos conforme rola a página
+
+Usuário reportou: a coleta terminou "com sucesso" na ETAPA 18 (`✅ Extração concluída`, dados
+inseridos no banco), mas "ainda tinham muitas outras" etapas que nunca foram nem tentadas.
+
+Confirmado com o usuário: a lista de etapas não é paginada nem tem botão "carregar mais" —
+todas já estão disponíveis, mas só aparecem no DOM conforme a página rola pra baixo (mesmo
+processo manual de antes do scraper existir, quando ele mesmo rolava a tela pra encontrar as
+etapas seguintes). `page.locator('a.color:has-text("ETAPA")').count()` só enxerga o que já
+foi renderizado — o loop `while (etapaIndex >= count) break` estava contando como "acabou"
+assim que esgotava a primeira leva renderizada, sem nunca ter rolado a página pra revelar o
+resto.
+
+Nova função `aguardarTodasEtapasCarregadas(page)`: rola a página até o fim em passos
+(`window.scrollTo(0, document.body.scrollHeight)`), medindo a contagem de links "ETAPA" a
+cada passo — para quando a contagem estabiliza (2 leituras iguais seguidas), não por um
+número de rolagens fixo. Chamada em dois pontos: uma vez no setup inicial (logo após a busca,
+antes de começar a processar a primeira etapa) e, principalmente, sempre que o loop parece
+ter chegado ao fim (`etapaIndex >= count`) — só decide que acabou de verdade depois de
+confirmar que rolar até o fim não revela nenhuma etapa nova.
+
+`npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
+próxima execução do usuário.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

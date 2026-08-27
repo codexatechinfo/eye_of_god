@@ -149,7 +149,7 @@ async function listarAtividadeHoje(db) {
   const [{ rows: linhas }, mapaPrazoRegulatorio] = await Promise.all([
     db.query(
       `
-      SELECT livro, etapa, situacao, qtd_digitados_nao_digitados, hora_import,
+      SELECT livro, etapa, situacao, hora_import,
         data_recebimento, data_prevista_limite
       FROM contr_execucao_leitura
       WHERE data_import = $1
@@ -170,7 +170,11 @@ async function listarAtividadeHoje(db) {
     if (!match) continue;
 
     const nome = match[3].trim();
-    const { digitados, naoDigitados } = parseQtd(linha.qtd_digitados_nao_digitados);
+    // qtd_digitados_nao_digitados saiu de contr_execucao_leitura (ver
+    // copelImportService.js) — zerado até a nova lógica de progresso ser
+    // definida com as colunas da aba nova do portal (uc/leitura_atual/etc).
+    const digitados = 0;
+    const naoDigitados = 0;
     // etapa vem às vezes como "ETAPA 09 - (66)" (contagem que varia a cada
     // ciclo) e às vezes já limpa ("09"); fica só com o número.
     const etapaLimpa = (linha.etapa || '').match(/\d+/)?.[0] ?? linha.etapa;

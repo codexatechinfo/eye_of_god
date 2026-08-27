@@ -35,10 +35,13 @@ async function calcularLeituraUrbana(db) {
       MIN(to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')) AS prazo_min,
       MAX(to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')) AS prazo_max,
       COUNT(*)::int AS livros,
-      SUM(CASE WHEN c.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$'
-          THEN split_part(c.qtd_digitados_nao_digitados, '/', 1)::int ELSE 0 END)::int AS digitados,
-      SUM(CASE WHEN c.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$'
-          THEN split_part(c.qtd_digitados_nao_digitados, '/', 2)::int ELSE 0 END)::int AS nao_digitados,
+      -- qtd_digitados_nao_digitados saiu do schema (contr_execucao_leitura
+      -- agora só guarda etapa/localidade/livro/empreiteira/datas/situacao +
+      -- uc/colaborador/codigo/equipamento/tipo_especificacao/faturamento/
+      -- leitura_atual, ainda sem scraping); zerado até a nova lógica de
+      -- progresso ser definida com as colunas da aba nova do portal.
+      0::int AS digitados,
+      0::int AS nao_digitados,
       COUNT(DISTINCT CASE WHEN c.situacao LIKE 'Em Execução%'
           THEN regexp_replace(c.situacao, '^Em Execução \\([^-]*-(.*)\\)$', '\\1')
           END)::int AS leituristas_ativos

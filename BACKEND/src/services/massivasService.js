@@ -235,6 +235,16 @@ function condicaoQuantidadeNao(coluna) {
   return `CASE WHEN ${coluna} ~ '^[0-9]+/[0-9]+$' THEN split_part(${coluna}, '/', 2)::int ELSE 0 END`;
 }
 
+// qtd_digitados_nao_digitados saiu de contr_execucao_leitura (ver
+// copelImportService.js) — todo digitados/nao_digitados calculado a partir
+// dela fica zerado até a nova lógica de progresso ser definida com as
+// colunas da aba nova do portal (uc/leitura_atual/etc). Fonte massiva
+// (t.qtd_digitados_nao_digitados, pendentes_im/atribuidas_im/em_execucao_im)
+// não foi tocada — continua usando condicaoQuantidade/condicaoQuantidadeNao
+// normalmente.
+const CONTR_DIGITADOS_SQL = '0';
+const CONTR_NAO_DIGITADOS_SQL = '0';
+
 async function contarTabela(db, chave, dataImport, horaImport, filtros) {
   const { nome, temLeiturista } = TABELAS_MASSIVA[chave];
   const { semResultado, condicoes, parametros } = construirCondicoes({ ...filtros, temLeiturista });
@@ -296,8 +306,11 @@ async function contarFonteContr(db, statusChave, tipoServico, dataImport, horaIm
   const condicaoPrazoInterna = condicaoSqlPrazoContr(filtros.condicaoPrazo);
   if (condicaoPrazoInterna) condicoesExtras.push(condicaoPrazoInterna);
 
-  const digitados = condicaoQuantidade('c.qtd_digitados_nao_digitados');
-  const naoDigitados = condicaoQuantidadeNao('c.qtd_digitados_nao_digitados');
+  // qtd_digitados_nao_digitados saiu de contr_execucao_leitura (ver
+  // copelImportService.js) — zerado até a nova lógica de progresso ser
+  // definida com as colunas da aba nova do portal.
+  const digitados = CONTR_DIGITADOS_SQL;
+  const naoDigitados = CONTR_NAO_DIGITADOS_SQL;
 
   const sql = `
     SELECT COUNT(*)::int AS livros, COALESCE(SUM(digitados) + SUM(nao_digitados), 0)::int AS leituras
@@ -310,7 +323,7 @@ async function contarFonteContr(db, statusChave, tipoServico, dataImport, horaIm
       ${joinCalendarioContr()}
       WHERE c.data_import = $1 AND c.hora_import = $2
         ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
-      ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
+      ORDER BY c.livro, id ASC
     ) escolhido
     WHERE 1 = 1
       ${rotulo ? `AND status_calc = '${rotulo}'` : ''}
@@ -447,8 +460,10 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
     condicoesExtras.push(`cl.regional = $${parametros.length + 2}`);
   }
 
-  const digitados = condicaoQuantidade('c.qtd_digitados_nao_digitados');
-  const naoDigitados = condicaoQuantidadeNao('c.qtd_digitados_nao_digitados');
+  // qtd_digitados_nao_digitados saiu de contr_execucao_leitura — zerado até
+  // a nova lógica de progresso ser definida (ver CONTR_DIGITADOS_SQL).
+  const digitados = CONTR_DIGITADOS_SQL;
+  const naoDigitados = CONTR_NAO_DIGITADOS_SQL;
 
   // livros = 1 linha por livro (contagem direta); leituras = soma de
   // digitados+não digitados do próprio livro — mesma dupla {livros,
@@ -748,8 +763,10 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
   if (condicaoTipo) condicoesExtras.push(condicaoTipo);
 
   const status = filtros.status && filtros.status !== 'todos' ? ROTULO_STATUS[filtros.status] : null;
-  const digitados = condicaoQuantidade('c.qtd_digitados_nao_digitados');
-  const naoDigitados = condicaoQuantidadeNao('c.qtd_digitados_nao_digitados');
+  // qtd_digitados_nao_digitados saiu de contr_execucao_leitura — zerado até
+  // a nova lógica de progresso ser definida (ver CONTR_DIGITADOS_SQL).
+  const digitados = CONTR_DIGITADOS_SQL;
+  const naoDigitados = CONTR_NAO_DIGITADOS_SQL;
 
   const condicaoPrazoExterna = condicaoSqlPrazoContr(filtros.prazo);
   if (condicaoPrazoExterna) condicoesExtras.push(condicaoPrazoExterna);
@@ -893,8 +910,10 @@ async function historicoMassivaLivro(db, livro) {
 }
 
 async function historicoContrLivro(db, livro) {
-  const digitados = condicaoQuantidade('c.qtd_digitados_nao_digitados');
-  const naoDigitados = condicaoQuantidadeNao('c.qtd_digitados_nao_digitados');
+  // qtd_digitados_nao_digitados saiu de contr_execucao_leitura — zerado até
+  // a nova lógica de progresso ser definida (ver CONTR_DIGITADOS_SQL).
+  const digitados = CONTR_DIGITADOS_SQL;
+  const naoDigitados = CONTR_NAO_DIGITADOS_SQL;
 
   const sql = `
     SELECT ${STATUS_CONTR_SQL} AS status,

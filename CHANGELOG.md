@@ -5,6 +5,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Alterado
+
+- `contr_execucao_leitura` reestruturada: removidas `tipo_oss`, `subtipo_os`, `numero_os`,
+  `data_ultima_atualizacao`, `qtd_digitados_nao_digitados`, `qtd_com_leitura_sem_leitura`,
+  `percentual_sem_leitura`, `qtd_fora_de_faixa_foto`; adicionadas `uc`, `colaborador`,
+  `codigo`, `equipamento`, `tipo_especificacao`, `faturamento`, `leitura_atual` (ainda sem
+  scraping — vêm de outra aba do portal Copel, a indicar). **Efeito colateral temporário**:
+  progresso/percentual de execução de leitura/releitura (Monitoramento de Livros e Trilho)
+  fica zerado até a nova lógica ser definida com as colunas novas — massiva não é afetada.
+  Ver [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+
 ### Adicionado
 
 - Toggle "Afastados" na barra de filtros do Trilho (5º, ao lado de Parado/Sem serviço/

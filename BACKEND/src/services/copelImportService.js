@@ -1,8 +1,24 @@
-const CAMPOS = [
+// Ordem posicional das colunas da tabela #item do portal Copel — o scraper
+// lê célula por célula sem nome, então essa ordem tem que continuar batendo
+// com o HTML mesmo que a tabela contr_execucao_leitura não guarde mais todas
+// elas (ver CAMPOS_TABELA abaixo). Mudar isso sem o layout do site mudar
+// junto desalinha o parse inteiro.
+const CAMPOS_SCRAPER = [
   'etapa', 'tipo_oss', 'subtipo_os', 'numero_os', 'localidade', 'livro',
   'empreiteira', 'data_recebimento', 'hora_recebimento', 'data_prevista_limite',
   'data_ultima_atualizacao', 'qtd_digitados_nao_digitados', 'qtd_com_leitura_sem_leitura',
   'percentual_sem_leitura', 'qtd_fora_de_faixa_foto', 'situacao'
+];
+
+// Subset de CAMPOS_SCRAPER que a tabela contr_execucao_leitura ainda guarda.
+// tipo_oss/subtipo_os/numero_os/data_ultima_atualizacao/qtd_digitados_nao_digitados/
+// qtd_com_leitura_sem_leitura/percentual_sem_leitura/qtd_fora_de_faixa_foto saíram
+// do schema; uc/colaborador/codigo/equipamento/tipo_especificacao/faturamento/
+// leitura_atual foram adicionadas mas vêm de outra aba do portal (scraping
+// ainda não implementado) — ficam null por enquanto.
+const CAMPOS_TABELA = [
+  'etapa', 'localidade', 'livro', 'empreiteira', 'data_recebimento',
+  'hora_recebimento', 'data_prevista_limite', 'situacao',
 ];
 
 // O portal da Copel mostra a etapa como link "ETAPA 18 - (528)" — o número
@@ -28,10 +44,10 @@ async function importarParaPostgres(db, registros, empresaId) {
 
   console.log(`[Coleta Acomp] 📥 Inserindo ${registros.length} registros na tabela 'contr_execucao_leitura'...`);
 
-  const colunas = [...CAMPOS, 'data_import', 'hora_import', 'empresa_id'];
+  const colunas = [...CAMPOS_TABELA, 'data_import', 'hora_import', 'empresa_id'];
   const linhas = registros.map(linha => {
     const obj = {};
-    CAMPOS.forEach((campo, i) => { obj[campo] = linha[i] || null; });
+    CAMPOS_SCRAPER.forEach((campo, i) => { obj[campo] = linha[i] || null; });
     obj.etapa = limparEtapa(obj.etapa);
     obj.data_import = dataImport;
     obj.hora_import = horaImport;

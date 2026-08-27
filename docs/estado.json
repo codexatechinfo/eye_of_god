@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T14:07:14.037Z",
+  "atualizado_em": "2026-08-27T14:14:48.101Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "beaefc9",
+  "commit": "c3909d8",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -544,6 +544,13 @@
       "skill": "/projeto-novo",
       "evento": "Scraper de acompanhamento reescrito: clica em cada OS pra coletar UCs (uc/codigo/equipamento/tipo_especificacao/faturamento/leitura_atual)",
       "detalhe": "Usuario indicou de onde vem as 7 colunas que ficaram pendentes na ADR 0018 (Adendo original): na tabela de livros de cada etapa, a coluna numero da OS tem um link (javascript:update(ID, editarTarefasLeituraAction.do?acompanhamento=S)) que abre uma tabela por UC/medidor do livro. Confirmado com o usuario via pergunta direta: abre em popup/nova aba, nao navega na mesma pagina. Reescrito copelScraperService.js: antes 1 livro = 1 linha extraida em lote via page.evaluate da table#item inteira; agora, pra cada linha da lista de livros, clica no link da celula de indice 3 (mesma posicao de numero_os no parser antigo), captura o popup via waitForEvent(popup) em paralelo ao clique, extrai a tabela #tabFixedHeader de dentro do popup (indices confirmados contra HTML real fornecido: 1=UC, 2=equip., 3=tipo espec., 5=faturar?, 7=leit. atual e 8=mensagem 1 sao inputs readonly, valor no atributo value nao no innerText), fecha o popup, segue pro proximo livro sem goBack (lista continua intacta ao fundo). Falha por livro isolada (try/catch) nao trava a etapa inteira - importante dado o volume (uma etapa tinha 274 livros no print do usuario). O scraper agora retorna array de objetos (nao mais arrays posicionais) - copelImportService.js reescrito pra receber campos nomeados direto, com parseSituacaoColaborador() nova (separa Em Execucao (CPO-NOME) em situacao + colaborador, mesma regex de SITUACAO_REGEX ja usada em atividadeColaboradoresService.js) e batching do INSERT em lotes de 300 linhas (um livro pode gerar dezenas de linhas agora, volume cresceu bastante em relacao a quando era 1 linha por livro - evita estourar limite de 65535 parametros do Postgres). Testado isoladamente: importarParaPostgres chamado com 2 registros mockados (2 UCs do mesmo livro, dados baseados no print e HTML reais fornecidos pelo usuario) dentro de transacao com rollback, sem persistir dado de teste - resultado bateu exatamente (etapa limpo pra 17, situacao Em Execucao, colaborador WELTON RICARDO VEIGA VIEIRA com prefixo CPO- removido, uc/codigo/equipamento/tipo_especificacao/faturamento/leitura_atual todos corretos). npm test (12 testes) continua passando. NAO testado ao vivo contra o portal Copel real nesta sessao - a extracao de fato (clique real, leitura do popup) so vai ser exercitada no proximo ciclo do job de coleta automatica, dentro da janela 07h-19h; nao foi disparada manualmente pra nao gerar carga extra no sistema de terceiros fora do ciclo ja agendado. Ver Adendo 2 da ADR 0018."
+    },
+    {
+      "data": "2026-08-27T14:14:48.100Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Fix: scraper aguarda popup OU modal na mesma pagina ao clicar no link da OS",
+      "detalhe": "Primeiro ciclo automatico de coleta apos a mudanca do Adendo 2 (ADR 0018) rodou contra o portal real e confirmou o cenario de risco: Etapa ETAPA 15 - (6): 0/6 livros com OS aberta, 0 UCs coletadas, com Timeout 15000ms exceeded while waiting for event popup repetido nos 6 livros. O clique acontecia sem erro, mas o evento popup do Playwright nunca disparava - sinal de que a tela de UCs abre como modal/iframe carregado via AJAX na MESMA pagina, nao janela nova, apesar do usuario ter descrito anteriormente como popup/nova aba. Corrigido copelScraperService.js pra aguardar os dois casos em paralelo: page.waitForEvent(popup) e page.waitForSelector(#tabFixedHeader, state visible) na propria pagina, usando Promise.any (nao Promise.race - com race a que expira primeiro derrubaria a tentativa mesmo que a outra estivesse a caminho de funcionar). Se veio da mesma pagina, extrai de page e faz goBack() depois; se veio de popup, so fecha a popup. Se nenhuma das duas vier, salva diagnostico (screenshot + texto, reaproveitando salvarDiagnostico ja existente pra falha de login) so na primeira falha da execucao inteira, nao uma captura por livro, pra nao gerar centenas de arquivos se o problema for sistemico. Nao validado ao vivo de novo apos esta correcao - fica pro proximo ciclo automatico. Se o diagnostico mostrar algo diferente do esperado, e o proximo ponto a investigar. Ver Adendo 2 da ADR 0018."
     }
   ]
 }

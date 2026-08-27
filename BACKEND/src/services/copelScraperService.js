@@ -190,6 +190,10 @@ async function coletarDadosAcompanhamento() {
     // scraper, não um por livro que falhar — evita gerar centenas de
     // capturas se o problema for sistêmico (ex.: popup nunca abre).
     let diagnosticoOsSalvo = false;
+    // Diagnóstico separado para falha fatal de ETAPA INTEIRA (ver catch mais
+    // abaixo) — categoria diferente de diagnosticoOsSalvo (falha pontual de
+    // 1 livro), então uma não deve impedir a outra de ser salva.
+    let diagnosticoEtapaSalvo = false;
 
     while (true) {
       const etapas = page.locator('a.color:has-text("ETAPA")');
@@ -203,8 +207,19 @@ async function coletarDadosAcompanhamento() {
         continue;
       }
 
-      console.log(`[Coleta Acomp] ➡️ Processando etapa ${etapaIndex + 1}/${count}: ${etapa}`);
-      await etapaLink.click();
+      // Todo o processamento desta etapa (abertura, livros, recolhimento)
+      // fica dentro de um try/catch de nível de etapa — antes, qualquer erro
+      // fatal não tratado internamente (ex.: o clique de recolher no fim,
+      // linha ~460) propagava e derrubava a função inteira, perdendo TODAS
+      // as etapas seguintes mesmo que fossem processar normalmente. Visto ao
+      // vivo: uma etapa de 187 livros degradou no meio (sessão/página num
+      // estado ruim depois de falhas repetidas de abrir OS) e o timeout
+      // fatal no clique final abortou a coleta inteira, reiniciando o ciclo
+      // do zero. Agora uma etapa irrecuperável só perde ela mesma — o código
+      // segue tentando as etapas seguintes.
+      try {
+        console.log(`[Coleta Acomp] ➡️ Processando etapa ${etapaIndex + 1}/${count}: ${etapa}`);
+        await etapaLink.click();
       // Nada de tempo fixo: espera a tabela de livros DESTA etapa (não
       // qualquer #item — ver tabelaDaEtapa) ficar visível. Isso já é o
       // sinal certo — um waitForLoadState('networkidle') extra só atrasava
@@ -365,12 +380,12 @@ async function coletarDadosAcompanhamento() {
           // estar em CADA nível (original, `.then()`, e a combinação final)
           // pra realmente eliminar o risco; um catch só na promise
           // original não bastou.
-          const promPopup = page.waitForEvent('popup', { timeout: 10000 });
+          const promPopup = page.waitForEvent('popup', { timeout: 20000 });
           promPopup.catch(() => {});
           const promMesmaPagina = page
             .getByText('DADOS DE EXECUÇÃO', { exact: false })
             .first()
-            .waitFor({ timeout: 10000, state: 'visible' });
+            .waitFor({ timeout: 20000, state: 'visible' });
           promMesmaPagina.catch(() => {});
 
           // Promise.any (não race): resolve assim que QUALQUER uma tiver
@@ -429,6 +444,24 @@ async function coletarDadosAcompanhamento() {
             diagnosticoOsSalvo = true;
             await salvarDiagnostico(page, `os_${cabecalhoAlvo.livro}_falhou`);
           }
+          // "All promises were rejected" (nem popup nem "DADOS DE EXECUÇÃO"
+          // apareceram a tempo) não significa que o clique não teve efeito —
+          // a navegação real pode só ter completado DEPOIS do timeout (rede
+          // lenta). Nesse caso nem popup nem usouMesmaPagina foram marcados,
+          // então o finally normal não fecharia nada, deixando a tela de
+          // detalhe aberta e a etapa presa tentando "reabrir" uma lista que
+          // não é mais a tela ativa — visto ao vivo: essa falha seguida de 3
+          // tentativas de reabertura fracassando, e por fim um timeout fatal
+          // no clique de recolher a etapa. Checa aqui, de forma ativa, se a
+          // tela de detalhe apareceu tarde e fecha antes de seguir.
+          if (!popup && !usouMesmaPagina) {
+            const apareceuTarde = await page
+              .getByText('DADOS DE EXECUÇÃO', { exact: false })
+              .first()
+              .isVisible()
+              .catch(() => false);
+            if (apareceuTarde) usouMesmaPagina = true;
+          }
         } finally {
           if (popup) {
             await popup.close().catch(() => {});
@@ -438,16 +471,27 @@ async function coletarDadosAcompanhamento() {
         }
       }
 
-      console.log(
-        `[Coleta Acomp] ✅ Etapa '${etapa}': ${livrosComUc}/${livrosProcessados.size} livros com OS aberta ` +
-          `(${totalLivrosInicial} na lista original), ${totalUcs} UCs coletadas.`,
-      );
+        console.log(
+          `[Coleta Acomp] ✅ Etapa '${etapa}': ${livrosComUc}/${livrosProcessados.size} livros com OS aberta ` +
+            `(${totalLivrosInicial} na lista original), ${totalUcs} UCs coletadas.`,
+        );
+
+        await etapaLink.click(); // recolhe a etapa atual antes de ir pra próxima
+        // Sem espera extra aqui — a próxima volta do while já espera a
+        // tabela da PRÓXIMA etapa ficar visível antes de prosseguir.
+      } catch (erroEtapa) {
+        console.error(
+          `[Coleta Acomp] ❌ Etapa '${etapa}' interrompida por erro irrecuperável: ${erroEtapa.message} — ` +
+            'seguindo para a próxima etapa.',
+        );
+        if (!diagnosticoEtapaSalvo) {
+          diagnosticoEtapaSalvo = true;
+          await salvarDiagnostico(page, `etapa_falhou_${etapa.replace(/[^\w-]/g, '_')}`);
+        }
+      }
 
       etapasProcessadas.add(etapa);
-      await etapaLink.click(); // recolhe a etapa atual antes de ir pra próxima
       etapaIndex++;
-      // Sem espera extra aqui — a próxima volta do while já espera a
-      // tabela da PRÓXIMA etapa ficar visível antes de prosseguir.
     }
 
     console.log('[Coleta Acomp] ✅ Extração concluída.');

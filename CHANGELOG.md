@@ -7,6 +7,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de Acompanhamento: um erro fatal numa etapa (ex.: o clique de recolher no final)
+  derrubava a coleta **inteira**, perdendo etapas seguintes que ainda nem tinham sido
+  tentadas — visto ao vivo na ETAPA 18 (187 livros): degradou no meio depois de uma falha
+  `All promises were rejected` ao abrir um livro, e o timeout fatal seguinte reiniciou o
+  ciclo do zero. Causa raiz encadeada: quando nem popup nem "DADOS DE EXECUÇÃO" respondem a
+  tempo, a tela de detalhe podia ficar aberta sem ninguém fechar (a navegação real às vezes
+  só completa *depois* do timeout de 10s), prendendo a etapa nas tentativas seguintes de
+  reabrir. Timeout aumentado para 20s, checagem ativa de tela tardia no `catch` do livro, e
+  — a correção principal — todo o processamento de uma etapa agora está dentro de um
+  try/catch próprio: uma etapa irrecuperável só perde ela mesma, o código segue tentando as
+  seguintes. Ver Adendo 12 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de Acompanhamento: `fecharTelaDetalheMesmaPagina()` esperava até 15s (silenciado
   por `.catch`, sem log) que a tabela de livros "ficasse visível sozinha" depois de clicar
   "CANCELAR" — mas o próprio Adendo 7 já tinha provado que isso não acontece sozinho, só

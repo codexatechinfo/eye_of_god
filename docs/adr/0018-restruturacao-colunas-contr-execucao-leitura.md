@@ -584,6 +584,50 @@ funcional — só elimina uma espera que nunca resolvia de verdade.
 `npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
 próxima execução do usuário.
 
+## Adendo 12 — erro fatal numa etapa derrubava a coleta inteira, perdendo as etapas seguintes
+
+Usuário colou log real: na ETAPA 18 (187 livros), depois de coletar 7 livros com sucesso, o
+livro seguinte falhou com `All promises were rejected` (nem popup nem "DADOS DE EXECUÇÃO"
+apareceram dentro do timeout de 10s). Na sequência, 3 tentativas de reabrir a etapa
+fracassaram, a etapa encerrou com só 8/187 livros processados, e o clique de recolher a
+etapa (fim do loop) deu `Timeout 30000ms exceeded` esperando `a.color:has-text("ETAPA")`. Sem
+nenhum try/catch no nível da etapa, esse erro propagou e derrubou `coletarDadosAcompanhamento`
+inteira — o ciclo inteiro reiniciou do zero, perdendo inclusive etapas que ainda nem tinham
+sido tentadas.
+
+### Duas causas encadeadas
+
+1. **"All promises were rejected" deixava a tela de detalhe aberta sem ninguém fechar.** O
+   `finally` do try/catch de cada livro só fecha a tela se `popup` ou `usouMesmaPagina`
+   estiverem marcados — mas quando AMBAS as esperas (popup e "DADOS DE EXECUÇÃO") estouram o
+   timeout, nenhuma das duas é marcada, mesmo que o clique tenha disparado a navegação de
+   verdade e ela só tenha completado *depois* do timeout (rede lenta). A etapa ficava presa
+   numa tela de detalhe que ninguém sabia que existia, e as tentativas seguintes de "reabrir
+   a etapa" fracassavam porque a página real não era mais a lista de livros.
+2. **Nenhum try/catch protegia o processamento de uma etapa inteira.** Um erro fatal em
+   qualquer ponto — incluindo o próprio clique de recolher a etapa no final — propagava até
+   o topo da função e abortava a coleta inteira, mesmo que as etapas seguintes fossem
+   processar normalmente se tentadas.
+
+### Correções
+
+- Timeout de espera por popup/"DADOS DE EXECUÇÃO" aumentado de 10s para 20s — reduz falsos
+  negativos por lentidão momentânea do portal.
+- No `catch` de falha ao abrir OS, checagem ativa: se nem popup nem "mesma página" foram
+  detectados dentro do timeout, verifica se a tela de detalhe apareceu tarde (`isVisible()`
+  no texto "DADOS DE EXECUÇÃO") e, se sim, marca `usouMesmaPagina = true` — o `finally` já
+  existente então fecha a tela normalmente, evitando que a etapa fique presa.
+- Todo o processamento de uma etapa (abertura, loop de livros, recolhimento) agora está
+  dentro de um try/catch de nível de etapa. Se algo falhar de forma irrecuperável, loga um
+  erro claro, salva diagnóstico (flag própria `diagnosticoEtapaSalvo`, separada de
+  `diagnosticoOsSalvo` — categorias diferentes de falha, uma não deve impedir a outra de
+  gerar screenshot) e segue para a próxima etapa em vez de abortar a função inteira.
+  `etapasProcessadas.add(etapa)` e `etapaIndex++` ficam fora do try/catch — rodam sempre,
+  sucesso ou falha, pra nunca ficar preso reprocessando a mesma etapa quebrada.
+
+`npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
+próxima execução do usuário.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

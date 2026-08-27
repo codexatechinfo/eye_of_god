@@ -465,6 +465,28 @@ achar nenhuma linha válida, e usava contagem em vez de visibilidade).
 Não validado ao vivo de novo — fica pra próxima execução do usuário. `npm test` (12 testes)
 continua passando.
 
+## Adendo 8 — confirmado funcionando; logs melhorados (parecia travado, não estava)
+
+Usuário rodou de novo: a etapa 15 (2 livros) processou **2/2 com sucesso, 14 UCs** — a
+correção do Adendo 7 funcionou. Na etapa 16 (66 livros), porém, o log mostrou a mensagem
+"tabela não está visível... reabrindo" **repetida a cada livro** (1/66, 2/66, 3/66...),
+sempre resolvendo na 1ª tentativa — comportamento esperado (o site recolhe a etapa a cada
+`CANCELAR`, confirmado no Adendo 7), mas sem nenhuma confirmação de sucesso entre um aviso e
+outro. Usuário reportou: "visualmente estava abrindo corretamente... mas pelo console parece
+que não estava coletando" — o código estava funcionando, só a falta de log por livro dava
+essa impressão numa etapa de dezenas/centenas de livros (só havia 1 linha de resumo no
+**final** da etapa inteira).
+
+Duas melhorias em `copelScraperService.js`, sem mudar comportamento:
+
+1. Log por livro processado com sucesso — `📖 Livro 'X' — N UCs (M/Total da etapa 'Y')` —
+   logo após incrementar `livrosComUc`/`totalUcs`.
+2. A mensagem de "reabrindo a etapa" trocada de `console.warn` (⚠️) para `console.log` (🔄),
+   com texto explicando que é comportamento normal do site — antes soava como uma falha
+   repetida, quando na prática é esperado a cada livro.
+
+`npm test` (12 testes) continua passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

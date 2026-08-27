@@ -242,10 +242,14 @@ async function coletarDadosAcompanhamento() {
       async function garantirEtapaVisivel() {
         for (let tentativa = 0; tentativa < MAX_TENTATIVAS_REABRIR_ETAPA; tentativa++) {
           if (await tabelaAtual.isVisible().catch(() => false)) return true;
-          console.warn(
-            `[Coleta Acomp] ⚠️ Etapa '${etapa}': tabela de livros não está visível ` +
-              `(${livrosProcessados.size}/${totalLivrosInicial} processados) — reabrindo a etapa ` +
-              `(tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
+          // Não é erro — o site recolhe a etapa a cada CANCELAR (ver
+          // Adendo 7), então isso é esperado a cada livro, não uma falha.
+          // console.log em vez de warn/error pra não soar alarmante numa
+          // execução normal.
+          console.log(
+            `[Coleta Acomp] 🔄 Etapa '${etapa}' recolheu (comportamento normal do site) — ` +
+              `reabrindo (${livrosProcessados.size}/${totalLivrosInicial} livros já coletados, ` +
+              `tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
           );
           await etapaLink.click().catch(() => {});
           await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
@@ -400,8 +404,17 @@ async function coletarDadosAcompanhamento() {
           if (linhasUc.length > 0) {
             livrosComUc++;
             totalUcs += linhasUc.length;
-          }
-          if (linhasUc.length === 0) {
+            // Log por livro: sem isso, uma etapa de centenas de livros só
+            // mostra 1 linha de progresso no final inteiro (usuário
+            // reportou "pelo console parece que não estava coletando",
+            // mesmo funcionando corretamente — os avisos de "reabrindo a
+            // etapa" a cada livro, sem nenhuma confirmação de sucesso no
+            // meio, davam essa impressão).
+            console.log(
+              `[Coleta Acomp] 📖 Livro '${cabecalhoAlvo.livro}' — ${linhasUc.length} UCs ` +
+                `(${livrosProcessados.size}/${totalLivrosInicial} da etapa '${etapa}').`,
+            );
+          } else {
             console.warn(`[Coleta Acomp] ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
           }
         } catch (erroOs) {

@@ -7,6 +7,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Scraper de acompanhamento: log de progresso por livro coletado (`📖 Livro 'X' — N UCs
+  (M/Total)`), não só um resumo no final da etapa inteira — dava a impressão de "travado"
+  em etapas com dezenas/centenas de livros. Mensagem de "etapa recolheu, reabrindo" (o site
+  recolhe a cada `CANCELAR`, comportamento normal) trocada de aviso para log informativo.
+  Ver Adendo 8 da [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Nova variável `COPEL_HEADLESS` (`.env`) — `false` abre o Chromium do scraper de
   acompanhamento com janela visível, útil pra acompanhar ao vivo o que o portal está fazendo;
   default `true` (sem janela), certo para produção (o job roda sozinho o dia inteiro). Ver

@@ -133,6 +133,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de acompanhamento: só processava o **primeiro livro de cada etapa**, pulando o
+  resto em silêncio (sem nenhum log de erro) — confirmado ao vivo (`1/76`, `1/259`, `1/376`
+  livros...) e visualmente pelo usuário. Causa: `page.goBack()` não restaura o estado AJAX da
+  lista de livros; o loop reaproveitava um locator capturado uma única vez, que ficava
+  inconsistente depois do primeiro livro. Trocado `goBack()` por clicar em "CANCELAR"
+  (mecanismo do próprio site); loop de livros reescrito para reler a lista do zero a cada
+  item, rastreando por número do livro em vez de posição; tempos fixos de espera trocados
+  por esperas de carregamento reais. Ver Adendo 4 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de acompanhamento: usava `#tabFixedHeader` (id de um plugin JS genérico, talvez
   reaproveitado na lista de livros) como sinal de "abriu a tela de UCs" — coletava só 1
   registro por livro em vez de todas as UCs (reportado ao vivo: livro com 200+ UCs reais

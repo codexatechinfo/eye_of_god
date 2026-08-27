@@ -275,6 +275,64 @@ o comportamento certo em produção já que o job roda sozinho o dia inteiro den
 recursos gráficos. `.env.example` documentado; `.env` real do usuário já ativado
 (`COPEL_HEADLESS=false`) para a próxima investigação.
 
+## Adendo 4 — correção da causa raiz real: só processava o 1º livro de cada etapa
+
+A "validação" registrada no fim da Correção 2 (UCs variando `2` a `257` no mesmo lote)
+**estava mal interpretada** — não era uma coleta completa de um único ciclo, era a soma de
+vários ciclos diferentes, cada um processando só o primeiro livro de cada etapa antes de
+pular pra próxima (o job de coleta reinicia do zero — login incluso — a cada novo ciclo).
+
+Confirmado ao vivo por dois caminhos: 1) usuário reiniciou o backend com `COPEL_HEADLESS=false`
+e observou visualmente o navegador abrindo a etapa seguinte sem terminar a anterior, e
+reabrindo o **mesmo** "número da OS" ao clicar de novo; 2) os logs reais bateram exatamente
+com isso — `1/76 livros`, `1/259 livros`, `1/376 livros`, `1/546 livros`, `1/432 livros`
+etc., **sem nenhum** log de `⚠️ Falha ao abrir OS` para os demais. A ausência total desses
+logs de erro foi o sinal decisivo: se fosse timeout/exceção capturada, cada livro pulado
+teria gerado uma linha de log; como não gerou nenhuma, o resto do loop estava caindo num
+`continue` silencioso, rápido demais pra serem tentativas reais de clique.
+
+### Causa raiz
+
+`page.goBack()` (usado pra fechar a tela de detalhe quando abria na mesma página, ver
+Correção 2) **não restaura o estado JS/AJAX da lista de livros da etapa** (filtro e
+paginação aplicados via AJAX pelo site, não por navegação de URL). Depois do primeiro livro
+processado dessa forma, a lista ficava num estado inconsistente — o locator reaproveitado
+(`linhasEtapa`, criado uma vez fora do loop) continuava apontando pra posições que agora
+tinham células vazias ou dados diferentes, e a checagem `if (!Object.values(cabecalho)...)
+continue` (linha então numerada 167) descartava silenciosamente todo o resto da etapa, item
+por item, sem nenhuma chamada de rede real — daí a impressão de "fecha muito rápido" que o
+usuário relatou visualmente.
+
+### Correção
+
+Duas mudanças complementares em `copelScraperService.js`:
+
+1. **`goBack()` trocado por clicar em "CANCELAR"** (`fecharTelaDetalheMesmaPagina`) — o
+   mecanismo que o próprio site oferece pra fechar a tela de detalhe, que devolve a lista de
+   livros no estado JS correto (em vez de depender do histórico do navegador). Fallback pra
+   `goBack()` só se o botão não for encontrado.
+2. **Loop de livros reescrito para não depender de índice de posição.** Antes: `for (let i =
+   0; i < totalLivros; i++)` sobre um locator capturado uma única vez no início da etapa —
+   frágil, porque a posição `i` só é confiável se a lista nunca mudar de ordem/conteúdo entre
+   uma leitura e outra (não é o caso aqui). Agora: um `while(true)` que **relê a lista do
+   zero a cada livro** (`page.locator('table#item:visible tbody tr')`, nova consulta), varre
+   as linhas procurando a primeira cujo **número do livro** ainda não esteja no `Set`
+   `livrosProcessados`, processa essa, marca como processada, e repete — até não sobrar
+   nenhum livro pendente na lista atual. O número do livro (não a posição) é a única
+   identidade confiável entre re-leituras. Trava de segurança (`limiteLivros =
+   totalLivrosInicial + 50`) evita loop infinito se a lista nunca convergir.
+3. **Removidos os tempos fixos de espera** (`page.waitForTimeout(8000)` depois de abrir uma
+   etapa, `2000` antes do loop de etapas e depois de fechar uma, `1000` depois de cancelar) —
+   trocados por esperas de carregamento reais: `page.waitForSelector(...)` pro elemento que
+   precisa existir, mais `page.waitForLoadState('networkidle', ...)` pra esperar o AJAX da
+   ação realmente terminar, em vez de assumir um tempo arbitrário. Usuário pediu
+   explicitamente essa mudança ("os tempo não são predefinidos, é esperar a página
+   carregar").
+
+Não validado ao vivo de novo depois desta correção (usuário pediu pra parar a execução em
+andamento antes de eu poder acompanhar um ciclo completo) — fica pra próxima execução.
+`npm test` (12 testes) continua passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

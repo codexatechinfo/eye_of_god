@@ -51,6 +51,59 @@ async function extrairLinhasDetalheOs(paginaDetalhe) {
   });
 }
 
+// Fecha a tela de detalhe da OS quando ela abriu na MESMA página (sem
+// popup) — usa o botão "CANCELAR" (visível no print do usuário, ao lado de
+// "GRAVAR") em vez de page.goBack(). Causa raiz de um bug real: goBack()
+// não restaura o estado JS da lista de livros da etapa (filtro/paginação
+// aplicados via AJAX), deixando os livros seguintes da mesma etapa
+// inacessíveis/errados. "CANCELAR" é o mecanismo que o próprio site
+// oferece pra fechar a tela e devolve a lista no estado certo. Fallback
+// pra goBack() só se o botão não existir.
+async function fecharTelaDetalheMesmaPagina(page) {
+  const botaoCancelar = page.getByRole('button', { name: /cancelar/i }).or(
+    page.locator('input[type="button"][value*="CANCELAR" i], input[type="submit"][value*="CANCELAR" i]'),
+  );
+  if ((await botaoCancelar.count()) > 0) {
+    await botaoCancelar.first().click();
+  } else {
+    await page.goBack().catch(() => {});
+  }
+  await page.waitForSelector('table#item:visible', { timeout: 15000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+}
+
+// Lê o cabeçalho (etapa/localidade/livro/...) e o número do livro de uma
+// linha da tabela de livros. Retorna null se a linha estiver vazia (sem
+// nenhum dado — acontece em linhas de rodapé/separador).
+async function lerCabecalhoLinha(linha, etapa) {
+  const celulas = await linha.locator('td').allInnerTexts();
+  // Primeira célula é o checkbox de seleção (sem texto).
+  let row = celulas.slice(1);
+  while (row.length < 14) row.push('');
+
+  let dataRecebimento = '';
+  let horaRecebimento = '';
+  if (row[6] && row[6].includes(' ')) {
+    [dataRecebimento, horaRecebimento] = row[6].split(' ', 2);
+  } else {
+    dataRecebimento = row[6];
+  }
+
+  const cabecalho = {
+    etapa,
+    localidade: row[3],
+    livro: row[4],
+    empreiteira: row[5],
+    dataRecebimento,
+    horaRecebimento,
+    dataPrevistaLimite: row[7],
+    situacaoBruta: row[13],
+  };
+
+  if (!Object.values(cabecalho).some(v => v && String(v).trim())) return null;
+  return cabecalho;
+}
+
 async function contarLinhasTabFixedHeader(paginaDetalhe) {
   return paginaDetalhe
     .locator('#tabFixedHeader tbody tr')
@@ -105,7 +158,7 @@ async function coletarDadosAcompanhamento() {
     await page.selectOption('select[name="searchEmpreiteiraId"]', { label: 'F IMM BRASIL LTDA' });
     await page.click('#botaoBuscar');
     await page.waitForSelector('a.color:has-text("ETAPA")', { timeout: 60000 });
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
     const registros = [];
     let etapaIndex = 0;
@@ -128,43 +181,56 @@ async function coletarDadosAcompanhamento() {
 
       console.log(`[Coleta Acomp] ➡️ Processando etapa ${etapaIndex + 1}/${count}: ${etapa}`);
       await etapas.nth(etapaIndex).click();
-      await page.waitForTimeout(8000);
+      // Nada de tempo fixo: espera a tabela de livros existir de verdade e
+      // a rede (AJAX de carregar a etapa) ficar ociosa antes de continuar.
+      await page.waitForSelector('table#item:visible', { timeout: 30000 }).catch(() => {});
+      await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 
-      const linhasEtapa = page.locator('table#item:visible tbody tr');
-      const totalLivros = await linhasEtapa.count();
-      console.log(`[Coleta Acomp] 📄 ${totalLivros} livros na etapa '${etapa}' — abrindo cada OS...`);
+      const totalLivrosInicial = await page.locator('table#item:visible tbody tr').count();
+      console.log(`[Coleta Acomp] 📄 ${totalLivrosInicial} livros na etapa '${etapa}' — abrindo cada OS...`);
 
+      // Processa livro a livro RELENDO A LISTA DO ZERO a cada vez, rastreando
+      // por número do livro (não por índice de posição). Usuário observou ao
+      // vivo, com índice fixo, o código reabrindo o MESMO "número da OS" em
+      // vez de avançar pro próximo — sinal de que a lista de livros pode
+      // reordenar/remontar via AJAX depois de fechar uma OS, então a posição
+      // N nem sempre aponta pro mesmo livro entre uma leitura e a próxima.
+      // Só o número do livro em si é uma identidade confiável.
+      const livrosProcessados = new Set();
       let livrosComUc = 0;
       let totalUcs = 0;
+      // Trava de segurança contra loop infinito, caso a lista fique
+      // crescendo/reaparecendo de um jeito que nunca convirja — não deve
+      // acontecer no fluxo normal, mas é melhor abortar com log claro do
+      // que travar o processo indefinidamente numa etapa.
+      const limiteLivros = totalLivrosInicial + 50;
 
-      for (let i = 0; i < totalLivros; i++) {
-        const linha = linhasEtapa.nth(i);
-        const celulas = await linha.locator('td').allInnerTexts();
-        // Primeira célula é o checkbox de seleção (sem texto) — mesmo
-        // padrão do parser antigo.
-        let row = celulas.slice(1);
-        while (row.length < 14) row.push('');
+      while (true) {
+        const linhasAtuais = page.locator('table#item:visible tbody tr');
+        const totalAtual = await linhasAtuais.count();
 
-        let dataRecebimento = '';
-        let horaRecebimento = '';
-        if (row[6] && row[6].includes(' ')) {
-          [dataRecebimento, horaRecebimento] = row[6].split(' ', 2);
-        } else {
-          dataRecebimento = row[6];
+        let linhaAlvo = null;
+        let cabecalhoAlvo = null;
+        for (let i = 0; i < totalAtual; i++) {
+          const cabecalho = await lerCabecalhoLinha(linhasAtuais.nth(i), etapa);
+          if (!cabecalho) continue;
+          if (livrosProcessados.has(cabecalho.livro)) continue;
+          linhaAlvo = linhasAtuais.nth(i);
+          cabecalhoAlvo = cabecalho;
+          break;
         }
 
-        const cabecalho = {
-          etapa,
-          localidade: row[3],
-          livro: row[4],
-          empreiteira: row[5],
-          dataRecebimento,
-          horaRecebimento,
-          dataPrevistaLimite: row[7],
-          situacaoBruta: row[13],
-        };
+        if (!linhaAlvo) break; // nenhum livro pendente sobrou na lista atual
 
-        if (!Object.values(cabecalho).some(v => v && String(v).trim())) continue;
+        if (livrosProcessados.size >= limiteLivros) {
+          console.error(
+            `[Coleta Acomp] ❌ Etapa '${etapa}' passou de ${limiteLivros} livros processados ` +
+              `(esperado ~${totalLivrosInicial}) — abortando a etapa pra não travar indefinidamente.`,
+          );
+          break;
+        }
+
+        livrosProcessados.add(cabecalhoAlvo.livro);
 
         // "Número da OS" (numero_os no parser antigo) é a célula de índice
         // 3 contando com o checkbox — ex.: <a href="javascript:update('ID',
@@ -189,7 +255,7 @@ async function coletarDadosAcompanhamento() {
         // como sinal de mudança foi a causa real de um bug encontrado ao
         // vivo: 1 registro por livro em vez de todas as UCs (a extração
         // rodava contra a tabela errada, ou cedo demais).
-        const linkOs = linha.locator('td').nth(3).locator('a');
+        const linkOs = linhaAlvo.locator('td').nth(3).locator('a');
         if ((await linkOs.count()) === 0) continue;
 
         let popup = null;
@@ -224,43 +290,41 @@ async function coletarDadosAcompanhamento() {
           await aguardarTabelaEstabilizar(paginaDetalhe);
           const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
           for (const uc of linhasUc) {
-            registros.push({ ...cabecalho, ...uc });
+            registros.push({ ...cabecalhoAlvo, ...uc });
           }
           if (linhasUc.length > 0) {
             livrosComUc++;
             totalUcs += linhasUc.length;
           }
           if (linhasUc.length === 0) {
-            console.warn(`[Coleta Acomp] ⚠️ Livro '${cabecalho.livro}' abriu a OS mas 0 UCs extraídas.`);
+            console.warn(`[Coleta Acomp] ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
           }
         } catch (erroOs) {
           console.error(
-            `[Coleta Acomp] ⚠️ Falha ao abrir OS do livro '${cabecalho.livro}' (etapa ${etapa}): ${erroOs.message}`,
+            `[Coleta Acomp] ⚠️ Falha ao abrir OS do livro '${cabecalhoAlvo.livro}' (etapa ${etapa}): ${erroOs.message}`,
           );
           if (!diagnosticoOsSalvo) {
             diagnosticoOsSalvo = true;
-            await salvarDiagnostico(page, `os_${cabecalho.livro}_falhou`);
+            await salvarDiagnostico(page, `os_${cabecalhoAlvo.livro}_falhou`);
           }
         } finally {
           if (popup) {
             await popup.close().catch(() => {});
           } else if (usouMesmaPagina) {
-            // Voltou na mesma página (sem popup) — precisa voltar pra lista
-            // de livros da etapa antes do próximo clique.
-            await page.goBack().catch(() => {});
-            await page.waitForTimeout(1000);
+            await fecharTelaDetalheMesmaPagina(page);
           }
         }
       }
 
       console.log(
-        `[Coleta Acomp] ✅ Etapa '${etapa}': ${livrosComUc}/${totalLivros} livros com OS aberta, ${totalUcs} UCs coletadas.`,
+        `[Coleta Acomp] ✅ Etapa '${etapa}': ${livrosComUc}/${livrosProcessados.size} livros com OS aberta ` +
+          `(${totalLivrosInicial} na lista original), ${totalUcs} UCs coletadas.`,
       );
 
       etapasProcessadas.add(etapa);
       await etapas.nth(etapaIndex).click();
       etapaIndex++;
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     }
 
     console.log('[Coleta Acomp] ✅ Extração concluída.');

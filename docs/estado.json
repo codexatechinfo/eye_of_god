@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T13:16:40.940Z",
+  "atualizado_em": "2026-08-27T13:19:50.474Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "2890260",
+  "commit": "5057f53",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -530,6 +530,13 @@
       "skill": "/projeto-novo",
       "evento": "contr_execucao_leitura reestruturada: 8 colunas removidas, 7 novas adicionadas",
       "detalhe": "Usuario pediu pra alterar a estrutura de contr_execucao_leitura: remover tipo_oss/subtipo_os/numero_os/data_ultima_atualizacao/qtd_digitados_nao_digitados/qtd_com_leitura_sem_leitura/percentual_sem_leitura/qtd_fora_de_faixa_foto, manter etapa/localidade/livro/empreiteira/data_recebimento/hora_recebimento/data_prevista_limite/situacao, e adicionar uc/colaborador/codigo/equipamento/tipo_especificacao/faturamento/leitura_atual. Antes de agir, perguntei sobre 3 pontos: 1) data_import/hora_import mantidas (confirmado, sao metadados de controle nao mencionados por nao virem do scraping); 2) qtd_digitados_nao_digitados pode ser removida, codigo da API sera alterado tambem; 3) as 7 colunas novas vem de outra aba do portal Copel, usuario vai indicar depois. Executado ALTER TABLE (DROP/ADD COLUMN) como postgres dentro do supabase-db, RLS/FK/PK preservados. Tabela ja estava vazia (truncada momentos antes a pedido do usuario), sem perda de dado real na alteracao de schema. Ajustado copelImportService.js separando CAMPOS_SCRAPER (16 posicoes originais do HTML, inalterado, scraper continua lendo a tabela #item do portal por posicao) de CAMPOS_TABELA (8 colunas que ainda existem no banco) - as 7 novas ficam NULL ate o scraping da aba nova ser implementado. Levantado todo uso de qtd_digitados_nao_digitados no codigo antes de remover: leituraUrbanaService.js (calcularLeituraUrbana, roda a cada ciclo de coleta - critico, se quebrasse a coleta automatica falharia inteira), atividadeColaboradoresService.js (listarAtividadeHoje), e 4 pontos em massivasService.js (contarFonteContr/obterFaixasDias/detalheContr/historicoContrLivro, todos com alias c=contr_execucao_leitura). Todos zerados (digitados=0, naoDigitados=0) com comentarios explicando o motivo - pontos que usam t.qtd_digitados_nao_digitados (tabelas de massiva pendentes_im/atribuidas_im/em_execucao_im) NAO foram tocados, continuam funcionando normalmente. Testado ao vivo direto contra o banco (sem passar pela API HTTP): calcularLeituraUrbana, listarAtividadeHoje, obterResumo e obterDetalhe (escopo leiturarelitura) todos rodaram sem erro de SQL - a coleta automatica ja tinha repopulado a tabela com o schema novo nesse meio-tempo (808 pendentes, 1253 linhas de detalhe), confirmando que copelImportService.js grava corretamente com as colunas atuais. npm test (12 testes de isolamento de tenant) continua passando. Efeito colateral temporario e esperado: progresso/percentual de execucao de leitura/releitura (Monitoramento de Livros e Trilho) fica zerado ate a nova logica ser definida com as colunas novas - massiva nao e afetada. Ver ADR 0018."
+    },
+    {
+      "data": "2026-08-27T13:19:50.473Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Coluna smart adicionada em contr_execucao_leitura",
+      "detalhe": "Usuario pediu mais uma coluna: smart (varchar(255), mesmo padrao das demais). Adicionada via ALTER TABLE ADD COLUMN como postgres dentro do supabase-db, confirmada via information_schema.columns. Mesma situacao das 7 colunas do Adendo original da ADR 0018: nao populada pelo scraper ainda, origem/uso nao especificados no pedido, fica pendente de instrucao futura."
     }
   ]
 }

@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T16:10:47.436Z",
+  "atualizado_em": "2026-08-27T16:25:24.663Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "11cc12a",
+  "commit": "86795e9",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -565,6 +565,13 @@
       "skill": "/projeto-novo",
       "evento": "Confirmado ao vivo: correcao do scraper funcionou (UCs por livro variando 2-257) + COPEL_HEADLESS pra debug visual",
       "detalhe": "Usuario pediu pra apagar os dados incompletos da execucao anterior (879 registros, 1 por livro) e acompanhar o proximo ciclo. TRUNCATE rodado, tabela zerada. Acompanhado o ciclo seguinte direto pelo banco de dados (contagem de linhas por livro), sem depender dos logs do terminal do usuario: distribuicao de UCs por livro passou a variar de verdade (2 a 257 UCs no mesmo lote - livro 018405 com 99, livro 019362 com 70, livro 042154 com 257, etc.), contra o 1 fixo de antes - confirma que a correcao do sinal de deteccao (texto DADOS DE EXECUCAO em vez de #tabFixedHeader) resolveu o problema real. Em seguida, usuario pediu pra tornar o navegador visivel durante a coleta pra poder identificar problemas visualmente. Adicionada variavel COPEL_HEADLESS (.env) - false abre o Chromium com janela (slowMo 300 em vez de 100, mais facil de acompanhar), default true (sem janela, comportamento certo pra producao ja que o job roda sozinho o dia inteiro dentro da janela 07h-19h). .env.example documentado; .env real do usuario ja ativado com COPEL_HEADLESS=false pra proxima investigacao. npm test (12 testes) continua passando. Reconfirmado por inspecao do codigo que a estrutura do loop ja garantia so avancar de etapa apos processar todos os livros da etapa atual - isso nunca foi o problema, ja estava correto desde a implementacao original."
+    },
+    {
+      "data": "2026-08-27T16:25:24.662Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Fix: scraper so processava o 1o livro de cada etapa (goBack invalidava a lista)",
+      "detalhe": "Usuario reiniciou o backend com COPEL_HEADLESS=false e observou visualmente o navegador abrindo a etapa seguinte sem terminar a anterior, reabrindo o MESMO numero da OS ao clicar de novo. Confirmado exatamente pelos logs reais que eu ja tinha coletado antes: 1/76 livros, 1/259 livros, 1/376 livros, 1/546 livros, 1/432 livros etc, sem NENHUM log de Falha ao abrir OS pros demais - a ausencia total desses logs de erro foi o sinal decisivo de que o resto do loop caia num continue silencioso, nao em tentativas reais de clique. Causa raiz: page.goBack() (usado pra fechar a tela de detalhe quando abria na mesma pagina) nao restaura o estado JS/AJAX da lista de livros da etapa (filtro/paginacao aplicados via AJAX, nao por navegacao de URL) - depois do primeiro livro processado dessa forma, o locator reaproveitado (capturado uma unica vez fora do loop) ficava apontando pra posicoes com celulas vazias/erradas, e a checagem de cabecalho vazio descartava silenciosamente todo o resto da etapa. Isso tambem revelou que uma validacao anterior que eu tinha registrado no ADR 0018 (UCs variando 2-257 por livro) estava mal interpretada - eram dados de MULTIPLOS ciclos parciais acumulados (cada ciclo reiniciando do zero com login incluso e processando so 1 livro por etapa antes de quebrar), nao uma coleta completa de um unico ciclo. Corrigido copelScraperService.js em tres frentes: 1) goBack() trocado por clicar no botao CANCELAR (mecanismo que o proprio site oferece, visto no anexo do usuario ao lado de GRAVAR, que devolve a lista no estado JS correto) com fallback pra goBack se o botao nao existir; 2) loop de livros reescrito de for com indice fixo pra while(true) que RELE A LISTA DO ZERO a cada livro, rastreando por numero do livro (nao posicao) num Set livrosProcessados - usuario observou visualmente o codigo reabrindo o mesmo numero da OS com indice fixo, confirmando que a posicao nao e uma identidade confiavel entre re-leituras; trava de seguranca (limiteLivros = totalLivrosInicial + 50) evita loop infinito; 3) removidos todos os tempos fixos de espera (waitForTimeout 8000/2000/1000) e trocados por esperas de carregamento reais (waitForSelector pro elemento que precisa existir + waitForLoadState networkidle pra esperar o AJAX terminar de verdade) - usuario pediu isso explicitamente (os tempo nao sao predefinidos, e esperar a pagina carregar). Corrigida tambem a afirmacao equivocada anterior no ADR 0018 sobre a validacao 2-257 UCs. npm test (12 testes) continua passando. NAO validado ao vivo de novo - usuario pediu pra parar a execucao em andamento antes de eu poder acompanhar um ciclo completo com a correcao. Ver Adendo 4 da ADR 0018."
     }
   ]
 }

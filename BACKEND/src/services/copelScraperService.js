@@ -76,7 +76,12 @@ async function aguardarTabelaEstabilizar(paginaDetalhe) {
 }
 
 async function coletarDadosAcompanhamento() {
-  const browser = await chromium.launch({ headless: true, slowMo: 100 });
+  // COPEL_HEADLESS=false abre o Chromium com janela visível — útil pra
+  // acompanhar ao vivo o que o site está fazendo durante uma investigação;
+  // default headless (sem janela), que é o certo pro job rodando sozinho o
+  // dia inteiro em produção.
+  const headless = process.env.COPEL_HEADLESS !== 'false';
+  const browser = await chromium.launch({ headless, slowMo: headless ? 100 : 300 });
   const page = await browser.newPage();
 
   try {

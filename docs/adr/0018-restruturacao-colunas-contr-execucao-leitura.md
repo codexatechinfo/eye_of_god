@@ -257,8 +257,23 @@ Também adicionado um `console.warn` por livro que abre a OS mas extrai 0 UCs (a
 total agregado por etapa aparecia no log, dificultando saber qual livro específico falhou
 silenciosamente).
 
-Não validado ao vivo de novo depois desta segunda correção — fica para o próximo ciclo
-automático. `npm test` (12 testes) continua passando.
+**Validado ao vivo depois desta correção**: usuário pediu pra apagar os 879 registros
+incompletos (produto da versão com o bug do `#tabFixedHeader`) — `TRUNCATE` rodado, tabela
+zerada. Acompanhado o ciclo seguinte direto pelo banco (contagem de linhas por livro, sem
+depender dos logs do terminal do usuário): distribuição de UCs por livro passou a variar de
+verdade — `2` a `257` UCs no mesmo lote (`018405`→99, `019362`→70, `042154`→257, etc.), contra
+o `1` fixo de antes. Confirma que a extração está pegando a tabela certa e completa.
+
+## Adendo 3 — Chromium visível para debug (`COPEL_HEADLESS`)
+
+Usuário pediu para poder ver o navegador rodando ao vivo durante a coleta, pra identificar
+visualmente qualquer problema futuro sem depender só de logs/diagnóstico. Adicionada
+`COPEL_HEADLESS` (`.env`) — `false` abre o Chromium com janela (`headless: false`,
+`slowMo: 300` em vez de `100`, mais fácil de acompanhar); default `true` (sem janela), que é
+o comportamento certo em produção já que o job roda sozinho o dia inteiro dentro da janela
+07h–19h — uma janela de navegador abrindo repetidamente sem necessidade seria desperdício de
+recursos gráficos. `.env.example` documentado; `.env` real do usuário já ativado
+(`COPEL_HEADLESS=false`) para a próxima investigação.
 
 ## Consequências
 

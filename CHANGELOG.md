@@ -7,6 +7,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Nova variável `COPEL_HEADLESS` (`.env`) — `false` abre o Chromium do scraper de
+  acompanhamento com janela visível, útil pra acompanhar ao vivo o que o portal está fazendo;
+  default `true` (sem janela), certo para produção (o job roda sozinho o dia inteiro). Ver
+  Adendo 3 da [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de acompanhamento (`copelScraperService.js`) reestruturado: antes coletava 1 linha
   por livro direto da tabela de cada etapa; agora, para cada livro, clica no link "número da
   OS" (abre popup com a tabela de UCs/medidores daquele livro) e gera 1 registro por UC,

@@ -649,6 +649,13 @@
       "skill": "/projeto-novo",
       "evento": "Feature: removida janela de horario 07h-19h dos jobs de coleta - agora rodam continuamente enquanto a API estiver no ar",
       "detalhe": "Usuario pediu explicitamente para tirar a limitacao de horario e deixar coletar o tempo todo enquanto a API estiver no ar. Removida a logica de janela dos dois jobs (coletaJob.js e coletaMassivasJob.js): dentroDaJanela(), HORA_INICIO/HORA_FIM, e o cron.schedule diario que so existia pra reativar o loop as 07h. Agora iniciarJobColeta()/iniciarJobMassivas() chamam loopContinuo() direto no boot e o while interno roda while(true) em vez de while(dentroDaJanela()) - nunca pausa sozinho. node-cron deixou de ser usado nesses dois arquivos (dependencia mantida no package.json, nao usada em mais nenhum lugar, fora do escopo mexer nisso). Watchdog continua como rede de seguranca, agora checando so se o loop parou, sem depender de janela. Removido o campo dentroDaJanela de obterStatus() e, no frontend, o estado fora-do-horario do indicador de status no header - Home.verificarStatusColeta() simplificado pra so coletando/parada/offline, home.html ajustado pras mesmas classes sem o cinza que nunca mais vai ocorrer. npm test (12 testes) e ng build --configuration production continuam passando. Nao validado ao vivo nesta sessao. Ver Adendo da ADR 0017."
+    },
+    {
+      "data": "2026-08-27T23:15:59.996Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Fix: resumo de Massivas quebrava com column reference id is ambiguous durante a coleta",
+      "detalhe": "Usuario colou log real mostrando o erro repetido enquanto a coleta corrigida (Adendo 13, ja indo bem alem da etapa 18) rodava em paralelo: Erro ao obter resumo de massivas: error: column reference id is ambiguous, em contarFonteContr (massivasService.js:334). Causa: a query SELECT DISTINCT ON (c.livro) ... FROM contr_execucao_leitura c LEFT JOIN cidades_localidades cl ... joinCalendarioContr() (LEFT JOIN calendario_leitura cal) terminava com ORDER BY c.livro, id ASC - tres tabelas no JOIN, todas com coluna id (padrao bigserial de toda tabela do projeto), e o id do ORDER BY sem qualificar por alias, causando erro 42702 do Postgres. As outras duas queries parecidas no arquivo (obterFaixasDias, historicoContrLivro) ja ordenavam por uma expressao calculada, nao por id puro, entao nao sofriam disso. Corrigido qualificando ORDER BY c.livro, c.id ASC. Validado direto no banco local rodando a mesma combinacao de LEFT JOINs da query real - retornou linhas sem erro. npm test (12 testes) continua passando. Ver Adendo 14 da ADR 0018."
     }
   ]
 }

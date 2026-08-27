@@ -652,6 +652,26 @@ confirmar que rolar até o fim não revela nenhuma etapa nova.
 `npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
 próxima execução do usuário.
 
+## Adendo 14 — `ORDER BY ... id` ambíguo derrubava o resumo de Massivas durante a coleta
+
+Erro real no log de produção, capturado enquanto a coleta corrigida (Adendo 13) rodava:
+
+```
+❌ Erro ao obter resumo de massivas: error: column reference "id" is ambiguous
+    at contarFonteContr (massivasService.js:334:29)
+```
+
+`contarFonteContr()` faz `SELECT DISTINCT ON (c.livro) ... FROM contr_execucao_leitura c LEFT
+JOIN cidades_localidades cl ... [+ joinCalendarioContr(), que junta calendario_leitura cal]`
+terminando com `ORDER BY c.livro, id ASC` — três tabelas no JOIN (`c`, `cl`, `cal`), todas
+com coluna `id` (padrão bigserial de toda tabela do projeto), e o `id` do `ORDER BY` sem
+qualificar por alias. Postgres não consegue decidir de qual tabela é — erro `42702`. As duas
+outras queries do arquivo com a mesma forma (`obterFaixasDias`, `historicoContrLivro`) já
+ordenavam por uma expressão calculada, não por `id` puro, então não sofriam disso.
+
+Corrigido qualificando: `ORDER BY c.livro, c.id ASC`. Validado direto no banco local com os
+mesmos LEFT JOINs da query real. `npm test` (12 testes) continua passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

@@ -323,7 +323,7 @@ async function contarFonteContr(db, statusChave, tipoServico, dataImport, horaIm
       ${joinCalendarioContr()}
       WHERE c.data_import = $1 AND c.hora_import = $2
         ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
-      ORDER BY c.livro, id ASC
+      ORDER BY c.livro, c.id ASC
     ) escolhido
     WHERE 1 = 1
       ${rotulo ? `AND status_calc = '${rotulo}'` : ''}

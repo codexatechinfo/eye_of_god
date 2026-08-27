@@ -7,6 +7,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Resumo da aba Massivas (`GET /massivas/resumo`) falhava com `column reference "id" is
+  ambiguous` — `contarFonteContr()` junta `contr_execucao_leitura`, `cidades_localidades` e
+  `calendario_leitura` (todas com coluna `id`) e o `ORDER BY` não qualificava por alias.
+  Corrigido para `ORDER BY c.livro, c.id ASC`. Ver Adendo 14 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de Acompanhamento: a coleta terminava "com sucesso" cedo demais, sem processar
   todas as etapas — a lista de etapas não é paginada, mas carrega no DOM aos poucos
   conforme a página rola pra baixo (confirmado com o usuário: mesmo processo manual de

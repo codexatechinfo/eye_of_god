@@ -487,6 +487,35 @@ Duas melhorias em `copelScraperService.js`, sem mudar comportamento:
 
 `npm test` (12 testes) continua passando.
 
+## Adendo 9 — `waitForLoadState('networkidle')` estava atrasando à toa
+
+Usuário reportou (mesma sessão de teste): "a página nitidamente já carregou e ainda fica
+esperando um tempo a mais desnecessário... assim que entra na aba acompanhamento e assim
+que volta pra ela depois de coletar as ucs" — ambos os pontos exatos onde o Adendo 4
+(remoção dos `waitForTimeout` fixos) tinha adicionado `page.waitForLoadState('networkidle',
+{timeout: N})` **depois** de já esperar o elemento certo (`waitForSelector`/`waitFor`)
+ficar visível.
+
+`networkidle` só resolve quando não há nenhuma requisição de rede por um período — se o
+portal tiver qualquer atividade de fundo (polling, heartbeat, analytics) que nunca some de
+verdade, essa espera nunca resolve antes do próprio *timeout*, e como estava com `.catch(()
+=> {})`, o código ficava preso o tempo **inteiro** do timeout (15s, 20s) mesmo com a página
+já pronta e o elemento relevante já visível havia tempo. Um sinal mais específico
+(visibilidade do elemento que realmente importa) já estava sendo usado em paralelo e é
+suficiente por si só — o `networkidle` era estritamente redundante em todo lugar onde
+aparecia.
+
+Removidas as 5 ocorrências de `waitForLoadState('networkidle', ...)` em
+`copelScraperService.js`: depois do login/busca inicial, depois de abrir uma etapa, dentro
+de `garantirEtapaVisivel()` (Adendo 7), dentro de `fecharTelaDetalheMesmaPagina()`, e no
+fim do loop de etapas (esse último nem tinha um `waitFor` de elemento antes — a próxima
+volta do loop externo já espera a tabela da etapa seguinte). Em todos os casos o
+`waitForSelector`/`waitFor({state:'visible'})` que já existia continua como único sinal de
+"pronto pra continuar".
+
+`npm test` (12 testes) continua passando. Não validado ao vivo de novo — fica pra próxima
+execução do usuário.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

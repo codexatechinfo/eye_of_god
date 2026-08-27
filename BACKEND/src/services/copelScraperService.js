@@ -70,9 +70,13 @@ async function fecharTelaDetalheMesmaPagina(page, tabelaAtual) {
     await page.goBack().catch(() => {});
   }
   // Espera a tabela DESTA etapa especificamente (não qualquer #item — ver
-  // tabelaDaEtapa) voltar a ficar visível.
+  // tabelaDaEtapa) voltar a ficar visível. Isso já é o sinal certo de "a
+  // página está pronta" — um waitForLoadState('networkidle') adicional
+  // depois disso só atrasava sem necessidade (usuário reportou "a página
+  // nitidamente já carregou e ainda fica esperando um tempo a mais": se o
+  // site tem qualquer requisição de fundo/polling, a rede nunca fica
+  // "idle" de verdade, e o código esperava o timeout inteiro à toa).
   await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 }
 
 // Lê o cabeçalho (etapa/localidade/livro/...) e o número do livro de uma
@@ -176,7 +180,6 @@ async function coletarDadosAcompanhamento() {
     await page.selectOption('select[name="searchEmpreiteiraId"]', { label: 'F IMM BRASIL LTDA' });
     await page.click('#botaoBuscar');
     await page.waitForSelector('a.color:has-text("ETAPA")', { timeout: 60000 });
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
     const registros = [];
     let etapaIndex = 0;
@@ -201,11 +204,11 @@ async function coletarDadosAcompanhamento() {
       console.log(`[Coleta Acomp] ➡️ Processando etapa ${etapaIndex + 1}/${count}: ${etapa}`);
       await etapaLink.click();
       // Nada de tempo fixo: espera a tabela de livros DESTA etapa (não
-      // qualquer #item — ver tabelaDaEtapa) existir e a rede (AJAX de
-      // carregar a etapa) ficar ociosa antes de continuar.
+      // qualquer #item — ver tabelaDaEtapa) ficar visível. Isso já é o
+      // sinal certo — um waitForLoadState('networkidle') extra só atrasava
+      // sem necessidade (ver comentário em fecharTelaDetalheMesmaPagina).
       const tabelaAtual = tabelaDaEtapa(etapaLink);
       await tabelaAtual.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
-      await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 
       const totalLivrosInicial = await tabelaAtual.locator('tbody tr').count();
       console.log(`[Coleta Acomp] 📄 ${totalLivrosInicial} livros na etapa '${etapa}' — abrindo cada OS...`);
@@ -253,7 +256,6 @@ async function coletarDadosAcompanhamento() {
           );
           await etapaLink.click().catch(() => {});
           await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-          await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
         }
         return tabelaAtual.isVisible().catch(() => false);
       }
@@ -442,7 +444,8 @@ async function coletarDadosAcompanhamento() {
       etapasProcessadas.add(etapa);
       await etapaLink.click(); // recolhe a etapa atual antes de ir pra próxima
       etapaIndex++;
-      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+      // Sem espera extra aqui — a próxima volta do while já espera a
+      // tabela da PRÓXIMA etapa ficar visível antes de prosseguir.
     }
 
     console.log('[Coleta Acomp] ✅ Extração concluída.');

@@ -138,6 +138,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de acompanhamento: removidas 5 chamadas de `page.waitForLoadState('networkidle',
+  ...)` que atrasavam sem necessidade — usuário reportou "a página nitidamente já carregou e
+  ainda fica esperando um tempo a mais desnecessário" ao entrar na aba e ao voltar dela após
+  coletar UCs. `networkidle` só resolve quando não há requisição de rede por um tempo; se o
+  portal tem qualquer atividade de fundo, isso nunca acontece e o código esperava o timeout
+  inteiro (15-20s) mesmo com a página já pronta. O `waitForSelector`/`waitFor` de
+  visibilidade que já existia em paralelo é suficiente sozinho. Ver Adendo 9 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de acompanhamento: depois de fechar a tela de detalhe da OS, a etapa podia voltar
   **recolhida** (não só "lista vazia") — o link do próximo livro continuava existindo no DOM
   mas ficava invisível, e `locator.click` ficava 30s tentando em vão. Nova checagem por

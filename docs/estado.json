@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T14:14:48.101Z",
+  "atualizado_em": "2026-08-27T14:32:12.554Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "c3909d8",
+  "commit": "fe3b08c",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -551,6 +551,13 @@
       "skill": "/projeto-novo",
       "evento": "Fix: scraper aguarda popup OU modal na mesma pagina ao clicar no link da OS",
       "detalhe": "Primeiro ciclo automatico de coleta apos a mudanca do Adendo 2 (ADR 0018) rodou contra o portal real e confirmou o cenario de risco: Etapa ETAPA 15 - (6): 0/6 livros com OS aberta, 0 UCs coletadas, com Timeout 15000ms exceeded while waiting for event popup repetido nos 6 livros. O clique acontecia sem erro, mas o evento popup do Playwright nunca disparava - sinal de que a tela de UCs abre como modal/iframe carregado via AJAX na MESMA pagina, nao janela nova, apesar do usuario ter descrito anteriormente como popup/nova aba. Corrigido copelScraperService.js pra aguardar os dois casos em paralelo: page.waitForEvent(popup) e page.waitForSelector(#tabFixedHeader, state visible) na propria pagina, usando Promise.any (nao Promise.race - com race a que expira primeiro derrubaria a tentativa mesmo que a outra estivesse a caminho de funcionar). Se veio da mesma pagina, extrai de page e faz goBack() depois; se veio de popup, so fecha a popup. Se nenhuma das duas vier, salva diagnostico (screenshot + texto, reaproveitando salvarDiagnostico ja existente pra falha de login) so na primeira falha da execucao inteira, nao uma captura por livro, pra nao gerar centenas de arquivos se o problema for sistemico. Nao validado ao vivo de novo apos esta correcao - fica pro proximo ciclo automatico. Se o diagnostico mostrar algo diferente do esperado, e o proximo ponto a investigar. Ver Adendo 2 da ADR 0018."
+    },
+    {
+      "data": "2026-08-27T14:32:12.553Z",
+      "nivel": "aviso",
+      "skill": "/projeto-novo",
+      "evento": "Fix: scraper coletava so 1 UC por livro (seletor #tabFixedHeader era ambiguo)",
+      "detalhe": "Usuario reportou apos o ciclo automatico anterior: etapa 29 tinha 3 livros, um deles com mais de 200 UCs reais, mas o banco so ficou com 3 registros no total - exatamente 1 por livro. Investigado o codigo: o for que percorre totalLivros ja roda por completo antes de etapaIndex++ (nunca pulava de etapa cedo, isso ja estava correto). O problema real estava na extracao de cada livro: usar #tabFixedHeader como sinal de mesma pagina mudou de fato era fragil - esse id pertence a um plugin JS generico de tabela com cabecalho fixo (classe fixedheader fht-table vista no HTML fornecido pelo usuario), plausivelmente reaproveitado em mais de uma tela do sistema, possivelmente ate na propria lista de livros. Se for esse o caso, o waitForSelector resolvia quase instantaneamente apos o clique, antes da navegacao real, ou contra a tabela errada - explicando 1 linha por livro. Segunda causa complementar: a tabela pode popular linhas de forma assincrona/incremental depois do elemento ja existir no DOM. Corrigido em copelScraperService.js: 1) trocado o sinal de mudou de tela de #tabFixedHeader para o texto DADOS DE EXECUCAO (cabecalho de secao exclusivo da tela de detalhe da OS, visto no print do usuario), improvavel de existir na lista de livros; 2) nova funcao aguardarTabelaEstabilizar() que faz poll a cada 500ms (ate 10s) contando linhas de #tabFixedHeader tbody tr, so retorna quando a contagem para de crescer entre duas checagens - cobre populacao assincrona. Tambem adicionado console.warn por livro que abre a OS mas extrai 0 UCs, pra facilitar diagnostico futuro sem precisar so do total agregado por etapa. npm test (12 testes) continua passando. Nao validado ao vivo de novo apos esta correcao - fica pro proximo ciclo automatico de coleta. Ver Correcao 2 do Adendo 2 da ADR 0018."
     }
   ]
 }

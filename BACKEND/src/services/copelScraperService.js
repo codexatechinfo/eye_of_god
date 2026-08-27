@@ -20,6 +20,37 @@ async function salvarDiagnostico(page, motivo) {
   }
 }
 
+// Extrai a tabela #tabFixedHeader da aba de detalhe (aberta via clique no
+// link "número da OS", ver comentário mais abaixo) — uma linha por UC/
+// medidor do livro. Índices confirmados contra o HTML real (usuário
+// forneceu print + <table id="tabFixedHeader"> completa): 0=num leit.,
+// 1=UC, 2=equip., 3=tipo espec., 4=função espec., 5=faturar?, 6=forma,
+// 7=leit. atual (input), 8=mensagem 1 (input), 9=mensagem 2 (input),
+// 10=lacre (input), 11=Observação (input), 12=checkbox/refresh.
+// leit. atual e mensagem 1 são <input readonly value="..."> — o valor
+// visível está no atributo value, não no innerText do <td>.
+async function extrairLinhasDetalheOs(paginaDetalhe) {
+  return paginaDetalhe.evaluate(() => {
+    const table = document.querySelector('#tabFixedHeader');
+    if (!table) return [];
+    const valorCelula = td => {
+      const input = td.querySelector('input');
+      return (input ? input.value : td.innerText).trim();
+    };
+    return Array.from(table.querySelectorAll('tbody tr')).map(tr => {
+      const tds = Array.from(tr.querySelectorAll('td'));
+      return {
+        uc: tds[1] ? valorCelula(tds[1]) : '',
+        equipamento: tds[2] ? valorCelula(tds[2]) : '',
+        tipoEspecificacao: tds[3] ? valorCelula(tds[3]) : '',
+        faturamento: tds[5] ? valorCelula(tds[5]) : '',
+        leituraAtual: tds[7] ? valorCelula(tds[7]) : '',
+        codigo: tds[8] ? valorCelula(tds[8]) : '',
+      };
+    });
+  });
+}
+
 async function coletarDadosAcompanhamento() {
   const browser = await chromium.launch({ headless: true, slowMo: 100 });
   const page = await browser.newPage();
@@ -66,43 +97,81 @@ async function coletarDadosAcompanhamento() {
       await etapas.nth(etapaIndex).click();
       await page.waitForTimeout(8000);
 
-      const rows = await page.evaluate(() => {
-        const tables = Array.from(document.querySelectorAll('table#item'));
-        return tables.map(table => {
-          if (table.offsetParent !== null) {
-            const rows = Array.from(table.querySelectorAll('tbody tr'));
-            return rows.map(row =>
-              Array.from(row.querySelectorAll('td')).map(cell =>
-                cell.innerText.trim().replace(/\s+/g, ' ')
-              )
-            );
-          }
-          return [];
-        }).flat();
-      });
+      const linhasEtapa = page.locator('table#item:visible tbody tr');
+      const totalLivros = await linhasEtapa.count();
+      console.log(`[Coleta Acomp] 📄 ${totalLivros} livros na etapa '${etapa}' — abrindo cada OS...`);
 
-      console.log(`[Coleta Acomp] 📄 ${rows.length} linhas extraídas na etapa '${etapa}'`);
+      let livrosComUc = 0;
+      let totalUcs = 0;
 
-      for (let row of rows) {
-        if (row.length >= 2) row = row.slice(1);
+      for (let i = 0; i < totalLivros; i++) {
+        const linha = linhasEtapa.nth(i);
+        const celulas = await linha.locator('td').allInnerTexts();
+        // Primeira célula é o checkbox de seleção (sem texto) — mesmo
+        // padrão do parser antigo.
+        let row = celulas.slice(1);
         while (row.length < 14) row.push('');
 
-        let data = '', hora = '';
+        let dataRecebimento = '';
+        let horaRecebimento = '';
         if (row[6] && row[6].includes(' ')) {
-          [data, hora] = row[6].split(' ', 2);
+          [dataRecebimento, horaRecebimento] = row[6].split(' ', 2);
         } else {
-          data = row[6];
+          dataRecebimento = row[6];
         }
 
-        const linha = [
-          etapa, row[0], row[1], row[2], row[3], row[4], row[5],
-          data, hora, row[7], row[8], row[9], row[10], row[11], row[12], row[13]
-        ];
+        const cabecalho = {
+          etapa,
+          localidade: row[3],
+          livro: row[4],
+          empreiteira: row[5],
+          dataRecebimento,
+          horaRecebimento,
+          dataPrevistaLimite: row[7],
+          situacaoBruta: row[13],
+        };
 
-        if (linha.slice(1).some(c => c && c.trim())) {
-          registros.push(linha);
+        if (!Object.values(cabecalho).some(v => v && String(v).trim())) continue;
+
+        // "Número da OS" (numero_os no parser antigo) é a célula de índice
+        // 3 contando com o checkbox — ex.: <a href="javascript:update('ID',
+        // 'editarTarefasLeituraAction.do?acompanhamento=S')">2026...</a>.
+        // Clicar de verdade (não simular via fetch) porque a função
+        // update() do site pode depender de estado JS/sessão que não dá
+        // pra replicar de fora; usuário confirmou que abre em popup/nova
+        // aba — a lista de livros continua intacta ao fundo, sem precisar
+        // de goBack().
+        const linkOs = linha.locator('td').nth(3).locator('a');
+        if ((await linkOs.count()) === 0) continue;
+
+        let popup = null;
+        try {
+          [popup] = await Promise.all([
+            page.waitForEvent('popup', { timeout: 15000 }),
+            linkOs.click(),
+          ]);
+          await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+
+          const linhasUc = await extrairLinhasDetalheOs(popup);
+          for (const uc of linhasUc) {
+            registros.push({ ...cabecalho, ...uc });
+          }
+          if (linhasUc.length > 0) {
+            livrosComUc++;
+            totalUcs += linhasUc.length;
+          }
+        } catch (erroOs) {
+          console.error(
+            `[Coleta Acomp] ⚠️ Falha ao abrir OS do livro '${cabecalho.livro}' (etapa ${etapa}): ${erroOs.message}`,
+          );
+        } finally {
+          if (popup) await popup.close().catch(() => {});
         }
       }
+
+      console.log(
+        `[Coleta Acomp] ✅ Etapa '${etapa}': ${livrosComUc}/${totalLivros} livros com OS aberta, ${totalUcs} UCs coletadas.`,
+      );
 
       etapasProcessadas.add(etapa);
       await etapas.nth(etapaIndex).click();

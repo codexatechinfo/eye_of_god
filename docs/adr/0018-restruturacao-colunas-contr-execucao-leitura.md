@@ -121,6 +121,74 @@ mesmo processo (como `postgres` dentro do `supabase-db`). Confirmada via
 Mesma situação das 7 colunas do Adendo original: não populada pelo scraper ainda (nenhum
 código toca nela), origem/uso não especificados no pedido — fica pendente de instrução.
 
+## Adendo 2 — scraping das 7 colunas novas: clique em cada OS abre uma tela por UC
+
+Usuário indicou de onde vêm `uc`/`colaborador`/`codigo`/`equipamento`/`tipo_especificacao`/
+`faturamento`/`leitura_atual` (as colunas que ficaram pendentes no Adendo original): a tabela
+de livros de cada etapa (já raspada antes) tem, na coluna "número da OS", um link
+(`<a href="javascript:update('ID','editarTarefasLeituraAction.do?acompanhamento=S')">...`)
+que abre — confirmado com o usuário via pergunta direta — um **popup/nova aba** com uma
+tabela por UC/medidor daquele livro (`#tabFixedHeader`).
+
+### Mudança de arquitetura do scraper
+
+Antes: 1 livro = 1 linha (`table#item`, extraída toda de uma vez via `page.evaluate` em
+lote). Agora: 1 livro = N linhas, uma por UC — o cabeçalho (etapa/localidade/livro/
+empreiteira/datas/situação/colaborador) vem da lista de livros e se repete em cada UC; o
+detalhe (uc/codigo/equipamento/tipo_especificacao/faturamento/leitura_atual) vem da tabela
+que abre ao clicar.
+
+`copelScraperService.js` reescrito: para cada linha da tabela de livros da etapa, clica no
+link da célula de índice 3 (contando o checkbox — mesma posição de `numero_os` no parser
+antigo), captura o popup via `page.waitForEvent('popup')` em paralelo ao clique, extrai
+`#tabFixedHeader` de dentro do popup, fecha o popup, e segue pro próximo livro sem precisar
+de `goBack()` (usuário confirmou que a lista de livros continua intacta ao fundo). Cada
+livro sem UC nenhuma ou com falha ao abrir a OS é logado e pulado (`try/catch` por livro),
+sem travar o resto da etapa — dado o volume (uma etapa chegou a mostrar 274 livros no print
+do usuário), uma falha isolada não pode derrubar a coleta inteira.
+
+Índices confirmados contra o HTML real fornecido pelo usuário (`<table id="tabFixedHeader">`
+completa, várias linhas de exemplo): `1`=UC, `2`=equip., `3`=tipo espec., `5`=faturar?,
+`7`=leit. atual, `8`=mensagem 1 (`codigo`). As duas últimas são `<input readonly value="...">`
+— o valor visível está no atributo `value`, não no `innerText` da célula (diferente das
+outras, que são texto puro).
+
+O scraper agora retorna um **array de objetos** (um por UC), não mais array de arrays
+posicionais — `copelImportService.js` foi ajustado para não depender mais de
+`CAMPOS_SCRAPER`/parse posicional: recebe os campos já nomeados e só aplica `limparEtapa()`
+(igual antes) e uma função nova, `parseSituacaoColaborador()`, que separa a coluna crua
+"Em Execução (CPO-NOME DO COLABORADOR)" em `situacao` (só a palavra) e `colaborador` (só o
+nome, sem prefixo tipo "CPO-") — mesma regex de `SITUACAO_REGEX` já usada em
+`atividadeColaboradoresService.js`. "Pendente" nunca tem colaborador (não bate no regex, cai
+no fallback: `situacao` = texto bruto, `colaborador` = `null`).
+
+### Batching do INSERT
+
+Um livro pode gerar dezenas de linhas agora (uma por UC), então o volume por lote de coleta
+cresceu bastante em relação a quando era uma linha por livro. Adicionado `LOTE_MAX_LINHAS =
+300` em `copelImportService.js` — o `INSERT` é dividido em lotes de até 300 linhas para não
+estourar o limite de 65535 parâmetros por query do Postgres (15 colunas × linha).
+
+### Verificação
+
+Testado `importarParaPostgres` isoladamente com 2 registros mockados (2 UCs do mesmo livro,
+dados baseados no print e no HTML reais fornecidos pelo usuário) — dentro de uma transação
+com rollback, sem persistir dado de teste. Resultado bateu exatamente: `etapa` limpo para
+`'17'`, `situacao` = `'Em Execução'`, `colaborador` = `'WELTON RICARDO VEIGA VIEIRA'` (prefixo
+"CPO-" removido corretamente), `uc`/`codigo`/`equipamento`/`tipo_especificacao`/`faturamento`/
+`leitura_atual` todos corretos. `npm test` (12 testes de isolamento de tenant) continua
+passando.
+
+**Não testado ao vivo contra o portal Copel real** nesta sessão — a extração em si
+(`coletarDadosAcompanhamento`, o clique real no link e a leitura do popup) só roda de fato no
+próximo ciclo do job de coleta automática (`coletaJob.js`, dentro da janela 07h–19h) ou numa
+execução manual deliberada; não foi disparada aqui para não gerar carga extra e repetida no
+sistema de terceiros fora do ciclo já agendado. Vale acompanhar os logs do primeiro ciclo real
+após esta mudança (`[Coleta Acomp] ✅ Etapa 'X': N/M livros com OS aberta, T UCs coletadas`) —
+se o popup não abrir como esperado, ou os índices de coluna estiverem errados, essa linha vai
+mostrar `0 UCs` mesmo com livros presentes, ou os logs de erro por livro (`⚠️ Falha ao abrir
+OS...`) vão aparecer em volume.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

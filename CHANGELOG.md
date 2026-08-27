@@ -7,15 +7,26 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Scraper de acompanhamento (`copelScraperService.js`) reestruturado: antes coletava 1 linha
+  por livro direto da tabela de cada etapa; agora, para cada livro, clica no link "número da
+  OS" (abre popup com a tabela de UCs/medidores daquele livro) e gera 1 registro por UC,
+  repetindo os dados do livro (etapa/localidade/livro/empreiteira/datas/situação/
+  colaborador) em cada um. Alimenta as colunas `uc`/`codigo`/`equipamento`/
+  `tipo_especificacao`/`faturamento`/`leitura_atual` de `contr_execucao_leitura`, até então
+  sem scraping. `copelImportService.js` ganhou `parseSituacaoColaborador()` (separa "Em
+  Execução (CPO-NOME)" em situação + colaborador) e batching do INSERT em lotes de 300 linhas
+  (um livro agora pode gerar dezenas de linhas). Testado isoladamente (mock + rollback) contra
+  o banco real — não testado ao vivo contra o portal Copel nesta sessão, só no próximo ciclo
+  automático de coleta. Ver Adendo 2 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - `contr_execucao_leitura` reestruturada: removidas `tipo_oss`, `subtipo_os`, `numero_os`,
   `data_ultima_atualizacao`, `qtd_digitados_nao_digitados`, `qtd_com_leitura_sem_leitura`,
   `percentual_sem_leitura`, `qtd_fora_de_faixa_foto`; adicionadas `uc`, `colaborador`,
-  `codigo`, `equipamento`, `tipo_especificacao`, `faturamento`, `leitura_atual`, `smart`
-  (ainda sem scraping — vêm de outra aba do portal Copel, a indicar). **Efeito colateral
-  temporário**:
-  progresso/percentual de execução de leitura/releitura (Monitoramento de Livros e Trilho)
-  fica zerado até a nova lógica ser definida com as colunas novas — massiva não é afetada.
-  Ver [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+  `codigo`, `equipamento`, `tipo_especificacao`, `faturamento`, `leitura_atual`, `smart`.
+  **Efeito colateral temporário**: progresso/percentual de execução de leitura/releitura
+  (Monitoramento de Livros e Trilho) fica zerado até a nova lógica ser definida com as
+  colunas novas — massiva não é afetada. Ver
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 
 ### Adicionado
 

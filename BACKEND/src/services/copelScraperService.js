@@ -59,7 +59,7 @@ async function extrairLinhasDetalheOs(paginaDetalhe) {
 // inacessíveis/errados. "CANCELAR" é o mecanismo que o próprio site
 // oferece pra fechar a tela e devolve a lista no estado certo. Fallback
 // pra goBack() só se o botão não existir.
-async function fecharTelaDetalheMesmaPagina(page, tabelaAtual) {
+async function fecharTelaDetalheMesmaPagina(page) {
   const botaoCancelar = page.getByRole('button', { name: /cancelar/i }).or(
     page.locator('input[type="button"][value*="CANCELAR" i], input[type="submit"][value*="CANCELAR" i]'),
   );
@@ -69,14 +69,16 @@ async function fecharTelaDetalheMesmaPagina(page, tabelaAtual) {
     console.warn('[Coleta Acomp] ⚠️ Botão CANCELAR não encontrado — usando page.goBack() como fallback.');
     await page.goBack().catch(() => {});
   }
-  // Espera a tabela DESTA etapa especificamente (não qualquer #item — ver
-  // tabelaDaEtapa) voltar a ficar visível. Isso já é o sinal certo de "a
-  // página está pronta" — um waitForLoadState('networkidle') adicional
-  // depois disso só atrasava sem necessidade (usuário reportou "a página
-  // nitidamente já carregou e ainda fica esperando um tempo a mais": se o
-  // site tem qualquer requisição de fundo/polling, a rede nunca fica
-  // "idle" de verdade, e o código esperava o timeout inteiro à toa).
-  await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+  // Não espera a tabela ficar visível aqui: o Adendo 7 já confirmou (com
+  // diagnóstico real) que depois de CANCELAR a etapa quase sempre volta
+  // RECOLHIDA e só reaparece quando alguém reclica no link da etapa — não
+  // sozinha. Um waitFor({state:'visible'}) aqui esperava, na prática, os
+  // 15s inteiros do timeout TODA VEZ (silenciado por .catch, sem log nenhum)
+  // antes de seguir em frente — 15s mortos por livro processado via "mesma
+  // página" (o caso mais comum). garantirEtapaVisivel(), chamada no início
+  // da próxima volta do loop de livros, já cuida de checar visibilidade e
+  // reclicar ativamente se preciso — esperar aqui era trabalho duplicado e
+  // mais lento (espera passiva por algo que só um clique ativo resolve).
 }
 
 // Lê o cabeçalho (etapa/localidade/livro/...) e o número do livro de uma
@@ -431,7 +433,7 @@ async function coletarDadosAcompanhamento() {
           if (popup) {
             await popup.close().catch(() => {});
           } else if (usouMesmaPagina) {
-            await fecharTelaDetalheMesmaPagina(page, tabelaAtual);
+            await fecharTelaDetalheMesmaPagina(page);
           }
         }
       }

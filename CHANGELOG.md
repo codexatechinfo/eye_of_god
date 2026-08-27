@@ -7,6 +7,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de Acompanhamento: `fecharTelaDetalheMesmaPagina()` esperava até 15s (silenciado
+  por `.catch`, sem log) que a tabela de livros "ficasse visível sozinha" depois de clicar
+  "CANCELAR" — mas o próprio Adendo 7 já tinha provado que isso não acontece sozinho, só
+  reclicando na etapa (o que `garantirEtapaVisivel()` já fazia corretamente no início de
+  cada livro). Era um buraco de até 15s morto por livro processado via "mesma página" (caso
+  mais comum), sem nenhum sinal de erro no log. Removida essa espera redundante — a
+  reabertura ativa continua sendo feita, só que exclusivamente por
+  `garantirEtapaVisivel()`. Ver Adendo 11 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de Massivas (`copelMassivasScraperService.js`): removidos 9 `waitForTimeout` fixos
   (login, troca de aba, cascata de filtros dependentes, pós-busca) que somavam >30s de
   espera garantida por ciclo mesmo com a página já carregada — mesma causa do "tempo

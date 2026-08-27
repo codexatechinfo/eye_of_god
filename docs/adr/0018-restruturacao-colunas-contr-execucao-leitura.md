@@ -552,6 +552,38 @@ carregamento, é folga proposital entre uma tentativa e outra).
 `npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
 próxima execução do usuário.
 
+## Adendo 11 — a demora real estava no Acompanhamento: 15s mortos por livro, contradizendo o próprio Adendo 7
+
+Usuário corrigiu o alvo: o scraper de Massivas (Adendo 10) já estava bom — quem continuava
+"com a página nitidamente carregada mas ainda parado" era o de Acompanhamento.
+
+Revisão completa de `copelScraperService.js` não achou mais nenhum `waitForTimeout` fixo nem
+`waitForLoadState('networkidle')` (já removidos nos Adendos 4 e 9). A causa real era outra:
+uma contradição entre dois pontos do próprio código. O Adendo 7 tinha confirmado, com
+diagnóstico real (screenshot), que depois de clicar "CANCELAR" a etapa quase sempre volta
+**recolhida sozinha** — só reaparece quando alguém reclica no link da etapa, nunca por conta
+própria. Mas `fecharTelaDetalheMesmaPagina()` (a função que clica em CANCELAR) continuava
+terminando com `tabelaAtual.waitFor({state:'visible', timeout:15000}).catch(() => {})` —
+esperando exatamente a coisa que o Adendo 7 já tinha provado não acontecer sozinha. Como o
+erro era engolido por um `.catch` silencioso, isso nunca aparecia como falha no log: era só
+um buraco de até 15s de nada, repetido a cada livro processado via "mesma página" (o caso
+mais comum, segundo o Adendo 2) — numa etapa com 66 livros, mais de dez minutos perdidos
+sem nenhum sinal de erro.
+
+A responsabilidade de reabrir a etapa e esperar ativamente já existia e já era a certa:
+`garantirEtapaVisivel()`, chamada no início de cada volta do loop de livros (Adendo 7), que
+checa visibilidade e reclica em `etapaLink` se preciso. `fecharTelaDetalheMesmaPagina()`
+não precisa (e não deve) tentar adivinhar se a tabela vai reaparecer sozinha — só clica em
+CANCELAR e segue; quem garante o resto é a próxima chamada de `garantirEtapaVisivel()`, que
+já fazia isso de forma ativa (reclicando), não passiva (esperando acontecer).
+
+Removido o `waitFor` de dentro de `fecharTelaDetalheMesmaPagina()` (que também deixou de
+receber o parâmetro `tabelaAtual`, agora sem uso). Nenhuma mudança de comportamento
+funcional — só elimina uma espera que nunca resolvia de verdade.
+
+`npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
+próxima execução do usuário.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

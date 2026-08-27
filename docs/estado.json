@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T14:32:12.554Z",
+  "atualizado_em": "2026-08-27T16:10:47.436Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "fe3b08c",
+  "commit": "11cc12a",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -558,6 +558,13 @@
       "skill": "/projeto-novo",
       "evento": "Fix: scraper coletava so 1 UC por livro (seletor #tabFixedHeader era ambiguo)",
       "detalhe": "Usuario reportou apos o ciclo automatico anterior: etapa 29 tinha 3 livros, um deles com mais de 200 UCs reais, mas o banco so ficou com 3 registros no total - exatamente 1 por livro. Investigado o codigo: o for que percorre totalLivros ja roda por completo antes de etapaIndex++ (nunca pulava de etapa cedo, isso ja estava correto). O problema real estava na extracao de cada livro: usar #tabFixedHeader como sinal de mesma pagina mudou de fato era fragil - esse id pertence a um plugin JS generico de tabela com cabecalho fixo (classe fixedheader fht-table vista no HTML fornecido pelo usuario), plausivelmente reaproveitado em mais de uma tela do sistema, possivelmente ate na propria lista de livros. Se for esse o caso, o waitForSelector resolvia quase instantaneamente apos o clique, antes da navegacao real, ou contra a tabela errada - explicando 1 linha por livro. Segunda causa complementar: a tabela pode popular linhas de forma assincrona/incremental depois do elemento ja existir no DOM. Corrigido em copelScraperService.js: 1) trocado o sinal de mudou de tela de #tabFixedHeader para o texto DADOS DE EXECUCAO (cabecalho de secao exclusivo da tela de detalhe da OS, visto no print do usuario), improvavel de existir na lista de livros; 2) nova funcao aguardarTabelaEstabilizar() que faz poll a cada 500ms (ate 10s) contando linhas de #tabFixedHeader tbody tr, so retorna quando a contagem para de crescer entre duas checagens - cobre populacao assincrona. Tambem adicionado console.warn por livro que abre a OS mas extrai 0 UCs, pra facilitar diagnostico futuro sem precisar so do total agregado por etapa. npm test (12 testes) continua passando. Nao validado ao vivo de novo apos esta correcao - fica pro proximo ciclo automatico de coleta. Ver Correcao 2 do Adendo 2 da ADR 0018."
+    },
+    {
+      "data": "2026-08-27T16:10:47.436Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Confirmado ao vivo: correcao do scraper funcionou (UCs por livro variando 2-257) + COPEL_HEADLESS pra debug visual",
+      "detalhe": "Usuario pediu pra apagar os dados incompletos da execucao anterior (879 registros, 1 por livro) e acompanhar o proximo ciclo. TRUNCATE rodado, tabela zerada. Acompanhado o ciclo seguinte direto pelo banco de dados (contagem de linhas por livro), sem depender dos logs do terminal do usuario: distribuicao de UCs por livro passou a variar de verdade (2 a 257 UCs no mesmo lote - livro 018405 com 99, livro 019362 com 70, livro 042154 com 257, etc.), contra o 1 fixo de antes - confirma que a correcao do sinal de deteccao (texto DADOS DE EXECUCAO em vez de #tabFixedHeader) resolveu o problema real. Em seguida, usuario pediu pra tornar o navegador visivel durante a coleta pra poder identificar problemas visualmente. Adicionada variavel COPEL_HEADLESS (.env) - false abre o Chromium com janela (slowMo 300 em vez de 100, mais facil de acompanhar), default true (sem janela, comportamento certo pra producao ja que o job roda sozinho o dia inteiro dentro da janela 07h-19h). .env.example documentado; .env real do usuario ja ativado com COPEL_HEADLESS=false pra proxima investigacao. npm test (12 testes) continua passando. Reconfirmado por inspecao do codigo que a estrutura do loop ja garantia so avancar de etapa apos processar todos os livros da etapa atual - isso nunca foi o problema, ja estava correto desde a implementacao original."
     }
   ]
 }

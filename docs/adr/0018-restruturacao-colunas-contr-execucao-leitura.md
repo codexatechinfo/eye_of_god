@@ -373,6 +373,65 @@ pelo mesmo motivo, em vez de esperar por qualquer `#item` visível na página.
 Não validado ao vivo de novo — fica pra próxima execução. `npm test` (12 testes) continua
 passando.
 
+## Adendo 6 — crash real: unhandled rejection no `Promise.any` de popup/mesma página
+
+Usuário rodou o backend no próprio terminal (pra ver a janela do Chromium de verdade — meu
+processo, iniciado por outra via, não roda na sessão gráfica dele, então a janela nunca
+aparecia; ver nota de comunicação abaixo) e o processo **crashou** de verdade — não uma
+falha tratada, um `nodemon: app crashed`:
+
+```
+page.waitForEvent: Timeout 10000ms exceeded while waiting for event "popup"
+...
+Node.js v24.14.1
+[nodemon] app crashed - waiting for file changes before starting...
+```
+
+### Causa raiz
+
+`promPopup`/`promMesmaPagina` (Adendo 4/5) eram criadas **antes** de `await linkOs.click()`
+— necessário para `waitForEvent('popup')` (que precisa estar escutando antes do clique, ou
+perde o evento se o popup abrir rápido demais). O problema: se o `click()` demorasse mais
+que os 10s de timeout de qualquer uma das duas, ela **rejeitava sozinha enquanto o código
+ainda estava no `await linkOs.click()`**, antes do `Promise.any` (só chamado depois do
+click) ter qualquer handler anexado — o V8 marca isso como *unhandled rejection*, que em
+Node é fatal por padrão (derruba o processo).
+
+Um `.catch(() => {})` preventivo só na promise original (tentativa anterior, mesmo commit
+anterior) **não bastou** — confirmado com um teste isolado (fora do projeto, script
+descartável): o V8 trata cada nível derivado da cadeia (`.then()`, e o resultado do
+`Promise.any` em si) como uma promise própria, e qualquer uma delas rejeitando sem handler
+anexado a tempo dispara o mesmo problema, independente de a promise-mãe já estar "tratada".
+
+### Correção
+
+`.catch(() => {})` preventivo adicionado em **todos** os níveis da cadeia: `promPopup`,
+`promMesmaPagina` (originais), `esperaPopup`, `esperaMesmaPagina` (derivadas do `.then()`),
+e `combinada` (o `Promise.any([...])` em si) — cada um logo após ser criado, antes de
+qualquer `await`. A referência real usada no fluxo (`combinada`, consumida via `await
+combinada` depois do clique) continua funcionando normalmente; os `.catch()` extras só
+"drenam" a rejeição pros handlers descartados, sem afetar o resultado usado.
+
+Validado com um teste isolado reproduzindo exatamente o cenário (duas promises com timeout
+curto, um "clique" mais lento que o timeout, antes/depois da correção) — sem a correção,
+`unhandledRejection` dispara sempre; com ela, o `catch` normal do código captura
+corretamente em ambos os casos (falha total das duas, ou sucesso de uma). Testado também o
+caminho de sucesso (uma das duas resolve antes da outra rejeitar) pra garantir que a
+correção não mudou o comportamento funcional, só eliminou o crash.
+
+### Nota — por que a janela do Chromium não aparecia
+
+Antes deste crash, o usuário reportou "não abriu a página pra eu ver" quando eu reiniciei o
+backend pela minha própria ferramenta (mesmo com `COPEL_HEADLESS=false` no `.env`). Causa:
+meu processo não roda na mesma sessão gráfica interativa do desktop do usuário — `headless:
+false` abre uma janela real do SO, mas ela só é visível em quem está na sessão onde o
+processo roda. Rodar `npm run dev` diretamente no terminal do próprio usuário (não pela
+minha ferramenta) é o que permite a janela aparecer pra ele — foi assim que ele conseguiu
+ver o comportamento real que levou às correções deste Adendo e dos anteriores.
+
+`npm test` (12 testes) continua passando. Não validado ao vivo de novo contra o portal real
+depois desta correção — fica pra próxima execução do usuário.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

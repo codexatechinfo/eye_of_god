@@ -133,6 +133,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de acompanhamento: **crash real do processo** (`nodemon: app crashed`) por
+  unhandled rejection no `Promise.any` que decide popup vs. mesma página — se o clique no
+  link da OS demorasse mais que o timeout de 10s de qualquer uma das duas esperas, ela
+  rejeitava sozinha antes do `Promise.any` ter handler anexado. `.catch(() => {})`
+  preventivo adicionado em todos os níveis da cadeia de promises (originais, derivadas do
+  `.then()`, e o `Promise.any` combinado) — validado com teste isolado reproduzindo o
+  cenário exato. Ver Adendo 6 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de acompanhamento: causa raiz real de só processar 1 livro por etapa — cada etapa
   expandida mostra sua própria tabela de livros, mas **todas compartilham o mesmo
   `id="item"`** (confirmado por print do usuário); um seletor CSS `#item` sempre resolve pra

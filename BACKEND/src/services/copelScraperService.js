@@ -341,19 +341,46 @@ async function coletarDadosAcompanhamento() {
         let popup = null;
         let usouMesmaPagina = false;
         try {
+          // waitForEvent('popup') precisa ser registrado ANTES do clique
+          // (senão corre risco de perder o evento se o popup abrir rápido
+          // demais) — mas isso deixa a promise "solta" rejeitando sozinha
+          // por timeout enquanto o código ainda está no `await
+          // linkOs.click()`. Bug real visto ao vivo: se o clique demorasse
+          // mais que os 10s do timeout, a rejeição acontecia ANTES do
+          // Promise.any ter chance de consumi-la, virando uma unhandled
+          // rejection que derrubava o processo Node inteiro (nodemon "app
+          // crashed").
+          //
+          // Confirmado com um teste isolado (fora deste arquivo) que o V8
+          // marca como "unhandled" QUALQUER promise da cadeia que rejeita
+          // antes de ter um handler anexado — inclusive as derivadas de
+          // `.then()` e o resultado final do `Promise.any()`, não só as
+          // promises originais. `.catch(() => {})` preventivo precisa
+          // estar em CADA nível (original, `.then()`, e a combinação final)
+          // pra realmente eliminar o risco; um catch só na promise
+          // original não bastou.
+          const promPopup = page.waitForEvent('popup', { timeout: 10000 });
+          promPopup.catch(() => {});
+          const promMesmaPagina = page
+            .getByText('DADOS DE EXECUÇÃO', { exact: false })
+            .first()
+            .waitFor({ timeout: 10000, state: 'visible' });
+          promMesmaPagina.catch(() => {});
+
           // Promise.any (não race): resolve assim que QUALQUER uma tiver
           // sucesso, e só rejeita se as DUAS falharem. Com race, a que
           // expira primeiro derrubaria a tentativa mesmo que a outra ainda
           // estivesse a caminho de dar certo.
-          const esperaPopup = page.waitForEvent('popup', { timeout: 10000 }).then(p => ({ tipo: 'popup', p }));
-          const esperaMesmaPagina = page
-            .getByText('DADOS DE EXECUÇÃO', { exact: false })
-            .first()
-            .waitFor({ timeout: 10000, state: 'visible' })
-            .then(() => ({ tipo: 'mesmaPagina' }));
+          const esperaPopup = promPopup.then(p => ({ tipo: 'popup', p }));
+          esperaPopup.catch(() => {});
+          const esperaMesmaPagina = promMesmaPagina.then(() => ({ tipo: 'mesmaPagina' }));
+          esperaMesmaPagina.catch(() => {});
+
+          const combinada = Promise.any([esperaPopup, esperaMesmaPagina]);
+          combinada.catch(() => {});
 
           await linkOs.click();
-          const resultado = await Promise.any([esperaPopup, esperaMesmaPagina]);
+          const resultado = await combinada;
 
           if (resultado.tipo === 'popup') {
             popup = resultado.p;

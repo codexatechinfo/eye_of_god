@@ -217,6 +217,49 @@ algo diferente do esperado (ex.: nem popup nem `#tabFixedHeader` — talvez a fu
 dependa de outro estado, ou o índice da célula do link esteja errado), é o próximo ponto a
 investigar.
 
+### Correção 2 pós-segundo-ciclo-real: `#tabFixedHeader` estava lendo a tabela errada, e/ou cedo demais
+
+Usuário reportou (segundo ciclo real, já com a correção acima): etapa 29 tinha 3 livros, um
+deles com mais de 200 UCs reais, mas o banco só ficou com **3 registros no total** — ou seja,
+exatamente 1 registro por livro, não uma UC de cada. A hipótese "só segue pra próxima etapa
+depois de terminar a atual" foi descartada por inspeção do código: o `for` que percorre
+`totalLivros` já roda por completo antes de `etapaIndex++` — isso nunca foi o problema; o
+problema estava dentro da extração de cada livro.
+
+Causa mais provável: usar `#tabFixedHeader` como sinal de "a mesma página mudou de fato" era
+frágil demais. Esse id pertence a um plugin JS genérico de tabela com cabeçalho fixo (classe
+CSS `fixedheader fht-table`, vista no HTML fornecido pelo usuário) — plausivelmente
+reaproveitado em mais de uma tela do sistema, possivelmente até na própria lista de livros
+(que também tem centenas de linhas e se beneficiaria de cabeçalho fixo ao rolar). Se for esse
+o caso, `page.waitForSelector('#tabFixedHeader', {state:'visible'})` podia resolver quase
+instantaneamente após o clique — **antes** da navegação real acontecer, ou contra a tabela
+errada — explicando por que a extração pegava só 1 linha (ou a linha errada) por livro. Uma
+segunda causa, complementar e também plausível, é a tabela popular linhas de forma
+assíncrona/incremental depois do elemento já existir no DOM — extrair cedo demais pegaria só
+a 1ª linha mesmo com o seletor certo.
+
+Corrigido nas duas frentes:
+
+1. **Sinal de "mudou de tela" mais específico**: trocado `#tabFixedHeader` por
+   `page.getByText('DADOS DE EXECUÇÃO', { exact: false }).first().waitFor({state:'visible'})`
+   — esse texto é o cabeçalho da segunda seção da tela de detalhe da OS (visto no print do
+   usuário: "📁 DADOS DE EXECUÇÃO", com os campos leiturista/data de leitura logo abaixo),
+   improvável de existir na lista de livros. `#tabFixedHeader` continua sendo usado só depois
+   de já ter certeza (via popup ou via esse texto) de que a tela certa carregou — nesse ponto,
+   `page.waitForSelector('#tabFixedHeader', ...)` é seguro porque já se sabe que a tabela
+   presente é a de UCs, não outra.
+2. **Espera a tabela estabilizar antes de extrair**: `aguardarTabelaEstabilizar()` (nova,
+   `copelScraperService.js`) — poll a cada 500ms (até 10s) contando `#tabFixedHeader tbody tr`,
+   só retorna quando a contagem para de crescer entre duas checagens consecutivas. Cobre o
+   caso de a tabela ser montada incrementalmente via JS.
+
+Também adicionado um `console.warn` por livro que abre a OS mas extrai 0 UCs (antes só o
+total agregado por etapa aparecia no log, dificultando saber qual livro específico falhou
+silenciosamente).
+
+Não validado ao vivo de novo depois desta segunda correção — fica para o próximo ciclo
+automático. `npm test` (12 testes) continua passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

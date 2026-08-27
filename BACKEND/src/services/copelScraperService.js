@@ -51,6 +51,30 @@ async function extrairLinhasDetalheOs(paginaDetalhe) {
   });
 }
 
+async function contarLinhasTabFixedHeader(paginaDetalhe) {
+  return paginaDetalhe
+    .locator('#tabFixedHeader tbody tr')
+    .count()
+    .catch(() => 0);
+}
+
+// A tabela de UCs pode montar as linhas via JS de forma assíncrona/
+// incremental depois de #tabFixedHeader já existir no DOM — extrair
+// assim que o elemento aparece corre o risco de pegar só a 1ª linha (foi
+// exatamente o sintoma reportado: 1 registro por livro num livro com
+// 200+ UCs reais). Espera a contagem de linhas parar de crescer entre
+// duas checagens (500ms de intervalo, até 10s no total) antes de extrair.
+async function aguardarTabelaEstabilizar(paginaDetalhe) {
+  let anterior = -1;
+  for (let tentativa = 0; tentativa < 20; tentativa++) {
+    const atual = await contarLinhasTabFixedHeader(paginaDetalhe);
+    if (atual > 0 && atual === anterior) return atual;
+    anterior = atual;
+    await paginaDetalhe.waitForTimeout(500);
+  }
+  return anterior;
+}
+
 async function coletarDadosAcompanhamento() {
   const browser = await chromium.launch({ headless: true, slowMo: 100 });
   const page = await browser.newPage();
@@ -145,14 +169,21 @@ async function coletarDadosAcompanhamento() {
         // pra replicar de fora.
         //
         // Usuário descreveu como "abre em popup/nova aba", mas o primeiro
-        // ciclo real (após esta mudança) deu timeout esperando o evento
-        // 'popup' em todos os livros testados — sinal de que a "nova tela"
-        // pode ser, na prática, um modal/iframe carregado via AJAX dentro
-        // da MESMA página (padrão comum em telas Struts como esta), não uma
-        // janela nova de verdade. Cobre os dois casos: espera popup E
-        // #tabFixedHeader aparecer na própria `page` em paralelo, usa o que
-        // vier primeiro. Se nenhum vier, salva diagnóstico (só na primeira
-        // falha do ciclo, pra não gerar uma captura por livro) e pula.
+        // ciclo real deu timeout esperando o evento 'popup' em todos os
+        // livros — a "nova tela" é, na prática, um modal/iframe carregado
+        // via AJAX dentro da MESMA página. Cobre os dois casos: espera
+        // popup E o texto "DADOS DE EXECUÇÃO" (cabeçalho de seção exclusivo
+        // da tela de detalhe da OS, visto no print do usuário) aparecer na
+        // própria `page`, em paralelo, usa o que vier primeiro.
+        //
+        // Não usa #tabFixedHeader como sinal de "mudou de tela": esse id é
+        // de um plugin JS genérico de tabela com cabeçalho fixo
+        // ("fixedheader fht-table", visto na classe CSS do HTML fornecido
+        // pelo usuário) que pode estar reaproveitado em MAIS de uma tela do
+        // sistema, inclusive talvez na própria lista de livros — usá-lo
+        // como sinal de mudança foi a causa real de um bug encontrado ao
+        // vivo: 1 registro por livro em vez de todas as UCs (a extração
+        // rodava contra a tabela errada, ou cedo demais).
         const linkOs = linha.locator('td').nth(3).locator('a');
         if ((await linkOs.count()) === 0) continue;
 
@@ -165,7 +196,9 @@ async function coletarDadosAcompanhamento() {
           // estivesse a caminho de dar certo.
           const esperaPopup = page.waitForEvent('popup', { timeout: 10000 }).then(p => ({ tipo: 'popup', p }));
           const esperaMesmaPagina = page
-            .waitForSelector('#tabFixedHeader', { timeout: 10000, state: 'visible' })
+            .getByText('DADOS DE EXECUÇÃO', { exact: false })
+            .first()
+            .waitFor({ timeout: 10000, state: 'visible' })
             .then(() => ({ tipo: 'mesmaPagina' }));
 
           await linkOs.click();
@@ -176,9 +209,14 @@ async function coletarDadosAcompanhamento() {
             await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
           } else {
             usouMesmaPagina = true;
+            await page.waitForSelector('#tabFixedHeader', { timeout: 15000 });
           }
 
           const paginaDetalhe = popup || page;
+          // A tabela de UCs pode popular as linhas de forma assíncrona
+          // depois de #tabFixedHeader já existir — espera a contagem
+          // estabilizar antes de extrair (ver aguardarTabelaEstabilizar).
+          await aguardarTabelaEstabilizar(paginaDetalhe);
           const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
           for (const uc of linhasUc) {
             registros.push({ ...cabecalho, ...uc });
@@ -186,6 +224,9 @@ async function coletarDadosAcompanhamento() {
           if (linhasUc.length > 0) {
             livrosComUc++;
             totalUcs += linhasUc.length;
+          }
+          if (linhasUc.length === 0) {
+            console.warn(`[Coleta Acomp] ⚠️ Livro '${cabecalho.livro}' abriu a OS mas 0 UCs extraídas.`);
           }
         } catch (erroOs) {
           console.error(

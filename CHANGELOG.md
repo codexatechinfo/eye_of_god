@@ -129,6 +129,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de acompanhamento: usava `#tabFixedHeader` (id de um plugin JS genérico, talvez
+  reaproveitado na lista de livros) como sinal de "abriu a tela de UCs" — coletava só 1
+  registro por livro em vez de todas as UCs (reportado ao vivo: livro com 200+ UCs reais
+  virou 1 linha no banco). Trocado por um texto exclusivo da tela de detalhe ("DADOS DE
+  EXECUÇÃO"); adicionada espera até a tabela de UCs parar de crescer antes de extrair (podia
+  popular linhas de forma assíncrona). Ver Correção 2 da Adendo 2 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de acompanhamento: clique no link "número da OS" nunca gerava o evento `popup` do
   Playwright (timeout em 100% dos livros no primeiro ciclo real pós-mudança) — a tela de UCs
   abre como modal/iframe na mesma página, não janela nova, apesar de ter sido descrita como

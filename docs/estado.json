@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T16:52:58.759Z",
+  "atualizado_em": "2026-08-27T17:00:58.747Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "eef8c6c",
+  "commit": "2244296",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -586,6 +586,13 @@
       "skill": "/projeto-novo",
       "evento": "Fix critico: crash real do processo (unhandled rejection no Promise.any de popup)",
       "detalhe": "Usuario rodou o backend no proprio terminal (pra ver a janela do Chromium de verdade, ja que meu processo iniciado por outra via nao roda na sessao grafica dele) e o processo CRASHOU de verdade - nodemon app crashed, nao uma falha tratada. Erro real: page.waitForEvent Timeout 10000ms exceeded while waiting for event popup, propagando ate triggerUncaughtException. Causa raiz: promPopup/promMesmaPagina sao criadas ANTES de await linkOs.click() (necessario pro waitForEvent nao perder o evento se o popup abrir rapido), mas se o click demorar mais que os 10s de timeout de qualquer uma, ela rejeita sozinha ENQUANTO o codigo ainda esta esperando o click, antes do Promise.any (so chamado depois do click) ter qualquer handler anexado - unhandled rejection, fatal em Node por padrao. Um catch preventivo so na promise original (aplicado no commit anterior, Adendo 5) nao bastou. Confirmado com uma bateria de testes isolados (scripts descartaveis, fora do projeto) que o V8 trata CADA NIVEL derivado da cadeia como promise propria sujeita ao mesmo problema: a promise original, a derivada do .then(), e ate o resultado do proprio Promise.any(). Testei 4 variacoes progressivas ate achar a correcao completa: 1) sem catch nenhum - crash; 2) catch so na promise original - ainda crash (a derivada do .then fica sem handler); 3) Promise.all([click, Promise.any(...)]) criado sincronamente - ainda crash (o resultado do proprio Promise.any tambem precisa de catch preventivo); 4) catch preventivo em TODOS os niveis (originais + derivadas do then + a combinada do Promise.any) - funcionou, sem nenhum unhandled rejection, validado tanto no cenario de falha total das duas quanto no cenario de sucesso parcial (uma resolve antes da outra rejeitar), confirmando que a correcao nao mudou o comportamento funcional, so eliminou o crash. Aplicado o padrao completo no codigo real: .catch(() => {}) logo apos criar promPopup, promMesmaPagina, esperaPopup, esperaMesmaPagina, e combinada (o Promise.any). npm test (12 testes) continua passando. Tambem documentado no ADR por que a janela do Chromium nao estava aparecendo pro usuario antes desse crash: meu processo (iniciado via minha ferramenta) nao roda na sessao grafica interativa do desktop do usuario, entao headless:false nao mostra janela nenhuma pra ele - rodar npm run dev diretamente no terminal do proprio usuario e o que permite ver a janela de verdade, foi assim que ele conseguiu observar os bugs anteriores (Adendo 4 e 5) e agora este crash. Nao validado ao vivo de novo contra o portal real depois desta correcao - fica pra proxima execucao do usuario. Ver Adendo 6 da ADR 0018."
+    },
+    {
+      "data": "2026-08-27T17:00:58.746Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Confirmado: fix do crash funcionou. Novo fix: etapa recolhe sozinha apos fechar OS, detectado por visibilidade",
+      "detalhe": "Usuario rodou npm run dev no proprio terminal de novo e confirmou que o crash do Promise.any (Adendo 6) nao aconteceu mais - o erro do 2o livro apareceu como Falha ao abrir OS capturado normalmente pelo catch, sem derrubar o processo, a coleta seguiu pra etapa seguinte normalmente e a aba Massivas (nao alterada) continuou funcionando em paralelo. Investigado o novo erro (locator.click Timeout 30000ms exceeded, element is not visible) usando o diagnostico automatico ja existente (screenshot salvo pelo proprio codigo na falha) - a imagem revelou que depois de fechar a tela de detalhe da OS (CANCELAR), a ETAPA INTEIRA volta RECOLHIDA (so o cabecalho ETAPA 15 - (2) visivel, sem a tabela de livros abaixo), nao uma lista vazia como a checagem anterior (Adendo 4/5, baseada em contagem de linhas) pressupunha. O elemento do proximo livro continua existindo no DOM (provavelmente display:none via CSS), entao count() de tbody tr nunca era zero e a logica de reabertura nunca disparava - o locator.click do Playwright ficava 30s inteiros tentando em vao contra um elemento existente mas invisivel. Corrigido com nova funcao garantirEtapaVisivel(), chamada no INICIO de cada volta do loop while (nao so quando a busca ja tinha falhado) - verifica tabelaAtual.isVisible() e, se false, re-clica em etapaLink ate 3 vezes, aguardando carregamento entre tentativas. Substituiu a logica anterior baseada em contagem. npm test (12 testes) continua passando. Nao validado ao vivo de novo - fica pra proxima execucao do usuario. Ver Adendo 7 da ADR 0018."
     }
   ]
 }

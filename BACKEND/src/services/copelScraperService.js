@@ -225,18 +225,42 @@ async function coletarDadosAcompanhamento() {
       // acontecer no fluxo normal, mas é melhor abortar com log claro do
       // que travar o processo indefinidamente numa etapa.
       const limiteLivros = totalLivrosInicial + 50;
-      // "CANCELAR" fecha a tela de detalhe, mas pode devolver uma tela sem
-      // a etapa expandida (lista de livros com 0 linhas visíveis) em vez de
-      // devolver direto a lista — confirmado ao vivo: livrosProcessados
-      // sempre parava em 1, e a tabela ficava com 0 linhas na releitura
-      // seguinte. Se isso acontecer, tenta re-clicar no link da etapa pra
-      // reabrir a lista antes de desistir; poucas tentativas (não é pra
-      // ficar reabrindo pra sempre se a etapa genuinamente acabou).
+      // "CANCELAR" fecha a tela de detalhe, mas pode devolver com a etapa
+      // inteira RECOLHIDA (não só "lista vazia") — confirmado com
+      // diagnóstico real: depois de processar o 1º livro, um screenshot
+      // mostrou a etapa de volta ao estado fechado (só o cabeçalho "ETAPA
+      // 15 - (2)" visível, sem a tabela de livros abaixo). Nesse caso o
+      // elemento da 2ª linha AINDA EXISTE no DOM (Playwright resolve o
+      // locator normalmente) mas fica invisível — `count()` de linhas não
+      // detecta isso (a linha "existe"), só checar visibilidade da tabela
+      // detecta. Sem essa checagem, o clique subsequente ficava 30s inteiro
+      // tentando em vão ("element is not visible") em vez de reabrir a
+      // etapa primeiro. Verificada a cada volta do loop, antes de procurar
+      // o próximo livro pendente.
       const MAX_TENTATIVAS_REABRIR_ETAPA = 3;
 
+      async function garantirEtapaVisivel() {
+        for (let tentativa = 0; tentativa < MAX_TENTATIVAS_REABRIR_ETAPA; tentativa++) {
+          if (await tabelaAtual.isVisible().catch(() => false)) return true;
+          console.warn(
+            `[Coleta Acomp] ⚠️ Etapa '${etapa}': tabela de livros não está visível ` +
+              `(${livrosProcessados.size}/${totalLivrosInicial} processados) — reabrindo a etapa ` +
+              `(tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
+          );
+          await etapaLink.click().catch(() => {});
+          await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+          await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+        }
+        return tabelaAtual.isVisible().catch(() => false);
+      }
+
       while (true) {
-        let linhasAtuais = tabelaAtual.locator('tbody tr');
-        let totalAtual = await linhasAtuais.count();
+        if (livrosProcessados.size < totalLivrosInicial) {
+          await garantirEtapaVisivel();
+        }
+
+        const linhasAtuais = tabelaAtual.locator('tbody tr');
+        const totalAtual = await linhasAtuais.count();
 
         let linhaAlvo = null;
         let cabecalhoAlvo = null;
@@ -247,32 +271,6 @@ async function coletarDadosAcompanhamento() {
           linhaAlvo = linhasAtuais.nth(i);
           cabecalhoAlvo = cabecalho;
           break;
-        }
-
-        if (!linhaAlvo && totalAtual === 0 && livrosProcessados.size < totalLivrosInicial) {
-          for (
-            let tentativa = 0;
-            tentativa < MAX_TENTATIVAS_REABRIR_ETAPA && totalAtual === 0;
-            tentativa++
-          ) {
-            console.warn(
-              `[Coleta Acomp] ⚠️ Etapa '${etapa}': lista de livros sumiu depois de fechar a OS ` +
-                `(${livrosProcessados.size}/${totalLivrosInicial} processados) — reabrindo a etapa ` +
-                `(tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
-            );
-            await etapaLink.click().catch(() => {});
-            await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-            await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-            linhasAtuais = tabelaAtual.locator('tbody tr');
-            totalAtual = await linhasAtuais.count();
-          }
-          for (let i = 0; i < totalAtual && !linhaAlvo; i++) {
-            const cabecalho = await lerCabecalhoLinha(linhasAtuais.nth(i), etapa);
-            if (!cabecalho) continue;
-            if (livrosProcessados.has(cabecalho.livro)) continue;
-            linhaAlvo = linhasAtuais.nth(i);
-            cabecalhoAlvo = cabecalho;
-          }
         }
 
         if (!linhaAlvo) {

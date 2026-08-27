@@ -133,6 +133,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de acompanhamento: depois de fechar a tela de detalhe da OS, a etapa podia voltar
+  **recolhida** (não só "lista vazia") — o link do próximo livro continuava existindo no DOM
+  mas ficava invisível, e `locator.click` ficava 30s tentando em vão. Nova checagem por
+  visibilidade da tabela (não só contagem de linhas) no início de cada volta do loop,
+  reabrindo a etapa quando necessário. Ver Adendo 7 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de acompanhamento: **crash real do processo** (`nodemon: app crashed`) por
   unhandled rejection no `Promise.any` que decide popup vs. mesma página — se o clique no
   link da OS demorasse mais que o timeout de 10s de qualquer uma das duas esperas, ela

@@ -432,6 +432,39 @@ ver o comportamento real que levou às correções deste Adendo e dos anteriores
 `npm test` (12 testes) continua passando. Não validado ao vivo de novo contra o portal real
 depois desta correção — fica pra próxima execução do usuário.
 
+## Adendo 7 — a correção do Adendo 6 já funcionou; achado um segundo bug (etapa recolhe sozinha)
+
+Usuário rodou `npm run dev` no próprio terminal de novo — **confirmado que o crash do
+Adendo 6 não aconteceu mais**: o erro apareceu como `⚠️ Falha ao abrir OS do livro
+'021676'... locator.click: Timeout 30000ms exceeded` capturado normalmente pelo `catch`,
+sem derrubar o processo; a coleta seguiu para a etapa seguinte normalmente.
+
+O erro em si, porém, revelou outra causa real: `locator.click` ficou 30s tentando (Playwright
+já tenta scroll/espera automática antes de clicar) porque o elemento **existe no DOM mas
+está invisível**. O diagnóstico salvo automaticamente (`salvarDiagnostico`, já existente)
+capturou um screenshot da tela exata no momento da falha — mostrando a **etapa inteira
+recolhida** (só o cabeçalho "ETAPA 15 - (2)" visível, sem a tabela de livros abaixo), não
+uma "lista vazia" como a checagem do Adendo 4/5 pressupunha.
+
+### Por que a checagem anterior não pegava isso
+
+A lógica de recuperação anterior (`totalAtual === 0`) checava a **contagem** de `tbody tr`
+— mas quando a etapa recolhe, a linha do livro pendente ainda existe no DOM (só fica
+`display:none` ou equivalente via CSS), então `count()` não é zero e a checagem nunca
+disparava. Só verificar **visibilidade** da tabela (`tabelaAtual.isVisible()`) detecta esse
+caso.
+
+### Correção
+
+Nova função `garantirEtapaVisivel()`, chamada no **início de cada volta** do loop `while`
+(antes de procurar o próximo livro pendente, não só quando a busca já falhou) — se
+`tabelaAtual.isVisible()` for `false`, re-clica em `etapaLink` até 3 vezes, aguardando
+carregamento entre tentativas. Substitui a lógica anterior (que só reagia depois de já não
+achar nenhuma linha válida, e usava contagem em vez de visibilidade).
+
+Não validado ao vivo de novo — fica pra próxima execução do usuário. `npm test` (12 testes)
+continua passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

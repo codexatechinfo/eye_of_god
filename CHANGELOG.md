@@ -62,6 +62,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   exclusão mútua (`copelSessaoLock.js`) serializa as duas coletas — nunca mais logam ao
   mesmo tempo. Ver [ADR 0019](docs/adr/0019-lock-sessao-copel-entre-jobs.md).
 
+### Corrigido
+
+- `logTempo.js`: os timestamps `[hh:mm:ss.mmm]` estavam em UTC (`toISOString()`), 3h à frente
+  do horário real de Brasília — usuário notou a discrepância no log ("que registros de tempo
+  são esses"). Corrigido para usar `getHours()`/`getMinutes()`/etc., que já refletem o fuso
+  local do sistema.
+
 ### Alterado
 
 - Fluxo de coleta (login → scraping → importação): TODA linha de log ganhou timestamp

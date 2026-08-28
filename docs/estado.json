@@ -684,6 +684,13 @@
       "skill": "/projeto-novo",
       "evento": "Feature: timestamp em toda linha de log do fluxo de coleta, do login ate a importacao",
       "detalhe": "Usuario pediu pra generalizar os timestamps que ja tinham sido adicionados so em abrir OS/etapa - queria TODA acao do fluxo com horario no terminal, do login ate a importacao no Postgres, pra contabilizar o tempo total de execucao sem cronometrar por fora. Criado BACKEND/src/utils/logTempo.js: log()/logWarn()/logErro(), substitutos de console.log/warn/error que ja prefixam [hh:mm:ss.mmm] antes de qualquer outro argumento. Todas as 26 chamadas de console.log/warn/error em copelScraperService.js trocadas pelas equivalentes (via sed, conferido depois). Os dois logs de timing manuais do Adendo anterior (que ja embutiam horaAgora() na propria mensagem) tiveram essa parte removida, redundante com o prefixo automatico. copelImportService.js ganhou log por lote inserido (util pra ver progresso - um ciclo grande pode gerar 60+ lotes de 300 linhas). coletaCopelService.js ganhou marcos de tempo decorrido desde o inicio do ciclo em 3 pontos: fim do scraping, fim da importacao, fim do ciclo inteiro (login-scraping-importacao-recalculo do painel). npm test (12 testes) continua passando. Testado localmente o formato de saida do logTempo.js. Nao validado ao vivo contra o portal real nesta sessao. Ver Adendo da ADR 0020."
+    },
+    {
+      "data": "2026-08-28T12:22:58.628Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Fix: timestamps do log estavam em UTC, 3h a frente do horario real de Brasilia",
+      "detalhe": "Usuario reportou confusao com os timestamps recem adicionados (que registros de tempo sao esses) - horaAgora() usava new Date().toISOString().slice(11,23), que e sempre UTC, 3h a frente do relogio real (confirmado: 12:22 no log vs 09:22 no relogio real). Corrigido pra usar os componentes locais do Date (getHours/getMinutes/getSeconds/getMilliseconds), que ja refletem o fuso do sistema operacional (Brasilia). Testado: horario do log bate exatamente com new Date().toString() real. npm test (12 testes) continua passando."
     }
   ]
 }

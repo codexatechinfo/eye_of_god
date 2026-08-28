@@ -134,25 +134,34 @@ function tabelaDaEtapa(etapaLink) {
 // aparecem no DOM conforme a página rola pra baixo — o mesmo processo manual
 // de antes do scraper existir. Sem isso, o loop de etapas parava cedo (ex.:
 // achava que só existiam 18 etapas quando na verdade havia muitas mais mais
-// abaixo) porque `count()` só enxerga o que já foi renderizado. Rola até o
-// fim da página em passos, checando se a contagem de links "ETAPA" ainda
-// está crescendo — para quando ela estabiliza (2 leituras iguais seguidas),
-// não por um tempo fixo.
+// abaixo) porque `count()` só enxerga o que já foi renderizado.
+//
+// Dois ajustes em cima da versão original (Adendo 13 da ADR 0018), depois de
+// a versão paralelizada (ADR 0020) ter montado a fila de etapas incompleta —
+// só 2 de N: 1) rola em PASSOS (altura de uma janela por vez), não num salto
+// direto pro fim (`scrollTo(0, scrollHeight)`) — se o carregamento do
+// próximo lote depende de a rolagem "passar" pelos itens já carregados (ex.:
+// intersection observer no fim da lista atual), pular direto pro fim pode
+// não disparar o gatilho certo. 2) exige 4 leituras estáveis seguidas (não
+// 2) com mais tempo entre elas — no fluxo sequencial antigo essa função
+// era chamada de novo a cada etapa processada, dando várias chances ao
+// longo de minutos; aqui só há UMA chance antes de montar a fila
+// definitiva, então precisa ser mais rigorosa antes de decidir que acabou.
 async function aguardarTodasEtapasCarregadas(page) {
   const etapas = page.locator('a.color:has-text("ETAPA")');
   let anterior = -1;
   let estavel = 0;
-  for (let tentativa = 0; tentativa < 100; tentativa++) {
+  for (let tentativa = 0; tentativa < 150; tentativa++) {
     const atual = await etapas.count();
     if (atual === anterior) {
       estavel++;
-      if (estavel >= 2) return atual;
+      if (estavel >= 4) return atual;
     } else {
       estavel = 0;
     }
     anterior = atual;
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
-    await page.waitForTimeout(300);
+    await page.evaluate(() => window.scrollBy(0, window.innerHeight)).catch(() => {});
+    await page.waitForTimeout(600);
   }
   return anterior;
 }
@@ -429,7 +438,15 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
 // até ela esvaziar. Localiza a etapa correspondente NA SUA PRÓPRIA página
 // pelo número (não por índice nem pelo texto completo — ver numeroDaEtapa),
 // já que cada aba carregou sua cópia da lista de forma independente.
-async function worker(page, rotulo, filaEtapas, registros) {
+//
+// `tentativasPorEtapa` (Map compartilhado entre workers) limita quantas
+// vezes um número pode ser devolvido à fila por "não encontrado nesta aba" —
+// sem isso, uma etapa que genuinamente não existe em nenhuma aba (número
+// extraído errado, etapa removida do portal entre a montagem da fila e a
+// tentativa) ficaria sendo re-adicionada pra sempre, travando a coleta.
+const MAX_TENTATIVAS_LOCALIZAR_ETAPA = 5;
+
+async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
   const estadoDiagnostico = { osSalvo: false, etapaSalvo: false };
 
   while (filaEtapas.length > 0) {
@@ -437,10 +454,38 @@ async function worker(page, rotulo, filaEtapas, registros) {
     if (numeroAlvo === undefined) break;
 
     const etapas = page.locator('a.color:has-text("ETAPA")');
-    const textos = await etapas.allInnerTexts();
-    const indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
+    let textos = await etapas.allInnerTexts();
+    let indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
     if (indice === -1) {
-      console.warn(`[Coleta Acomp]${rotulo} ⚠️ Etapa número ${numeroAlvo} não encontrada nesta aba — pulando.`);
+      // Pode ser que ESTA aba especificamente ainda não tenha terminado de
+      // carregar sua própria cópia da lista (cada aba rola de forma
+      // independente — ver aguardarTodasEtapasCarregadas). Tenta rolar mais
+      // antes de desistir, em vez de simplesmente descartar a etapa.
+      console.log(
+        `[Coleta Acomp]${rotulo} 🔄 Etapa número ${numeroAlvo} não encontrada ainda — rolando mais pra procurar.`,
+      );
+      await aguardarTodasEtapasCarregadas(page);
+      textos = await etapas.allInnerTexts();
+      indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
+    }
+    if (indice === -1) {
+      const tentativas = (tentativasPorEtapa.get(numeroAlvo) ?? 0) + 1;
+      tentativasPorEtapa.set(numeroAlvo, tentativas);
+      if (tentativas >= MAX_TENTATIVAS_LOCALIZAR_ETAPA) {
+        console.error(
+          `[Coleta Acomp]${rotulo} ❌ Etapa número ${numeroAlvo} não encontrada em ${tentativas} tentativas ` +
+            '(em nenhuma aba) — desistindo dela pra não travar a coleta.',
+        );
+        continue;
+      }
+      // Ainda não achou depois de garantir a lista carregada — devolve pra
+      // fila em vez de perder a etapa silenciosamente; outra aba (ou esta
+      // mesma, numa próxima volta) tenta de novo.
+      console.warn(
+        `[Coleta Acomp]${rotulo} ⚠️ Etapa número ${numeroAlvo} não existe nesta aba mesmo após recarregar ` +
+          `(tentativa ${tentativas}/${MAX_TENTATIVAS_LOCALIZAR_ETAPA}) — devolvendo pra fila.`,
+      );
+      filaEtapas.push(numeroAlvo);
       continue;
     }
 
@@ -533,8 +578,9 @@ async function coletarDadosAcompanhamento() {
     }
 
     const registros = [];
+    const tentativasPorEtapa = new Map();
     await Promise.all(
-      paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaEtapas, registros)),
+      paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaEtapas, registros, tentativasPorEtapa)),
     );
 
     // Fecha só as abas extras — a principal fecha junto com o browser no

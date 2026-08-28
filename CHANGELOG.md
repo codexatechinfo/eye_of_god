@@ -62,6 +62,19 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   exclusão mútua (`copelSessaoLock.js`) serializa as duas coletas — nunca mais logam ao
   mesmo tempo. Ver [ADR 0019](docs/adr/0019-lock-sessao-copel-entre-jobs.md).
 
+### Corrigido
+
+- Scraper de Acompanhamento paralelizado (ADR 0020): rodando ao vivo, só abriu 2 abas em vez
+  das 8 configuradas — a fila de etapas era montada antes da lista terminar de carregar via
+  scroll (a função de espera só rodava 1 vez, com intervalo curto demais entre tentativas, e
+  pulava direto pro fim da página em vez de rolar em passos, o que pode não disparar o
+  carregamento do próximo lote). Corrigido: `scrollBy` incremental em vez de `scrollTo`
+  direto, mais tempo entre passos, mais leituras estáveis exigidas. Segunda camada de
+  proteção no `worker()`: se uma aba não encontrar a etapa sorteada da fila, tenta rolar mais
+  antes de desistir e devolve o número à fila em vez de descartá-lo (com limite de tentativas
+  pra não travar em loop). Ver Adendo da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+
 ### Alterado
 
 - Scraper de Acompanhamento (`copelScraperService.js`) paralelizado: em vez de processar as

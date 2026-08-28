@@ -95,3 +95,43 @@ mais abas do que etapas existem na fila (sem sentido ter 8 abas ociosas pra 2 et
   primeiro teste real: se as 8 abas realmente aparecem visíveis (com `COPEL_HEADLESS=false`),
   se a fila é dividida sem repetição nem etapa perdida, e se o volume de UCs total bate com
   execuções sequenciais anteriores.
+
+## Adendo — só abriu 2 abas: a lista de etapas não tinha carregado tudo antes de montar a fila
+
+Testado ao vivo: usuário rodou a coleta e só viu 2 abas abrirem, não 8. Ele mesmo apontou a
+causa provável antes de eu investigar: a montagem da fila provavelmente não esperava a lista
+de etapas carregar por completo via scroll.
+
+Confirmado revendo o código. Duas causas reais, ambas do mesmo tema:
+
+1. **A janela de confiança de `aguardarTodasEtapasCarregadas` era curta demais pra rodar só
+   uma vez.** No fluxo sequencial antigo (Adendo 13 da ADR 0018), essa função era chamada de
+   novo a cada etapa que parecia ter acabado — várias chances ao longo de minutos. No fluxo
+   paralelo ela só roda **uma vez**, antes de montar a fila definitiva — se o próximo lote de
+   etapas demorasse mais que os 300ms entre tentativas pra aparecer no DOM, a função "achava"
+   que tinha estabilizado (2 leituras iguais) cedo demais, e a fila ficava curta pra sempre
+   (nada tenta carregar mais depois).
+2. **O salto direto pro fim (`scrollTo(0, document.body.scrollHeight)`) pode não disparar o
+   carregamento do próximo lote da mesma forma que rolar em passos.** Se o portal usa algo
+   como intersection observer no fim da lista atual pra decidir quando buscar mais itens,
+   pular direto pro fim pula por cima do gatilho — mais parecido com "teletransportar" do que
+   com o "ir rolando a tela pra baixo" que o usuário descreveu como o processo manual real.
+
+### Correção
+
+`aguardarTodasEtapasCarregadas()`: troca `scrollTo` (salto) por `scrollBy(0, innerHeight)`
+(passo do tamanho de uma janela por vez); intervalo entre passos de 300ms para 600ms; exige 4
+leituras estáveis seguidas (era 2) antes de considerar concluído; teto de tentativas subiu de
+100 para 150 (mais passos, cada um menor).
+
+Segunda camada de proteção, independente da primeira: no `worker()`, se a etapa sorteada da
+fila não for encontrada na lista local da aba (pode ser que ESSA aba especificamente ainda
+não tenha terminado de carregar — cada aba rola de forma independente), agora tenta rolar
+mais uma vez antes de desistir; se ainda não achar, devolve o número à fila (em vez do
+comportamento antigo, que descartava a etapa silenciosamente) para outra aba tentar. Um `Map`
+`tentativasPorEtapa` compartilhado limita isso a `MAX_TENTATIVAS_LOCALIZAR_ETAPA = 5` — sem
+esse limite, uma etapa que genuinamente não existe em nenhuma aba (cenário hipotético, não
+observado) ficaria sendo devolvida pra fila pra sempre, travando a coleta num loop.
+
+`npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
+próxima execução do usuário confirmar que as 8 abas abrem quando há etapas suficientes.

@@ -3,22 +3,27 @@ const { importarParaPostgres } = require('./copelImportService');
 const { calcularLeituraUrbana } = require('./leituraUrbanaService');
 const dashboardCache = require('./dashboardCacheService');
 const { comSessaoExclusiva } = require('./copelSessaoLock');
+const { log, logErro } = require('../utils/logTempo');
 
 async function executarColetaCopel(db, empresaId) {
-  console.log('[Coleta Acomp] 🟡 Iniciando coleta de acompanhamento...');
+  const inicioCiclo = Date.now();
+  log('[Coleta Acomp] 🟡 Iniciando coleta de acompanhamento...');
   const registros = await comSessaoExclusiva(() => coletarDadosAcompanhamento());
+  log(`[Coleta Acomp] 🕸️ Scraping concluído (${Date.now() - inicioCiclo}ms desde o início do ciclo).`);
+
   const resultado = await importarParaPostgres(db, registros, empresaId);
+  log(`[Coleta Acomp] 💾 Importação concluída (${Date.now() - inicioCiclo}ms desde o início do ciclo).`);
 
   try {
-    console.log('[Coleta Acomp] 🔄 Recalculando painel (Leitura Urbana)...');
+    log('[Coleta Acomp] 🔄 Recalculando painel (Leitura Urbana)...');
     const leituraUrbana = await calcularLeituraUrbana(db);
     dashboardCache.definir(empresaId, { leituraUrbana });
-    console.log('[Coleta Acomp] ✅ Cache do painel atualizado.');
+    log('[Coleta Acomp] ✅ Cache do painel atualizado.');
   } catch (erro) {
-    console.error('[Coleta Acomp] ❌ Erro ao recalcular painel:', erro);
+    logErro('[Coleta Acomp] ❌ Erro ao recalcular painel:', erro);
   }
 
-  console.log('[Coleta Acomp] ✅ Coleta finalizada.');
+  log(`[Coleta Acomp] ✅ Coleta finalizada — ciclo completo em ${Date.now() - inicioCiclo}ms.`);
   return resultado;
 }
 

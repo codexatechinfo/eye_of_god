@@ -168,3 +168,26 @@ volta à mesa.
 
 `npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
 próxima execução do usuário colar o log com os novos timestamps para eu analisar.
+
+## Adendo — timestamp em toda linha de log do fluxo de coleta
+
+Usuário pediu pra generalizar: não só as ações já instrumentadas (abrir OS, abrir etapa),
+mas TODA ação do fluxo — do login até a importação no Postgres — com horário no terminal,
+pra dar pra contabilizar o tempo total de execução sem precisar cronometrar por fora.
+
+Criado `BACKEND/src/utils/logTempo.js`: `log()`/`logWarn()`/`logErro()`, substitutos de
+`console.log`/`warn`/`error` que já prefixam `[hh:mm:ss.mmm]` antes de qualquer outro
+argumento. Todas as 26 chamadas de `console.log/warn/error` em `copelScraperService.js`
+trocadas pelas equivalentes (via `sed`, depois conferido visualmente); os dois logs de
+timing manuais adicionados no Adendo anterior (que já embutiam `${horaAgora()}` na própria
+mensagem) tiveram essa parte removida, já redundante com o prefixo automático.
+
+`copelImportService.js` ganhou log por lote inserido (útil pra ver o progresso — um ciclo
+grande pode gerar 60+ lotes de 300 linhas). `coletaCopelService.js` ganhou marcos de tempo
+decorrido desde o início do ciclo em 3 pontos: fim do scraping, fim da importação, e fim do
+ciclo inteiro (login → scraping → importação → recálculo do painel) — dá pra ver quanto cada
+fase levou e o total, direto no terminal, sem precisar somar manualmente os timestamps.
+
+`npm test` (12 testes) continua passando. Testado localmente que o formato de saída do
+`logTempo.js` está correto (`[hh:mm:ss.mmm] mensagem`). Não validado ao vivo contra o portal
+real nesta sessão.

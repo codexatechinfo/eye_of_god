@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { log, logWarn, logErro } = require('../utils/logTempo');
 
 const DIR_DIAGNOSTICO = path.join(__dirname, '..', '..', 'diagnosticos');
 const URL_ACOMPANHAMENTO = 'https://www.copel.com/lis/acompanhamentoAction.do#';
@@ -15,9 +16,9 @@ async function salvarDiagnostico(page, motivo) {
     const textoVisivel = await page.evaluate(() => document.body.innerText.slice(0, 3000));
     fs.writeFileSync(`${base}.txt`, `URL: ${page.url()}\n\n${textoVisivel}`, 'utf-8');
 
-    console.log(`[Coleta Acomp] 📸 Diagnóstico salvo: ${base}.png / .txt`);
+    log(`[Coleta Acomp] 📸 Diagnóstico salvo: ${base}.png / .txt`);
   } catch (erroDiagnostico) {
-    console.error('[Coleta Acomp] ⚠️ Não foi possível salvar diagnóstico:', erroDiagnostico.message);
+    logErro('[Coleta Acomp] ⚠️ Não foi possível salvar diagnóstico:', erroDiagnostico.message);
   }
 }
 
@@ -67,7 +68,7 @@ async function fecharTelaDetalheMesmaPagina(page) {
   if ((await botaoCancelar.count()) > 0) {
     await botaoCancelar.first().click();
   } else {
-    console.warn('[Coleta Acomp] ⚠️ Botão CANCELAR não encontrado — usando page.goBack() como fallback.');
+    logWarn('[Coleta Acomp] ⚠️ Botão CANCELAR não encontrado — usando page.goBack() como fallback.');
     await page.goBack().catch(() => {});
   }
   // Não espera a tabela ficar visível aqui: o Adendo 7 já confirmou (com
@@ -201,12 +202,6 @@ function numeroDaEtapa(texto) {
   return match ? match[1] : null;
 }
 
-// hh:mm:ss.mmm — só pra log de timing, comparar entre abas quem está "em
-// voo" (esperando resposta do servidor) ao mesmo tempo que quem.
-function horaAgora() {
-  return new Date().toISOString().slice(11, 23);
-}
-
 // Aplica os mesmos filtros (concessionária/empreiteira) e busca — comum
 // tanto à aba principal (depois do login) quanto às abas extras (que já
 // herdam a sessão via cookies do mesmo browser context, sem precisar logar
@@ -228,7 +223,7 @@ async function aplicarFiltroEBuscar(page) {
 // screenshots sem perder o sinal quando várias abas falham por motivos
 // diferentes ao mesmo tempo.
 async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estadoDiagnostico }) {
-  console.log(`[Coleta Acomp]${rotulo} ➡️ Processando etapa: ${etapa} (INÍCIO ${horaAgora()})`);
+  log(`[Coleta Acomp]${rotulo} ➡️ Processando etapa: ${etapa}`);
   await etapaLink.click();
   // Nada de tempo fixo: espera a tabela de livros DESTA etapa (não
   // qualquer #item — ver tabelaDaEtapa) ficar visível. Isso já é o
@@ -238,7 +233,7 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
   await tabelaAtual.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
 
   const totalLivrosInicial = await tabelaAtual.locator('tbody tr').count();
-  console.log(`[Coleta Acomp]${rotulo} 📄 ${totalLivrosInicial} livros na etapa '${etapa}' — abrindo cada OS...`);
+  log(`[Coleta Acomp]${rotulo} 📄 ${totalLivrosInicial} livros na etapa '${etapa}' — abrindo cada OS...`);
 
   // Processa livro a livro RELENDO A LISTA DO ZERO a cada vez, rastreando
   // por número do livro (não por índice de posição). Usuário observou ao
@@ -262,7 +257,7 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
       if (await tabelaAtual.isVisible().catch(() => false)) return true;
       // Não é erro — o site recolhe a etapa a cada CANCELAR (ver
       // Adendo 7), então isso é esperado a cada livro, não uma falha.
-      console.log(
+      log(
         `[Coleta Acomp]${rotulo} 🔄 Etapa '${etapa}' recolheu (comportamento normal do site) — ` +
           `reabrindo (${livrosProcessados.size}/${totalLivrosInicial} livros já coletados, ` +
           `tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
@@ -308,7 +303,7 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
                 .allInnerTexts()
                 .catch(() => ['<falhou ao ler>'])
             : [];
-        console.error(
+        logErro(
           `[Coleta Acomp]${rotulo} ❌ Etapa '${etapa}': parou em ${livrosProcessados.size} livros ` +
             `processados (esperado ${totalLivrosInicial}), tabela com ${totalAtual} linhas ` +
             `visíveis depois de tentar reabrir. 1ª linha: ${JSON.stringify(amostra)}`,
@@ -320,7 +315,7 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
     }
 
     if (livrosProcessados.size >= limiteLivros) {
-      console.error(
+      logErro(
         `[Coleta Acomp]${rotulo} ❌ Etapa '${etapa}' passou de ${limiteLivros} livros processados ` +
           `(esperado ~${totalLivrosInicial}) — abortando a etapa pra não travar indefinidamente.`,
       );
@@ -376,7 +371,7 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
       // processa a mesma sessão HTTP de forma serializada, já que todas as
       // abas compartilham o mesmo login — ver ADR 0020).
       const inicioReq = Date.now();
-      console.log(`[Coleta Acomp]${rotulo} ⏱️ INÍCIO abrir OS livro '${cabecalhoAlvo.livro}' às ${horaAgora()}`);
+      log(`[Coleta Acomp]${rotulo} ⏱️ INÍCIO abrir OS livro '${cabecalhoAlvo.livro}'`);
 
       await linkOs.click();
       const resultado = await combinada;
@@ -395,25 +390,22 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
       // estabilizar antes de extrair (ver aguardarTabelaEstabilizar).
       await aguardarTabelaEstabilizar(paginaDetalhe);
       const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
-      console.log(
-        `[Coleta Acomp]${rotulo} ⏱️ FIM abrir OS livro '${cabecalhoAlvo.livro}' às ${horaAgora()} ` +
-          `(${Date.now() - inicioReq}ms)`,
-      );
+      log(`[Coleta Acomp]${rotulo} ⏱️ FIM abrir OS livro '${cabecalhoAlvo.livro}' (${Date.now() - inicioReq}ms)`);
       for (const uc of linhasUc) {
         registros.push({ ...cabecalhoAlvo, ...uc });
       }
       if (linhasUc.length > 0) {
         livrosComUc++;
         totalUcs += linhasUc.length;
-        console.log(
+        log(
           `[Coleta Acomp]${rotulo} 📖 Livro '${cabecalhoAlvo.livro}' — ${linhasUc.length} UCs ` +
             `(${livrosProcessados.size}/${totalLivrosInicial} da etapa '${etapa}').`,
         );
       } else {
-        console.warn(`[Coleta Acomp]${rotulo} ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
+        logWarn(`[Coleta Acomp]${rotulo} ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
       }
     } catch (erroOs) {
-      console.error(
+      logErro(
         `[Coleta Acomp]${rotulo} ⚠️ Falha ao abrir OS do livro '${cabecalhoAlvo.livro}' (etapa ${etapa}): ${erroOs.message}`,
       );
       if (!estadoDiagnostico.osSalvo) {
@@ -445,7 +437,7 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
     }
   }
 
-  console.log(
+  log(
     `[Coleta Acomp]${rotulo} ✅ Etapa '${etapa}': ${livrosComUc}/${livrosProcessados.size} livros com OS aberta ` +
       `(${totalLivrosInicial} na lista original), ${totalUcs} UCs coletadas.`,
   );
@@ -482,7 +474,7 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
       // carregar sua própria cópia da lista (cada aba rola de forma
       // independente — ver aguardarTodasEtapasCarregadas). Tenta rolar mais
       // antes de desistir, em vez de simplesmente descartar a etapa.
-      console.log(
+      log(
         `[Coleta Acomp]${rotulo} 🔄 Etapa número ${numeroAlvo} não encontrada ainda — rolando mais pra procurar.`,
       );
       await aguardarTodasEtapasCarregadas(page);
@@ -493,7 +485,7 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
       const tentativas = (tentativasPorEtapa.get(numeroAlvo) ?? 0) + 1;
       tentativasPorEtapa.set(numeroAlvo, tentativas);
       if (tentativas >= MAX_TENTATIVAS_LOCALIZAR_ETAPA) {
-        console.error(
+        logErro(
           `[Coleta Acomp]${rotulo} ❌ Etapa número ${numeroAlvo} não encontrada em ${tentativas} tentativas ` +
             '(em nenhuma aba) — desistindo dela pra não travar a coleta.',
         );
@@ -502,7 +494,7 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
       // Ainda não achou depois de garantir a lista carregada — devolve pra
       // fila em vez de perder a etapa silenciosamente; outra aba (ou esta
       // mesma, numa próxima volta) tenta de novo.
-      console.warn(
+      logWarn(
         `[Coleta Acomp]${rotulo} ⚠️ Etapa número ${numeroAlvo} não existe nesta aba mesmo após recarregar ` +
           `(tentativa ${tentativas}/${MAX_TENTATIVAS_LOCALIZAR_ETAPA}) — devolvendo pra fila.`,
       );
@@ -522,7 +514,7 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
     try {
       await processarEtapa({ page, etapaLink, etapa: etapaTexto, registros, rotulo, estadoDiagnostico });
     } catch (erroEtapa) {
-      console.error(
+      logErro(
         `[Coleta Acomp]${rotulo} ❌ Etapa '${etapaTexto}' interrompida por erro irrecuperável: ${erroEtapa.message} — ` +
           'seguindo para a próxima etapa da fila.',
       );
@@ -532,7 +524,7 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
       }
     }
   }
-  console.log(`[Coleta Acomp]${rotulo} 🏁 Fila de etapas esgotada — aba encerrada.`);
+  log(`[Coleta Acomp]${rotulo} 🏁 Fila de etapas esgotada — aba encerrada.`);
 }
 
 async function coletarDadosAcompanhamento() {
@@ -554,7 +546,7 @@ async function coletarDadosAcompanhamento() {
   const page = await context.newPage();
 
   try {
-    console.log('[Coleta Acomp] 🔐 Fazendo login...');
+    log('[Coleta Acomp] 🔐 Fazendo login...');
     await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 });
     await page.fill("input[name='j_username']", process.env.COPEL_USERNAME);
     await page.fill("input[name='j_password']", process.env.COPEL_PASSWORD);
@@ -566,9 +558,9 @@ async function coletarDadosAcompanhamento() {
       await salvarDiagnostico(page, 'login_falhou');
       throw erroLogin;
     }
-    console.log('[Coleta Acomp] ✅ Login realizado com sucesso.');
+    log('[Coleta Acomp] ✅ Login realizado com sucesso.');
 
-    console.log('[Coleta Acomp] 🔎 Acessando aba Acompanhamento...');
+    log('[Coleta Acomp] 🔎 Acessando aba Acompanhamento...');
     await page.click("a.submenu:has-text('acompanhamento')");
     await aplicarFiltroEBuscar(page);
 
@@ -577,10 +569,10 @@ async function coletarDadosAcompanhamento() {
     // todas as abas.
     const textosEtapas = await page.locator('a.color:has-text("ETAPA")').allInnerTexts();
     const filaEtapas = [...new Set(textosEtapas.map(numeroDaEtapa).filter(Boolean))];
-    console.log(`[Coleta Acomp] 📋 ${filaEtapas.length} etapas encontradas: ${filaEtapas.join(', ')}`);
+    log(`[Coleta Acomp] 📋 ${filaEtapas.length} etapas encontradas: ${filaEtapas.join(', ')}`);
 
     if (filaEtapas.length === 0) {
-      console.log('[Coleta Acomp] ✅ Nenhuma etapa para processar.');
+      log('[Coleta Acomp] ✅ Nenhuma etapa para processar.');
       return [];
     }
 
@@ -588,7 +580,7 @@ async function coletarDadosAcompanhamento() {
     // ociosas pra processar 2 etapas.
     const paralelismoConfigurado = Math.max(1, parseInt(process.env.COPEL_PARALELISMO_ACOMP || '8', 10));
     const totalAbas = Math.min(paralelismoConfigurado, filaEtapas.length);
-    console.log(`[Coleta Acomp] 🧵 Abrindo ${totalAbas} aba(s) em paralelo para processar as etapas.`);
+    log(`[Coleta Acomp] 🧵 Abrindo ${totalAbas} aba(s) em paralelo para processar as etapas.`);
 
     const paginas = [page];
     for (let i = 1; i < totalAbas; i++) {
@@ -608,7 +600,7 @@ async function coletarDadosAcompanhamento() {
     // finally.
     await Promise.all(paginas.slice(1).map(p => p.close().catch(() => {})));
 
-    console.log('[Coleta Acomp] ✅ Extração concluída.');
+    log('[Coleta Acomp] ✅ Extração concluída.');
     return registros;
   } finally {
     await browser.close();

@@ -64,6 +64,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Fluxo de coleta (login → scraping → importação): TODA linha de log ganhou timestamp
+  `[hh:mm:ss.mmm]` no terminal — novo `BACKEND/src/utils/logTempo.js`
+  (`log`/`logWarn`/`logErro`, substitutos de `console.log/warn/error`), usado em
+  `copelScraperService.js`, `copelImportService.js` (+ log por lote inserido) e
+  `coletaCopelService.js` (+ tempo decorrido desde o início do ciclo em 3 marcos: fim do
+  scraping, fim da importação, fim do ciclo inteiro). Permite contabilizar o tempo de
+  execução direto no terminal, sem cronometrar por fora. Ver Adendo da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
 - Scraper de Acompanhamento: timestamps de início/fim (com duração) instrumentados ao redor
   do clique que abre a OS de cada livro e ao abrir cada etapa — usuário reportou uma aba
   parecendo "esperar a vez" de outra em vez de rodar em paralelo de verdade (hipótese: as 8

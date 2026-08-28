@@ -1,3 +1,5 @@
+const { log } = require('../utils/logTempo');
+
 // Colunas gravadas em contr_execucao_leitura. Vem em dois grupos: o
 // "cabeçalho" do livro (etapa/localidade/livro/empreiteira/datas/situacao/
 // colaborador — extraído da lista de livros da etapa, um por livro, repetido
@@ -47,7 +49,7 @@ function parseSituacaoColaborador(valorBruto) {
 
 async function importarParaPostgres(db, registros, empresaId) {
   if (!registros.length) {
-    console.log('⚠️ Nenhum registro para importar.');
+    log('⚠️ Nenhum registro para importar.');
     return { inseridos: 0 };
   }
 
@@ -55,7 +57,7 @@ async function importarParaPostgres(db, registros, empresaId) {
   const dataImport = agora.toLocaleDateString('pt-BR');
   const horaImport = agora.toLocaleTimeString('pt-BR');
 
-  console.log(`[Coleta Acomp] 📥 Inserindo ${registros.length} registros na tabela 'contr_execucao_leitura'...`);
+  log(`[Coleta Acomp] 📥 Inserindo ${registros.length} registros na tabela 'contr_execucao_leitura'...`);
 
   const colunas = [...CAMPOS_TABELA, 'data_import', 'hora_import', 'empresa_id'];
   const linhas = registros.map(reg => {
@@ -84,6 +86,7 @@ async function importarParaPostgres(db, registros, empresaId) {
   });
 
   let totalInseridos = 0;
+  const totalLotes = Math.ceil(linhas.length / LOTE_MAX_LINHAS);
   for (let inicio = 0; inicio < linhas.length; inicio += LOTE_MAX_LINHAS) {
     const lote = linhas.slice(inicio, inicio + LOTE_MAX_LINHAS);
     const valores = [];
@@ -96,9 +99,10 @@ async function importarParaPostgres(db, registros, empresaId) {
     const sql = `INSERT INTO contr_execucao_leitura (${colunas.join(', ')}) VALUES ${placeholders.join(', ')}`;
     const { rowCount } = await db.query(sql, valores);
     totalInseridos += rowCount;
+    log(`[Coleta Acomp] 📥 Lote ${inicio / LOTE_MAX_LINHAS + 1}/${totalLotes} inserido (${totalInseridos}/${linhas.length}).`);
   }
 
-  console.log(`[Coleta Acomp] ✅ ${totalInseridos} registros inseridos com sucesso.`);
+  log(`[Coleta Acomp] ✅ ${totalInseridos} registros inseridos com sucesso.`);
   return { inseridos: totalInseridos };
 }
 

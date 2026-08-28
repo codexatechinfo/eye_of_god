@@ -327,3 +327,80 @@ dados.
 
 `npm test` (12 testes) continua passando. Não validado ao vivo ainda com o retry de 3
 tentativas — fica pra próxima execução do usuário.
+
+## Adendo — fila por LIVRO em vez de fila por ETAPA (fim do desbalanceamento de carga)
+
+Usuário colou o HTML real da página de Acompanhamento depois de uma busca, e apontou três
+coisas que mudam a arquitetura da paralelização:
+
+1. Depois da busca, **todas as etapas e todos os livros de cada uma já estão no DOM de uma
+   vez só** — o clique em "ETAPA N - (M)" só alterna a visibilidade (`ShowHide()`, função do
+   próprio site) de uma `<table id="item">` que já existe, com `style="display:none"`
+   enquanto recolhida. Não é carregamento sob demanda por etapa — só a lista de *etapas* em
+   si (os links) carrega aos poucos via scroll (Adendo acima); a tabela de livros de cada
+   etapa que já apareceu vem inteira desde o início.
+2. Com isso, não faz sentido a fila de trabalho ser por etapa inteira: basta ler os livros de
+   todas as etapas de uma vez (leitura de texto/atributo não exige visibilidade, só
+   `.click()` exige) e cada uma das 5 abas ir processando **livro por livro** de uma fila
+   compartilhada única, não etapa por etapa.
+3. Cuidado explícito pedido: nenhum livro pode ser importado duas vezes por abas diferentes.
+
+Esse desenho resolve de raiz o problema relatado no Adendo "abas pareciam se revezar": a fila
+por etapa causava desbalanceamento severo de carga — uma etapa com 4 livros (ETAPA 16) e uma
+com 128 (ETAPA 24) contavam como "1 item" cada na fila, então a aba que pegava a etapa grande
+ficava sozinha nela por muito mais tempo enquanto outras abas, com etapas pequenas, esgotavam
+a fila e ficavam ociosas — não havia como "roubar" trabalho de uma etapa já em andamento em
+outra aba.
+
+### Mudanças em `copelScraperService.js`
+
+- **`extrairOsId(href)`**: extrai o id da OS do `href="javascript:update('12105126', ...)"` do
+  link "número da OS" de cada linha — identificador **globalmente único** por livro/OS,
+  diferente do "número do livro" exibido (que é só um rótulo, não garantidamente único entre
+  etapas). Vira a chave de identidade de cada item da fila.
+- **`extrairLivrosDaEtapa(etapaLink, etapaNumero)`**: lê todas as linhas da tabela de uma
+  etapa (visível ou não) e monta um array de `{osId, etapa, livro, localidade, ...}` — sem
+  clicar/expandir a etapa.
+- **Montagem da fila em `coletarDadosAcompanhamento()`**: antes de abrir as abas extras, itera
+  sobre TODAS as etapas já carregadas na aba principal, chamando `extrairLivrosDaEtapa` em
+  cada uma e concatenando os resultados em `filaLivros` (array achatado, um item por livro de
+  todas as etapas). Substitui a antiga `filaEtapas` (array de números de etapa).
+- **`processarLivro({page, alvo, registros, rotulo, estadoDiagnostico})`** substitui
+  `processarEtapa()`: localiza a etapa do livro na própria página do worker (cada aba
+  carregou sua cópia independente — mesmo raciocínio de sempre), garante que a tabela dessa
+  etapa está visível (`garantirEtapaVisivel`, extraída da lógica que antes vivia dentro do
+  loop de `processarEtapa`), localiza a linha certa comparando por `osId` (não por índice nem
+  por número do livro — uma comparação imune a reordenação da lista entre leituras) e delega
+  a `abrirEExtrairOs()` — o clique na OS, extração das UCs e fechamento (popup ou mesma
+  página), também extraído do corpo antigo de `processarEtapa`.
+- **`worker()`**: agora consome `filaLivros.shift()` em vez de `filaEtapas.shift()`. Como cada
+  livro só existe **uma única vez** no array (montado numa única leitura, antes de qualquer
+  aba extra abrir), a garantia contra double-processing (pedido 3 do usuário) vem de graça da
+  própria estrutura de dados — não precisa de nenhum `Set`/lock adicional: um item só pode
+  estar na fila ou já ter sido `shift()`ado por exatamente uma aba, nunca as duas coisas ao
+  mesmo tempo (`Array.shift()` é síncrono em JS single-thread). `tentativasPorLivro` (Map
+  chaveado por `osId`, substitui `tentativasPorEtapa`) limita a quantas vezes um livro pode
+  voltar pra fila após falha (`MAX_TENTATIVAS_LOCALIZAR_LIVRO = 5`), mesmo raciocínio de
+  antes, só que no grão certo agora.
+- `garantirEtapaVisivel` deixou de ser uma função interna de `processarEtapa` (fechada sobre
+  `etapa`/`totalLivrosInicial`) e virou uma função de nível de módulo, chamada por livro (já
+  que livros consecutivos da fila podem pertencer a etapas diferentes, ao contrário do fluxo
+  antigo onde uma aba ficava "presa" numa etapa só até ela esgotar).
+
+### Efeito colateral positivo: paralelismo não fica mais limitado pelo número de etapas
+
+Antes, `totalAbas = Math.min(paralelismoConfigurado, filaEtapas.length)` — com poucas etapas
+(ex.: 2), no máximo 2 abas abriam, mesmo que houvesse centenas de livros no total. Agora o
+mesmo cálculo usa `filaLivros.length`, então as 5 abas configuradas são usadas sempre que
+houver pelo menos 5 livros no total, independente de quantas etapas existirem.
+
+## Consequências
+
+- Nenhuma mudança na lógica de extração de dados por livro (`extrairLinhasDetalheOs`,
+  `aguardarTabelaEstabilizar`) nem na estrutura dos registros salvos — só a forma como o
+  trabalho é distribuído entre abas mudou.
+- `node --check` confirma sintaxe válida do arquivo reescrito.
+- Não validado ao vivo nesta sessão — fica pra próxima execução do usuário confirmar que: (1)
+  a fila por livro elimina o desbalanceamento observado antes (nenhuma aba grande "prende"
+  as outras), (2) nenhum livro aparece duplicado no resultado final, (3) o volume total de
+  UCs coletadas bate com o esperado.

@@ -57,10 +57,10 @@ async function extrairLinhasDetalheOs(paginaDetalhe) {
 // popup) — usa o botão "CANCELAR" (visível no print do usuário, ao lado de
 // "GRAVAR") em vez de page.goBack(). Causa raiz de um bug real: goBack()
 // não restaura o estado JS da lista de livros da etapa (filtro/paginação
-// aplicados via AJAX), deixando os livros seguintes da mesma etapa
-// inacessíveis/errados. "CANCELAR" é o mecanismo que o próprio site
-// oferece pra fechar a tela e devolve a lista no estado certo. Fallback
-// pra goBack() só se o botão não existir.
+// aplicados via AJAX), deixando os livros seguintes inacessíveis/errados.
+// "CANCELAR" é o mecanismo que o próprio site oferece pra fechar a tela e
+// devolve a lista no estado certo. Fallback pra goBack() só se o botão não
+// existir.
 async function fecharTelaDetalheMesmaPagina(page) {
   const botaoCancelar = page.getByRole('button', { name: /cancelar/i }).or(
     page.locator('input[type="button"][value*="CANCELAR" i], input[type="submit"][value*="CANCELAR" i]'),
@@ -71,21 +71,18 @@ async function fecharTelaDetalheMesmaPagina(page) {
     logWarn('[Coleta Acomp] ⚠️ Botão CANCELAR não encontrado — usando page.goBack() como fallback.');
     await page.goBack().catch(() => {});
   }
-  // Não espera a tabela ficar visível aqui: o Adendo 7 já confirmou (com
-  // diagnóstico real) que depois de CANCELAR a etapa quase sempre volta
-  // RECOLHIDA e só reaparece quando alguém reclica no link da etapa — não
-  // sozinha. Um waitFor({state:'visible'}) aqui esperava, na prática, os
-  // 15s inteiros do timeout TODA VEZ (silenciado por .catch, sem log nenhum)
-  // antes de seguir em frente — 15s mortos por livro processado via "mesma
-  // página" (o caso mais comum). garantirEtapaVisivel(), chamada no início
-  // da próxima volta do loop de livros, já cuida de checar visibilidade e
-  // reclicar ativamente se preciso — esperar aqui era trabalho duplicado e
-  // mais lento (espera passiva por algo que só um clique ativo resolve).
+  // Não espera a tabela ficar visível aqui: depois de CANCELAR a etapa
+  // quase sempre volta RECOLHIDA e só reaparece quando alguém reclica no
+  // link da etapa — não sozinha. garantirEtapaVisivel(), chamada antes de
+  // processar o próximo livro da fila, já cuida de checar visibilidade e
+  // reclicar ativamente se preciso.
 }
 
 // Lê o cabeçalho (etapa/localidade/livro/...) e o número do livro de uma
 // linha da tabela de livros. Retorna null se a linha estiver vazia (sem
-// nenhum dado — acontece em linhas de rodapé/separador).
+// nenhum dado — acontece em linhas de rodapé/separador). Funciona mesmo
+// com a linha oculta (display:none): innerText/getAttribute não exigem
+// visibilidade, só .click() exige.
 async function lerCabecalhoLinha(linha, etapa) {
   const celulas = await linha.locator('td').allInnerTexts();
   // Primeira célula é o checkbox de seleção (sem texto).
@@ -117,37 +114,33 @@ async function lerCabecalhoLinha(linha, etapa) {
 
 // Cada etapa expandida (clique em "ETAPA X - (N)") mostra sua própria
 // tabela de livros — mas TODAS essas tabelas compartilham o mesmo
-// id="item" (confirmado no print do usuário: várias tabelas empilhadas na
-// mesma página, uma por etapa, cada uma com seu cabeçalho "ETAPA N - (M)"
-// acima). Um seletor CSS `#item` sempre resolve pra PRIMEIRA ocorrência
-// desse id no documento — foi a causa real de um bug ao vivo: depois de
-// processar a etapa 15 e abrir a etapa 16, o código continuava clicando
-// nos livros da etapa 15 (a primeira tabela #item do DOM), porque nunca
-// escopava a busca pra tabela da etapa certa. Usa XPath relativo ao link
-// da etapa ("following::table[@id='item'][1]" — a primeira tabela #item
-// que aparece DEPOIS do link no documento) em vez de um seletor global.
+// id="item" (várias tabelas empilhadas na mesma página, uma por etapa,
+// cada uma com seu cabeçalho "ETAPA N - (M)" acima). Um seletor CSS
+// `#item` sempre resolve pra PRIMEIRA ocorrência desse id no documento —
+// por isso usa XPath relativo ao link da etapa ("following::table[@id='item'][1]"
+// — a primeira tabela #item que aparece DEPOIS do link no documento) em
+// vez de um seletor global.
 function tabelaDaEtapa(etapaLink) {
   return etapaLink.locator('xpath=following::table[@id="item"][1]');
 }
 
-// A lista de etapas da aba Acompanhamento carrega de forma "preguiçosa": o
-// usuário confirmou que todas as etapas já estão disponíveis, mas só
-// aparecem no DOM conforme a página rola pra baixo — o mesmo processo manual
-// de antes do scraper existir. Sem isso, o loop de etapas parava cedo (ex.:
-// achava que só existiam 18 etapas quando na verdade havia muitas mais mais
-// abaixo) porque `count()` só enxerga o que já foi renderizado.
+// A lista de ETAPAS (os links "ETAPA X - (N)") carrega de forma
+// "preguiçosa" conforme a página rola pra baixo. Já a tabela de LIVROS de
+// cada etapa que JÁ apareceu vem inteira desde o início — o clique em
+// "ETAPA X - (N)" só alterna a visibilidade (função ShowHide() do site) de
+// uma tabela que já existe no DOM, não busca dado novo (confirmado pelo
+// usuário com o HTML real da página: toda tabela de livros de toda etapa
+// carregada já está presente, só com `style="display:none"`). Por isso
+// esta função só precisa garantir que os LINKS de etapa terminaram de
+// carregar via scroll — depois disso dá pra ler os livros de todas elas
+// direto, sem precisar clicar/expandir uma por uma.
 //
-// Dois ajustes em cima da versão original (Adendo 13 da ADR 0018), depois de
-// a versão paralelizada (ADR 0020) ter montado a fila de etapas incompleta —
-// só 2 de N: 1) rola em PASSOS (altura de uma janela por vez), não num salto
-// direto pro fim (`scrollTo(0, scrollHeight)`) — se o carregamento do
-// próximo lote depende de a rolagem "passar" pelos itens já carregados (ex.:
+// Rola em PASSOS (altura de uma janela por vez), não num salto direto pro
+// fim (`scrollTo(0, scrollHeight)`) — se o carregamento do próximo lote
+// depende de a rolagem "passar" pelos itens já carregados (ex.:
 // intersection observer no fim da lista atual), pular direto pro fim pode
-// não disparar o gatilho certo. 2) exige 4 leituras estáveis seguidas (não
-// 2) com mais tempo entre elas — no fluxo sequencial antigo essa função
-// era chamada de novo a cada etapa processada, dando várias chances ao
-// longo de minutos; aqui só há UMA chance antes de montar a fila
-// definitiva, então precisa ser mais rigorosa antes de decidir que acabou.
+// não disparar o gatilho certo. Exige 4 leituras estáveis seguidas (não
+// só 1) antes de decidir que a lista de etapas parou de crescer.
 async function aguardarTodasEtapasCarregadas(page) {
   const etapas = page.locator('a.color:has-text("ETAPA")');
   let anterior = -1;
@@ -194,12 +187,47 @@ async function aguardarTabelaEstabilizar(paginaDetalhe) {
 // Extrai só o número da etapa ("18" de "ETAPA 18 - (309)") — o texto
 // completo inclui a contagem de livros ENTRE PARÊNTESES, que muda a cada
 // consulta e não é confiável como identificador entre abas diferentes (ver
-// coordenarAbas mais abaixo: cada aba carrega sua PRÓPRIA cópia da lista,
-// de forma independente, então o texto completo pode divergir ligeiramente
+// worker mais abaixo: cada aba carrega sua PRÓPRIA cópia da lista, de
+// forma independente, então o texto completo pode divergir ligeiramente
 // entre elas mesmo sendo a mesma etapa).
 function numeroDaEtapa(texto) {
   const match = String(texto ?? '').match(/ETAPA\s+(\d+)/i);
   return match ? match[1] : null;
+}
+
+// Extrai o id interno da OS a partir do href
+// `javascript:update('12105126','editarTarefasLeituraAction.do?...')` do
+// link "número da OS" de cada linha — é o identificador globalmente único
+// de cada livro/OS na página (diferente do "número do livro" exibido, que
+// é só um rótulo e pode não ser único entre etapas). Usado como chave da
+// fila de livros: como cada osId só é extraído UMA vez ao montar a fila,
+// não existe forma de duas abas processarem o mesmo livro duas vezes.
+function extrairOsId(href) {
+  const match = String(href ?? '').match(/update\('(\d+)'/);
+  return match ? match[1] : null;
+}
+
+// Lê TODOS os livros de uma etapa (já com a tabela no DOM, visível ou não —
+// ver aguardarTodasEtapasCarregadas) sem precisar clicar/expandir a etapa:
+// innerText e getAttribute funcionam em elemento oculto, só .click() exige
+// visibilidade. Cada item vira uma entrada da fila compartilhada por livro.
+async function extrairLivrosDaEtapa(etapaLink, etapaNumero) {
+  const tabela = tabelaDaEtapa(etapaLink);
+  const linhas = tabela.locator('tbody tr');
+  const total = await linhas.count();
+  const livros = [];
+  for (let i = 0; i < total; i++) {
+    const linha = linhas.nth(i);
+    const cabecalho = await lerCabecalhoLinha(linha, etapaNumero);
+    if (!cabecalho) continue;
+    const linkOs = linha.locator('td').nth(3).locator('a');
+    if ((await linkOs.count()) === 0) continue;
+    const href = await linkOs.getAttribute('href');
+    const osId = extrairOsId(href);
+    if (!osId) continue;
+    livros.push({ osId, ...cabecalho });
+  }
+  return livros;
 }
 
 // Aplica os mesmos filtros (concessionária/empreiteira) e busca — comum
@@ -214,243 +242,125 @@ async function aplicarFiltroEBuscar(page) {
   await aguardarTodasEtapasCarregadas(page);
 }
 
-// Processa TODOS os livros de uma etapa já aberta (clique já feito antes de
-// chamar) — extraído do loop original pra poder rodar em qualquer `page`,
-// permitindo que várias abas processem etapas diferentes em paralelo (ver
-// coletarDadosAcompanhamento). `estadoDiagnostico` é um objeto mutável
-// {osSalvo, etapaSalvo} — um por ABA (worker), não global: cada aba só
-// salva 1 diagnóstico de cada categoria por ela mesma, evitando spam de
-// screenshots sem perder o sinal quando várias abas falham por motivos
-// diferentes ao mesmo tempo.
-async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estadoDiagnostico }) {
-  log(`[Coleta Acomp]${rotulo} ➡️ Processando etapa: ${etapa}`);
-  await etapaLink.click();
-  // Nada de tempo fixo: espera a tabela de livros DESTA etapa (não
-  // qualquer #item — ver tabelaDaEtapa) ficar visível. Isso já é o
-  // sinal certo — um waitForLoadState('networkidle') extra só atrasava
-  // sem necessidade (ver comentário em fecharTelaDetalheMesmaPagina).
-  const tabelaAtual = tabelaDaEtapa(etapaLink);
-  await tabelaAtual.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
+const MAX_TENTATIVAS_REABRIR_ETAPA = 3;
 
-  const totalLivrosInicial = await tabelaAtual.locator('tbody tr').count();
-  log(`[Coleta Acomp]${rotulo} 📄 ${totalLivrosInicial} livros na etapa '${etapa}' — abrindo cada OS...`);
+// Garante que a tabela de livros da etapa DESTE livro está visível nesta
+// aba antes de tentar clicar num livro dentro dela — o site recolhe a
+// etapa a cada CANCELAR (ver fecharTelaDetalheMesmaPagina), então isso é
+// esperado a cada livro processado, não uma falha. Como a fila agora
+// mistura livros de etapas diferentes, essa checagem roda por livro (não
+// mais uma vez só por etapa inteira).
+async function garantirEtapaVisivel(etapaLink, tabelaAtual, rotulo, etapaNumero) {
+  for (let tentativa = 0; tentativa < MAX_TENTATIVAS_REABRIR_ETAPA; tentativa++) {
+    if (await tabelaAtual.isVisible().catch(() => false)) return true;
+    log(
+      `[Coleta Acomp]${rotulo} 🔄 Etapa '${etapaNumero}' recolhida — reabrindo ` +
+        `(tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
+    );
+    await etapaLink.click().catch(() => {});
+    await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+  }
+  return tabelaAtual.isVisible().catch(() => false);
+}
 
-  // Processa livro a livro RELENDO A LISTA DO ZERO a cada vez, rastreando
-  // por número do livro (não por índice de posição). Usuário observou ao
-  // vivo, com índice fixo, o código reabrindo o MESMO "número da OS" em
-  // vez de avançar pro próximo — sinal de que a lista de livros pode
-  // reordenar/remontar via AJAX depois de fechar uma OS, então a posição
-  // N nem sempre aponta pro mesmo livro entre uma leitura e a próxima.
-  // Só o número do livro em si é uma identidade confiável.
-  const livrosProcessados = new Set();
-  let livrosComUc = 0;
-  let totalUcs = 0;
-  // Trava de segurança contra loop infinito, caso a lista fique
-  // crescendo/reaparecendo de um jeito que nunca convirja — não deve
-  // acontecer no fluxo normal, mas é melhor abortar com log claro do
-  // que travar o processo indefinidamente numa etapa.
-  const limiteLivros = totalLivrosInicial + 50;
-  const MAX_TENTATIVAS_REABRIR_ETAPA = 3;
+// Abre a OS de um único livro (clique no link "número da OS"), extrai as
+// UCs do detalhe e fecha a tela (popup ou mesma página). Extraído do fluxo
+// original pra rodar por livro isolado em vez de dentro de um loop de
+// etapa inteira.
+async function abrirEExtrairOs({ page, linhaAlvo, cabecalhoAlvo, registros, rotulo, estadoDiagnostico }) {
+  const linkOs = linhaAlvo.locator('td').nth(3).locator('a');
+  let popup = null;
+  let usouMesmaPagina = false;
+  try {
+    // waitForEvent('popup') precisa ser registrado ANTES do clique (senão
+    // corre risco de perder o evento se o popup abrir rápido demais) — mas
+    // isso deixa a promise "solta" rejeitando sozinha por timeout enquanto
+    // o código ainda está no `await linkOs.click()`. `.catch(() => {})`
+    // preventivo precisa estar em CADA nível (original, `.then()`, e a
+    // combinação final) pra realmente eliminar o risco de unhandled
+    // rejection — um catch só na promise original não bastou.
+    const promPopup = page.waitForEvent('popup', { timeout: 20000 });
+    promPopup.catch(() => {});
+    const promMesmaPagina = page
+      .getByText('DADOS DE EXECUÇÃO', { exact: false })
+      .first()
+      .waitFor({ timeout: 20000, state: 'visible' });
+    promMesmaPagina.catch(() => {});
 
-  async function garantirEtapaVisivel() {
-    for (let tentativa = 0; tentativa < MAX_TENTATIVAS_REABRIR_ETAPA; tentativa++) {
-      if (await tabelaAtual.isVisible().catch(() => false)) return true;
-      // Não é erro — o site recolhe a etapa a cada CANCELAR (ver
-      // Adendo 7), então isso é esperado a cada livro, não uma falha.
+    // Promise.any (não race): resolve assim que QUALQUER uma tiver
+    // sucesso, e só rejeita se as DUAS falharem.
+    const esperaPopup = promPopup.then(p => ({ tipo: 'popup', p }));
+    esperaPopup.catch(() => {});
+    const esperaMesmaPagina = promMesmaPagina.then(() => ({ tipo: 'mesmaPagina' }));
+    esperaMesmaPagina.catch(() => {});
+
+    const combinada = Promise.any([esperaPopup, esperaMesmaPagina]);
+    combinada.catch(() => {});
+
+    const inicioReq = Date.now();
+    log(`[Coleta Acomp]${rotulo} ⏱️ INÍCIO abrir OS livro '${cabecalhoAlvo.livro}' (etapa ${cabecalhoAlvo.etapa})`);
+
+    await linkOs.click();
+    const resultado = await combinada;
+
+    if (resultado.tipo === 'popup') {
+      popup = resultado.p;
+      await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+    } else {
+      usouMesmaPagina = true;
+      await page.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+    }
+
+    const paginaDetalhe = popup || page;
+    // A tabela de UCs pode popular as linhas de forma assíncrona depois de
+    // #tabFixedHeader já existir — espera a contagem estabilizar antes de
+    // extrair (ver aguardarTabelaEstabilizar).
+    await aguardarTabelaEstabilizar(paginaDetalhe);
+    const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
+    log(`[Coleta Acomp]${rotulo} ⏱️ FIM abrir OS livro '${cabecalhoAlvo.livro}' (${Date.now() - inicioReq}ms)`);
+    for (const uc of linhasUc) {
+      registros.push({ ...cabecalhoAlvo, ...uc });
+    }
+    if (linhasUc.length > 0) {
       log(
-        `[Coleta Acomp]${rotulo} 🔄 Etapa '${etapa}' recolheu (comportamento normal do site) — ` +
-          `reabrindo (${livrosProcessados.size}/${totalLivrosInicial} livros já coletados, ` +
-          `tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
+        `[Coleta Acomp]${rotulo} 📖 Livro '${cabecalhoAlvo.livro}' (etapa ${cabecalhoAlvo.etapa}) — ` +
+          `${linhasUc.length} UCs coletadas.`,
       );
-      await etapaLink.click().catch(() => {});
-      await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+    } else {
+      logWarn(`[Coleta Acomp]${rotulo} ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
     }
-    return tabelaAtual.isVisible().catch(() => false);
-  }
-
-  while (true) {
-    if (livrosProcessados.size < totalLivrosInicial) {
-      await garantirEtapaVisivel();
+  } catch (erroOs) {
+    logErro(
+      `[Coleta Acomp]${rotulo} ⚠️ Falha ao abrir OS do livro '${cabecalhoAlvo.livro}' (etapa ${cabecalhoAlvo.etapa}): ${erroOs.message}`,
+    );
+    if (!estadoDiagnostico.osSalvo) {
+      estadoDiagnostico.osSalvo = true;
+      await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_os_${cabecalhoAlvo.livro}_falhou`);
     }
-
-    const linhasAtuais = tabelaAtual.locator('tbody tr');
-    const totalAtual = await linhasAtuais.count();
-
-    let linhaAlvo = null;
-    let cabecalhoAlvo = null;
-    for (let i = 0; i < totalAtual; i++) {
-      const cabecalho = await lerCabecalhoLinha(linhasAtuais.nth(i), etapa);
-      if (!cabecalho) continue;
-      if (livrosProcessados.has(cabecalho.livro)) continue;
-      linhaAlvo = linhasAtuais.nth(i);
-      cabecalhoAlvo = cabecalho;
-      break;
-    }
-
-    if (!linhaAlvo) {
-      // totalAtual > 0 mas nenhuma linha "bateu" (nem vazia nem já
-      // processada) — sinal de que a lista existe mas está num estado
-      // inesperado (linhas vazias, ou o "número do livro" mudou de
-      // valor entre leituras). Loga e salva diagnóstico pra investigar,
-      // já que a contagem esperada (totalLivrosInicial) não bate com o
-      // que foi de fato processado.
-      if (livrosProcessados.size < totalLivrosInicial && !estadoDiagnostico.osSalvo) {
-        const amostra =
-          totalAtual > 0
-            ? await linhasAtuais
-                .nth(0)
-                .locator('td')
-                .allInnerTexts()
-                .catch(() => ['<falhou ao ler>'])
-            : [];
-        logErro(
-          `[Coleta Acomp]${rotulo} ❌ Etapa '${etapa}': parou em ${livrosProcessados.size} livros ` +
-            `processados (esperado ${totalLivrosInicial}), tabela com ${totalAtual} linhas ` +
-            `visíveis depois de tentar reabrir. 1ª linha: ${JSON.stringify(amostra)}`,
-        );
-        estadoDiagnostico.osSalvo = true;
-        await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_lista_travada_${etapa.replace(/[^\w-]/g, '_')}`);
-      }
-      break; // nenhum livro pendente sobrou na lista atual
-    }
-
-    if (livrosProcessados.size >= limiteLivros) {
-      logErro(
-        `[Coleta Acomp]${rotulo} ❌ Etapa '${etapa}' passou de ${limiteLivros} livros processados ` +
-          `(esperado ~${totalLivrosInicial}) — abortando a etapa pra não travar indefinidamente.`,
-      );
-      break;
-    }
-
-    livrosProcessados.add(cabecalhoAlvo.livro);
-
-    // "Número da OS" (numero_os no parser antigo) é a célula de índice
-    // 3 contando com o checkbox — ex.: <a href="javascript:update('ID',
-    // 'editarTarefasLeituraAction.do?acompanhamento=S')">2026...</a>.
-    // Clicar de verdade (não simular via fetch) porque a função
-    // update() do site pode depender de estado JS/sessão que não dá
-    // pra replicar de fora.
-    const linkOs = linhaAlvo.locator('td').nth(3).locator('a');
-    if ((await linkOs.count()) === 0) continue;
-
-    let popup = null;
-    let usouMesmaPagina = false;
-    try {
-      // waitForEvent('popup') precisa ser registrado ANTES do clique
-      // (senão corre risco de perder o evento se o popup abrir rápido
-      // demais) — mas isso deixa a promise "solta" rejeitando sozinha
-      // por timeout enquanto o código ainda está no `await
-      // linkOs.click()`. `.catch(() => {})` preventivo precisa estar em
-      // CADA nível (original, `.then()`, e a combinação final) pra
-      // realmente eliminar o risco de unhandled rejection — um catch só
-      // na promise original não bastou (ver Adendo 6 da ADR 0018).
-      const promPopup = page.waitForEvent('popup', { timeout: 20000 });
-      promPopup.catch(() => {});
-      const promMesmaPagina = page
-        .getByText('DADOS DE EXECUÇÃO', { exact: false })
-        .first()
-        .waitFor({ timeout: 20000, state: 'visible' });
-      promMesmaPagina.catch(() => {});
-
-      // Promise.any (não race): resolve assim que QUALQUER uma tiver
-      // sucesso, e só rejeita se as DUAS falharem.
-      const esperaPopup = promPopup.then(p => ({ tipo: 'popup', p }));
-      esperaPopup.catch(() => {});
-      const esperaMesmaPagina = promMesmaPagina.then(() => ({ tipo: 'mesmaPagina' }));
-      esperaMesmaPagina.catch(() => {});
-
-      const combinada = Promise.any([esperaPopup, esperaMesmaPagina]);
-      combinada.catch(() => {});
-
-      // Timing instrumentado (a pedido do usuário, que viu uma aba "parada
-      // esperando a vez" enquanto outra processava) — o clique + espera da
-      // resposta é a única ação de rede pesada por livro. Comparando os
-      // intervalos [INÍCIO, FIM] de abas diferentes no log dá pra ver se
-      // elas realmente ficam com requisição em voo ao mesmo tempo (paralelo
-      // de verdade) ou se sempre se revezam (sinal de que o servidor
-      // processa a mesma sessão HTTP de forma serializada, já que todas as
-      // abas compartilham o mesmo login — ver ADR 0020).
-      const inicioReq = Date.now();
-      log(`[Coleta Acomp]${rotulo} ⏱️ INÍCIO abrir OS livro '${cabecalhoAlvo.livro}'`);
-
-      await linkOs.click();
-      const resultado = await combinada;
-
-      if (resultado.tipo === 'popup') {
-        popup = resultado.p;
-        await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
-      } else {
-        usouMesmaPagina = true;
-        await page.waitForSelector('#tabFixedHeader', { timeout: 15000 });
-      }
-
-      const paginaDetalhe = popup || page;
-      // A tabela de UCs pode popular as linhas de forma assíncrona
-      // depois de #tabFixedHeader já existir — espera a contagem
-      // estabilizar antes de extrair (ver aguardarTabelaEstabilizar).
-      await aguardarTabelaEstabilizar(paginaDetalhe);
-      const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
-      log(`[Coleta Acomp]${rotulo} ⏱️ FIM abrir OS livro '${cabecalhoAlvo.livro}' (${Date.now() - inicioReq}ms)`);
-      for (const uc of linhasUc) {
-        registros.push({ ...cabecalhoAlvo, ...uc });
-      }
-      if (linhasUc.length > 0) {
-        livrosComUc++;
-        totalUcs += linhasUc.length;
-        log(
-          `[Coleta Acomp]${rotulo} 📖 Livro '${cabecalhoAlvo.livro}' — ${linhasUc.length} UCs ` +
-            `(${livrosProcessados.size}/${totalLivrosInicial} da etapa '${etapa}').`,
-        );
-      } else {
-        logWarn(`[Coleta Acomp]${rotulo} ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
-      }
-    } catch (erroOs) {
-      logErro(
-        `[Coleta Acomp]${rotulo} ⚠️ Falha ao abrir OS do livro '${cabecalhoAlvo.livro}' (etapa ${etapa}): ${erroOs.message}`,
-      );
-      if (!estadoDiagnostico.osSalvo) {
-        estadoDiagnostico.osSalvo = true;
-        await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_os_${cabecalhoAlvo.livro}_falhou`);
-      }
-      // "All promises were rejected" (nem popup nem "DADOS DE EXECUÇÃO"
-      // apareceram a tempo) não significa que o clique não teve efeito —
-      // a navegação real pode só ter completado DEPOIS do timeout (rede
-      // lenta, mais comum sob 8 abas competindo pela mesma sessão). Nesse
-      // caso nem popup nem usouMesmaPagina foram marcados, então o finally
-      // normal não fecharia nada, deixando a tela de detalhe (URL
-      // editarTarefasLeituraAction.do) aberta e a aba PRESA nela pro resto
-      // da execução — sem nenhuma etapa visível, sem formulário de busca,
-      // incapaz de se recuperar sozinha (confirmado com diagnóstico real:
-      // uma checagem única e instantânea aqui não bastava — a tela às vezes
-      // só aparecia alguns segundos depois dela). Poll de até 10s (bem mais
-      // curto que os 20s do timeout original, só cobrindo o "quase lá") em
-      // vez de uma checagem única.
-      if (!popup && !usouMesmaPagina) {
-        const textoExecucao = page.getByText('DADOS DE EXECUÇÃO', { exact: false }).first();
-        for (let tentativa = 0; tentativa < 10 && !usouMesmaPagina; tentativa++) {
-          const apareceuTarde = await textoExecucao.isVisible().catch(() => false);
-          if (apareceuTarde) {
-            usouMesmaPagina = true;
-            break;
-          }
-          await page.waitForTimeout(1000);
+    // "All promises were rejected" (nem popup nem "DADOS DE EXECUÇÃO"
+    // apareceram a tempo) não significa que o clique não teve efeito — a
+    // navegação real pode só ter completado DEPOIS do timeout (rede lenta,
+    // mais comum sob várias abas competindo pela mesma sessão). Poll de
+    // até 10s (bem mais curto que os 20s do timeout original, só cobrindo
+    // o "quase lá") em vez de uma checagem única.
+    if (!popup && !usouMesmaPagina) {
+      const textoExecucao = page.getByText('DADOS DE EXECUÇÃO', { exact: false }).first();
+      for (let tentativa = 0; tentativa < 10 && !usouMesmaPagina; tentativa++) {
+        const apareceuTarde = await textoExecucao.isVisible().catch(() => false);
+        if (apareceuTarde) {
+          usouMesmaPagina = true;
+          break;
         }
-      }
-    } finally {
-      if (popup) {
-        await popup.close().catch(() => {});
-      } else if (usouMesmaPagina) {
-        await fecharTelaDetalheMesmaPagina(page);
+        await page.waitForTimeout(1000);
       }
     }
+  } finally {
+    if (popup) {
+      await popup.close().catch(() => {});
+    } else if (usouMesmaPagina) {
+      await fecharTelaDetalheMesmaPagina(page);
+    }
   }
-
-  log(
-    `[Coleta Acomp]${rotulo} ✅ Etapa '${etapa}': ${livrosComUc}/${livrosProcessados.size} livros com OS aberta ` +
-      `(${totalLivrosInicial} na lista original), ${totalUcs} UCs coletadas.`,
-  );
-
-  await etapaLink.click(); // recolhe a etapa atual antes de ir pra próxima
 }
 
 // Tenta trazer uma aba "cega" (sem nenhuma etapa visível) de volta ao
@@ -487,106 +397,131 @@ async function recuperarAba(page, rotulo, estadoDiagnostico) {
   }
 }
 
-// Cada worker (1 por aba) consome números de etapa da fila COMPARTILHADA
-// (`filaEtapas.shift()` — síncrono, sem race condition real mesmo com
-// vários workers "concorrentes", já que JS processa um passo de cada vez)
-// até ela esvaziar. Localiza a etapa correspondente NA SUA PRÓPRIA página
-// pelo número (não por índice nem pelo texto completo — ver numeroDaEtapa),
-// já que cada aba carregou sua cópia da lista de forma independente.
+// Processa UM livro da fila compartilhada: localiza a etapa dele NA
+// PRÓPRIA página do worker (cada aba carregou sua cópia da lista de forma
+// independente), garante que a tabela dessa etapa está visível, localiza a
+// linha certa por osId (não por índice nem por número do livro — ver
+// extrairOsId) e abre a OS. Retorna 'ok' em caso de sucesso, ou um motivo
+// curto de falha pra o worker decidir se devolve o livro pra fila.
+async function processarLivro({ page, alvo, registros, rotulo, estadoDiagnostico }) {
+  const etapas = page.locator('a.color:has-text("ETAPA")');
+  let textos = await etapas.allInnerTexts();
+  let indice = textos.findIndex(t => numeroDaEtapa(t) === alvo.etapa);
+
+  if (indice === -1) {
+    // Pode ser que ESTA aba especificamente ainda não tenha terminado de
+    // rolar até o fim quando este livro foi retirado da fila.
+    log(
+      `[Coleta Acomp]${rotulo} 🔄 Etapa '${alvo.etapa}' (livro '${alvo.livro}') não encontrada ainda nesta ` +
+        'aba — rolando mais pra procurar.',
+    );
+    await aguardarTodasEtapasCarregadas(page);
+    textos = await etapas.allInnerTexts();
+    indice = textos.findIndex(t => numeroDaEtapa(t) === alvo.etapa);
+  }
+
+  if (indice === -1 && textos.length === 0) {
+    // A aba pode ter ficado PRESA na tela de detalhe de uma OS anterior, ou
+    // o formulário de filtro simplesmente não carregou (sobrecarga
+    // momentânea do servidor sob várias abas competindo pela mesma sessão).
+    logWarn(
+      `[Coleta Acomp]${rotulo} 🔁 Nenhuma etapa na página (aba provavelmente presa em outra tela) — ` +
+        'renavegando e refazendo busca.',
+    );
+    await recuperarAba(page, rotulo, estadoDiagnostico);
+    textos = await etapas.allInnerTexts();
+    indice = textos.findIndex(t => numeroDaEtapa(t) === alvo.etapa);
+  }
+
+  if (indice === -1) return 'etapa_nao_encontrada';
+
+  const etapaLink = etapas.nth(indice);
+  const tabelaAtual = tabelaDaEtapa(etapaLink);
+  const visivel = await garantirEtapaVisivel(etapaLink, tabelaAtual, rotulo, alvo.etapa);
+  if (!visivel) return 'etapa_nao_abriu';
+
+  const linhas = tabelaAtual.locator('tbody tr');
+  const total = await linhas.count();
+  let linhaAlvo = null;
+  for (let i = 0; i < total; i++) {
+    const linkOs = linhas.nth(i).locator('td').nth(3).locator('a');
+    if ((await linkOs.count()) === 0) continue;
+    const href = await linkOs.getAttribute('href');
+    if (extrairOsId(href) === alvo.osId) {
+      linhaAlvo = linhas.nth(i);
+      break;
+    }
+  }
+
+  if (!linhaAlvo) return 'linha_nao_encontrada';
+
+  await abrirEExtrairOs({ page, linhaAlvo, cabecalhoAlvo: alvo, registros, rotulo, estadoDiagnostico });
+  return 'ok';
+}
+
+// Cada worker (1 por aba) consome LIVROS (não mais etapas inteiras) da
+// fila COMPARTILHADA (`filaLivros.shift()` — síncrono, sem race condition
+// real mesmo com vários workers "concorrentes", já que JS processa um
+// passo de cada vez) até ela esvaziar. Como cada livro só existe UMA vez
+// no array (montado numa única leitura no início — ver
+// coletarDadosAcompanhamento), nenhum livro pode ser processado duas vezes
+// por abas diferentes, e nenhuma etapa grande prende uma aba inteira
+// enquanto outras abas ficam ociosas — o problema real observado com a
+// fila por etapa: uma etapa com poucos livros terminava rápido e a aba
+// ficava esperando, enquanto uma etapa com 100+ livros segurava outra aba
+// sozinha.
 //
-// `tentativasPorEtapa` (Map compartilhado entre workers) limita quantas
-// vezes um número pode ser devolvido à fila por "não encontrado nesta aba" —
-// sem isso, uma etapa que genuinamente não existe em nenhuma aba (número
-// extraído errado, etapa removida do portal entre a montagem da fila e a
-// tentativa) ficaria sendo re-adicionada pra sempre, travando a coleta.
-const MAX_TENTATIVAS_LOCALIZAR_ETAPA = 5;
+// `tentativasPorLivro` (Map compartilhado entre workers, chaveado por
+// osId) limita quantas vezes um livro pode ser devolvido à fila por falha
+// — sem isso, um livro que genuinamente não é localizável (osId extraído
+// errado, OS removida do portal entre a montagem da fila e a tentativa)
+// ficaria sendo re-adicionado pra sempre, travando a coleta.
+const MAX_TENTATIVAS_LOCALIZAR_LIVRO = 5;
 
-async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
+async function worker(page, rotulo, filaLivros, registros, tentativasPorLivro) {
   const estadoDiagnostico = { osSalvo: false, etapaSalvo: false };
+  let processados = 0;
 
-  while (filaEtapas.length > 0) {
-    const numeroAlvo = filaEtapas.shift();
-    if (numeroAlvo === undefined) break;
+  while (filaLivros.length > 0) {
+    const alvo = filaLivros.shift();
+    if (!alvo) break;
 
-    const etapas = page.locator('a.color:has-text("ETAPA")');
-    let textos = await etapas.allInnerTexts();
-    let indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
-    if (indice === -1) {
-      // Pode ser que ESTA aba especificamente ainda não tenha terminado de
-      // carregar sua própria cópia da lista (cada aba rola de forma
-      // independente — ver aguardarTodasEtapasCarregadas). Tenta rolar mais
-      // antes de desistir, em vez de simplesmente descartar a etapa.
-      log(
-        `[Coleta Acomp]${rotulo} 🔄 Etapa número ${numeroAlvo} não encontrada ainda — rolando mais pra procurar.`,
+    let resultado;
+    try {
+      resultado = await processarLivro({ page, alvo, registros, rotulo, estadoDiagnostico });
+    } catch (erro) {
+      logErro(
+        `[Coleta Acomp]${rotulo} ❌ Livro '${alvo.livro}' (etapa ${alvo.etapa}) falhou de forma inesperada: ${erro.message}`,
       );
-      await aguardarTodasEtapasCarregadas(page);
-      textos = await etapas.allInnerTexts();
-      indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
+      resultado = 'erro_inesperado';
     }
-    if (indice === -1 && textos.length === 0) {
-      // Visto ao vivo (diagnóstico automático confirmou duas causas
-      // diferentes ao longo da investigação): 1) a aba pode ficar PRESA na
-      // tela de detalhe de uma OS (URL editarTarefasLeituraAction.do) que
-      // nunca foi fechada — "All promises were rejected" seguido da
-      // navegação real completando só depois da checagem de "apareceu
-      // tarde"; 2) mesmo com goto() forçando a URL certa de volta, o
-      // FORMULÁRIO de filtro às vezes simplesmente não carrega — corpo da
-      // página vazio, só o menu, mesmo depois dos 30s de auto-wait do
-      // Playwright em cima do `selectOption`. O segundo caso parece
-      // transitório (sobrecarga momentânea do servidor sob várias abas
-      // competindo pela mesma sessão) — vale a pena tentar de novo em vez
-      // de desistir na primeira falha.
-      logWarn(
-        `[Coleta Acomp]${rotulo} 🔁 Nenhuma etapa na página (aba provavelmente presa em outra tela) — renavegando e refazendo busca.`,
-      );
-      await recuperarAba(page, rotulo, estadoDiagnostico);
-      textos = await etapas.allInnerTexts();
-      indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
-    }
-    if (indice === -1) {
-      const tentativas = (tentativasPorEtapa.get(numeroAlvo) ?? 0) + 1;
-      tentativasPorEtapa.set(numeroAlvo, tentativas);
-      if (tentativas >= MAX_TENTATIVAS_LOCALIZAR_ETAPA) {
-        logErro(
-          `[Coleta Acomp]${rotulo} ❌ Etapa número ${numeroAlvo} não encontrada em ${tentativas} tentativas ` +
-            '(em nenhuma aba) — desistindo dela pra não travar a coleta.',
-        );
-        continue;
-      }
-      // Ainda não achou depois de garantir a lista carregada — devolve pra
-      // fila em vez de perder a etapa silenciosamente; outra aba (ou esta
-      // mesma, numa próxima volta) tenta de novo.
-      logWarn(
-        `[Coleta Acomp]${rotulo} ⚠️ Etapa número ${numeroAlvo} não existe nesta aba mesmo após recarregar ` +
-          `(tentativa ${tentativas}/${MAX_TENTATIVAS_LOCALIZAR_ETAPA}) — devolvendo pra fila.`,
-      );
-      filaEtapas.push(numeroAlvo);
+
+    if (resultado === 'ok') {
+      processados++;
       continue;
     }
 
-    const etapaLink = etapas.nth(indice);
-    const etapaTexto = textos[indice].trim();
-
-    // Todo o processamento desta etapa fica dentro de um try/catch de nível
-    // de etapa — um erro fatal não tratado internamente (ex.: o clique de
-    // recolher no fim de processarEtapa) não pode derrubar o worker
-    // inteiro, senão as etapas restantes da fila ficam sem ninguém pra
-    // processá-las (ver Adendo 12 da ADR 0018 — mesmo raciocínio, agora por
-    // worker em vez de por execução inteira).
-    try {
-      await processarEtapa({ page, etapaLink, etapa: etapaTexto, registros, rotulo, estadoDiagnostico });
-    } catch (erroEtapa) {
+    const tentativas = (tentativasPorLivro.get(alvo.osId) ?? 0) + 1;
+    tentativasPorLivro.set(alvo.osId, tentativas);
+    if (tentativas >= MAX_TENTATIVAS_LOCALIZAR_LIVRO) {
       logErro(
-        `[Coleta Acomp]${rotulo} ❌ Etapa '${etapaTexto}' interrompida por erro irrecuperável: ${erroEtapa.message} — ` +
-          'seguindo para a próxima etapa da fila.',
+        `[Coleta Acomp]${rotulo} ❌ Livro '${alvo.livro}' (etapa ${alvo.etapa}) falhou ${tentativas}x ` +
+          `(${resultado}) — desistindo dele pra não travar a coleta.`,
       );
       if (!estadoDiagnostico.etapaSalvo) {
         estadoDiagnostico.etapaSalvo = true;
-        await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_etapa_falhou_${etapaTexto.replace(/[^\w-]/g, '_')}`);
+        await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_livro_${alvo.livro}_desistiu`);
       }
+      continue;
     }
+
+    logWarn(
+      `[Coleta Acomp]${rotulo} ⚠️ Livro '${alvo.livro}' (etapa ${alvo.etapa}) — ${resultado} ` +
+        `(tentativa ${tentativas}/${MAX_TENTATIVAS_LOCALIZAR_LIVRO}) — devolvendo pra fila.`,
+    );
+    filaLivros.push(alvo);
   }
-  log(`[Coleta Acomp]${rotulo} 🏁 Fila de etapas esgotada — aba encerrada.`);
+  log(`[Coleta Acomp]${rotulo} 🏁 Fila de livros esgotada — ${processados} livro(s) processado(s) nesta aba — encerrada.`);
 }
 
 async function coletarDadosAcompanhamento() {
@@ -626,23 +561,35 @@ async function coletarDadosAcompanhamento() {
     await page.click("a.submenu:has-text('acompanhamento')");
     await aplicarFiltroEBuscar(page);
 
-    // Números de etapa únicos (não o texto inteiro — ver numeroDaEtapa),
-    // na ordem em que aparecem. Vira a fila de trabalho compartilhada entre
-    // todas as abas.
-    const textosEtapas = await page.locator('a.color:has-text("ETAPA")').allInnerTexts();
-    const filaEtapas = [...new Set(textosEtapas.map(numeroDaEtapa).filter(Boolean))];
-    log(`[Coleta Acomp] 📋 ${filaEtapas.length} etapas encontradas: ${filaEtapas.join(', ')}`);
+    // A página, depois da busca, já carrega TODAS as etapas E todos os
+    // livros de cada uma no DOM de uma vez só — o clique em "ETAPA N - (M)"
+    // só alterna a visibilidade (ShowHide()) de uma tabela que já existe,
+    // não busca dado novo (confirmado com o HTML real da página). Por isso
+    // dá pra ler todos os livros de todas as etapas aqui, de uma vez, sem
+    // precisar clicar/expandir etapa por etapa.
+    const etapasLocator = page.locator('a.color:has-text("ETAPA")');
+    const totalEtapas = await etapasLocator.count();
+    const filaLivros = [];
+    for (let i = 0; i < totalEtapas; i++) {
+      const etapaLink = etapasLocator.nth(i);
+      const etapaTexto = await etapaLink.innerText();
+      const etapaNumero = numeroDaEtapa(etapaTexto);
+      if (!etapaNumero) continue;
+      const livrosDaEtapa = await extrairLivrosDaEtapa(etapaLink, etapaNumero);
+      filaLivros.push(...livrosDaEtapa);
+    }
+    log(`[Coleta Acomp] 📋 ${filaLivros.length} livro(s) encontrado(s) em ${totalEtapas} etapa(s).`);
 
-    if (filaEtapas.length === 0) {
-      log('[Coleta Acomp] ✅ Nenhuma etapa para processar.');
+    if (filaLivros.length === 0) {
+      log('[Coleta Acomp] ✅ Nenhum livro para processar.');
       return [];
     }
 
-    // Não abre mais abas do que etapas existem — sem sentido ter 8 abas
-    // ociosas pra processar 2 etapas.
+    // Não abre mais abas do que livros existem — sem sentido ter 5 abas
+    // ociosas pra processar 2 livros.
     const paralelismoConfigurado = Math.max(1, parseInt(process.env.COPEL_PARALELISMO_ACOMP || '8', 10));
-    const totalAbas = Math.min(paralelismoConfigurado, filaEtapas.length);
-    log(`[Coleta Acomp] 🧵 Abrindo ${totalAbas} aba(s) em paralelo para processar as etapas.`);
+    const totalAbas = Math.min(paralelismoConfigurado, filaLivros.length);
+    log(`[Coleta Acomp] 🧵 Abrindo ${totalAbas} aba(s) em paralelo para processar os livros.`);
 
     const paginas = [page];
     for (let i = 1; i < totalAbas; i++) {
@@ -653,9 +600,9 @@ async function coletarDadosAcompanhamento() {
     }
 
     const registros = [];
-    const tentativasPorEtapa = new Map();
+    const tentativasPorLivro = new Map();
     await Promise.all(
-      paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaEtapas, registros, tentativasPorEtapa)),
+      paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaLivros, registros, tentativasPorLivro)),
     );
 
     // Fecha só as abas extras — a principal fecha junto com o browser no

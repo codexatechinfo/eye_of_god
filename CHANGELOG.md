@@ -5,6 +5,23 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Alterado
+
+- Scraper de Acompanhamento (`copelScraperService.js`): fila de trabalho compartilhada entre
+  as abas passou a ser **por livro**, não mais por etapa inteira. Usuário mostrou o HTML real
+  da página depois da busca: todas as etapas e todos os livros de cada uma já vêm no DOM de
+  uma vez (o clique em "ETAPA N - (M)" só alterna visibilidade de uma tabela que já existe,
+  não busca dado novo). Antes, uma etapa grande (128 livros) e uma pequena (4 livros) contavam
+  como "1 item" cada na fila, prendendo a aba que pegava a grande enquanto as outras ficavam
+  ociosas — causa raiz do desbalanceamento relatado no adendo "abas pareciam se revezar".
+  Agora a fila é montada lendo os livros de todas as etapas de uma vez (`extrairLivrosDaEtapa`,
+  sem precisar clicar/expandir cada etapa) e cada aba consome um livro por vez
+  (`processarLivro`, identificado pelo id da OS extraído do link — `extrairOsId` — não pelo
+  número do livro, que não é garantidamente único entre etapas). Cada livro só existe uma vez
+  no array da fila, então nenhum pode ser processado duas vezes por abas diferentes. Ver
+  Adendo "fila por LIVRO em vez de fila por ETAPA" da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+
 ### Corrigido
 
 - Resumo da aba Massivas (`GET /massivas/resumo`) falhava com `column reference "id" is

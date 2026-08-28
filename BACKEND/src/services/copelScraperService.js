@@ -512,8 +512,17 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
       await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(erro => {
         logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao renavegar: ${erro.message}`);
       });
-      await aplicarFiltroEBuscar(page).catch(erro => {
+      await aplicarFiltroEBuscar(page).catch(async erro => {
         logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao refazer a busca: ${erro.message}`);
+        // Diagnóstico dedicado: o goto() explícito pra URL_ACOMPANHAMENTO
+        // ainda assim não bastou (visto ao vivo) — precisa ver o que a
+        // página realmente mostra depois do goto pra saber se caiu numa
+        // tela de login (sessão expirada de verdade, não só "aba perdida")
+        // ou outra coisa. Só uma vez por aba, pra não spammar.
+        if (!estadoDiagnostico.recuperacaoSalvo) {
+          estadoDiagnostico.recuperacaoSalvo = true;
+          await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_recuperacao_falhou`);
+        }
       });
       textos = await etapas.allInnerTexts();
       indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);

@@ -64,6 +64,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de Acompanhamento paralelizado: rodando ao vivo com os timestamps instrumentados,
+  8 das 16 etapas de um ciclo foram completamente perdidas — 5 das 8 abas ficaram
+  permanentemente incapazes de localizar qualquer etapa depois de um evento simultâneo.
+  Diagnóstico automático revelou a causa: não é a sessão caindo nem a etapa recolhendo, é a
+  **busca inteira se perdendo** nessa aba (usuário continua logado, menu completo visível,
+  mas o corpo da página fica sem nenhuma etapa) — provavelmente o servidor guarda o
+  resultado da busca como estado de sessão compartilhado, e uma ação de outra aba pode
+  sobrescrevê-lo. Corrigido: quando a lista de etapas está totalmente vazia (não só "ainda
+  não carregou"), o worker refaz filtro + busca do zero antes de desistir, recuperando a aba
+  em vez de deixá-la cega pelo resto da execução. Limitação que permanece: a etapa em
+  andamento no momento da perda ainda fica parcialmente coletada. Ver Adendo da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
 - `logTempo.js`: os timestamps `[hh:mm:ss.mmm]` estavam em UTC (`toISOString()`), 3h à frente
   do horário real de Brasília — usuário notou a discrepância no log ("que registros de tempo
   são esses"). Corrigido para usar `getHours()`/`getMinutes()`/etc., que já refletem o fuso

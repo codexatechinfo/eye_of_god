@@ -481,6 +481,22 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
       textos = await etapas.allInnerTexts();
       indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
     }
+    if (indice === -1 && textos.length === 0) {
+      // Visto ao vivo (diagnóstico automático confirmou): não é questão de
+      // "essa etapa específica ainda não carregou" — a página INTEIRA perde
+      // a busca em algum momento (menu completo continua visível, sessão
+      // continua logada, mas o corpo fica vazio, sem NENHUM link "ETAPA").
+      // Rolar não ajuda nesse caso — não há nada pra carregar, porque a
+      // busca nunca foi refeita. Refaz filtro + busca do zero.
+      logWarn(
+        `[Coleta Acomp]${rotulo} 🔁 Nenhuma etapa na página (a busca parece ter se perdido nesta aba) — refazendo filtro + busca.`,
+      );
+      await aplicarFiltroEBuscar(page).catch(erro => {
+        logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao refazer a busca: ${erro.message}`);
+      });
+      textos = await etapas.allInnerTexts();
+      indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
+    }
     if (indice === -1) {
       const tentativas = (tentativasPorEtapa.get(numeroAlvo) ?? 0) + 1;
       tentativasPorEtapa.set(numeroAlvo, tentativas);

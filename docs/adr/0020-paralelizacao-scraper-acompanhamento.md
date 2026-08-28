@@ -191,3 +191,51 @@ fase levou e o total, direto no terminal, sem precisar somar manualmente os time
 `npm test` (12 testes) continua passando. Testado localmente que o formato de saída do
 `logTempo.js` está correto (`[hh:mm:ss.mmm] mensagem`). Não validado ao vivo contra o portal
 real nesta sessão.
+
+## Adendo — causa raiz real do "esperando a vez": a busca inteira se perde em algumas abas, não é serialização de servidor
+
+Rodada ao vivo, com os timestamps já instrumentados: das 16 etapas encontradas, **8 foram
+completamente perdidas** (desistidas em todas as 8 abas após 5 tentativas cada) e outras 5
+ficaram com só 1-2 livros coletados de dezenas/centenas esperados. Os logs mostraram 5 das 8
+abas falhando quase no mesmo instante (dentro de meio segundo umas das outras) com "tabela
+com 0 linhas visíveis depois de tentar reabrir" — enquanto as outras 3 abas continuaram
+coletando normalmente, sem nenhum problema, no mesmo intervalo.
+
+O diagnóstico automático (screenshot + texto, já salvo pelo código existente) revelou a causa
+real: a página, no momento da falha, mostra o menu completo normalmente (usuário continua
+logado: home, equipes, despacho, acompanhamento...) mas o **corpo principal está
+completamente vazio** — nenhum link "ETAPA", nenhuma tabela, nada. Não é a etapa que recolheu
+(Adendo 7) nem a sessão que caiu — é a **busca inteira que se perdeu** nessa aba específica,
+como se ela tivesse voltado para o estado "acabou de entrar na tela, ainda sem buscar".
+
+Isso explica por que `aguardarTodasEtapasCarregadas()` nunca resolvia depois disso: rolar a
+página não adianta quando não há absolutamente nada carregado para revelar — a causa não é
+"lista ainda carregando", é "resultado da busca sumiu". E como só algumas abas (não todas)
+foram afetadas ao mesmo tempo, a hipótese anterior (servidor serializando toda a sessão) não
+se sustenta sozinha — é mais provável que o servidor guarde o "resultado da busca atual" como
+estado de SESSÃO (não por conexão/aba), e uma ação de uma aba (buscar, cancelar, etc.)
+enquanto outra está no meio de algo pode sobrescrever esse estado compartilhado para a
+segunda, sem invalidar a sessão em si.
+
+### Correção aplicada
+
+No `worker()`: quando uma etapa não é encontrada mesmo depois de rolar (`aguardarTodasEtapasCarregadas`),
+E a lista de etapas da página está **totalmente vazia** (não só "essa etapa específica ainda
+não apareceu"), refaz filtro + busca do zero (`aplicarFiltroEBuscar`) antes de desistir —
+recupera a aba para o estado funcional em vez de deixá-la "cega" pelo resto da execução
+(cenário real observado: 5 abas ficaram permanentemente incapazes de achar qualquer etapa
+depois do evento, desistindo de 8 etapas inteiras em sequência).
+
+### Limitação que permanece, não resolvida por esta correção
+
+Essa correção **recupera** a aba depois do problema acontecer, mas não evita que ele
+aconteça — a etapa que estava sendo processada no momento da perda de busca ainda fica
+parcialmente coletada (só os livros já processados antes do evento). Se isso se mostrar
+frequente na prática, a única forma de eliminar a causa de vez é dar a cada aba sua PRÓPRIA
+sessão (login independente por aba) — a opção que o usuário preferiu não arriscar ainda no
+Adendo anterior, mas agora com evidência mais concreta do problema real da sessão
+compartilhada (não é só "paralelismo aparente", é corrupção de estado entre abas).
+
+`npm test` (12 testes) continua passando. Corrigido e reiniciado o backend na mesma sessão —
+falta confirmar ao vivo se a recuperação funciona e se a frequência de perda de etapas cai
+significativamente.

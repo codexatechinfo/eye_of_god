@@ -62,6 +62,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   exclusão mútua (`copelSessaoLock.js`) serializa as duas coletas — nunca mais logam ao
   mesmo tempo. Ver [ADR 0019](docs/adr/0019-lock-sessao-copel-entre-jobs.md).
 
+### Corrigido
+
+- Recuperação de aba "cega" no scraper de Acompanhamento: o `page.goto()` isolado (correção
+  anterior) às vezes navegava pra URL certa mas o servidor não devolvia a página completa
+  (formulário de filtro ausente, mesmo depois dos 30s de auto-wait) — diagnóstico confirmou
+  que não era mais "aba presa em outra tela", era sobrecarga momentânea do servidor.
+  Extraída para `recuperarAba()`, que agora tenta `goto()` + refazer busca até 3 vezes com
+  folga entre tentativas antes de desistir. Ver Adendo da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+
 ### Alterado
 
 - `COPEL_PARALELISMO_ACOMP` reduzido de 8 para 5 no `.env` local — mesmo com as correções de

@@ -300,3 +300,30 @@ anterior (incompleto) limpos da tabela antes de reiniciar.
 Não validado ao vivo ainda com 5 abas — fica pra próxima execução confirmar se a frequência
 de "All promises were rejected"/travamento cai o suficiente para completar mais livros por
 etapa antes de pular para a próxima.
+
+## Adendo — mesmo com 5 abas, `goto()` isolado às vezes não bastava; virou retry de 3 tentativas
+
+Rodando com 5 abas, o diagnóstico dedicado (commit anterior) finalmente foi capturado num
+caso real: depois do `page.goto(URL_ACOMPANHAMENTO)`, a URL estava **correta** (confirmado no
+screenshot/texto), mas o corpo da página continuava vazio — sem o `select` de concessionária,
+só o menu — mesmo depois dos 30s de auto-wait padrão do Playwright em cima do
+`selectOption()`. Diferente do caso anterior (aba presa em `editarTarefasLeituraAction.do`),
+aqui a navegação para a URL certa funcionou, mas o **servidor não devolveu a página
+completa** — sinal de sobrecarga momentânea do lado dele, não um problema de navegação do
+lado do cliente.
+
+Extraída a lógica de recuperação para `recuperarAba(page, rotulo, estadoDiagnostico)`: agora
+tenta `goto()` + `aplicarFiltroEBuscar()` até 3 vezes, com 3s de folga entre tentativas, antes
+de desistir — tratando esse tipo de falha como transitório (o que é consistente com o padrão
+observado: outras abas, no mesmo intervalo, continuavam funcionando normalmente). Diagnóstico
+continua sendo salvo só na última tentativa, uma vez por aba.
+
+Também reduzido `COPEL_PARALELISMO_ACOMP` para 5 (Adendo anterior) — mesmo assim, a
+frequência de "All promises were rejected" observada com 5 abas pareceu proporcionalmente
+parecida com a de 8, o que enfraquece um pouco a hipótese de que é *só* volume de conexões
+simultâneas; pode haver um componente de instabilidade da rede/portal mais amplo, não
+exclusivo da paralelização. Fica em aberto para as próximas execuções confirmarem com mais
+dados.
+
+`npm test` (12 testes) continua passando. Não validado ao vivo ainda com o retry de 3
+tentativas — fica pra próxima execução do usuário.

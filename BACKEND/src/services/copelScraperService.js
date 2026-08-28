@@ -453,6 +453,40 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
   await etapaLink.click(); // recolhe a etapa atual antes de ir pra próxima
 }
 
+// Tenta trazer uma aba "cega" (sem nenhuma etapa visível) de volta ao
+// estado funcional: renavega pra URL de Acompanhamento e refaz filtro +
+// busca. Visto ao vivo que isso às vezes falha na primeira tentativa (o
+// formulário de filtro não carrega, corpo da página vazio, mesmo depois do
+// goto ter ido pra URL certa) — parece transitório (sobrecarga momentânea
+// do servidor sob várias abas competindo pela mesma sessão), então tenta
+// até 3 vezes com uma folga entre elas antes de desistir. Diagnóstico
+// salvo só na última tentativa falha, e só uma vez por aba.
+const MAX_TENTATIVAS_RECUPERAR_ABA = 3;
+
+async function recuperarAba(page, rotulo, estadoDiagnostico) {
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_RECUPERAR_ABA; tentativa++) {
+    await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(erro => {
+      logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao renavegar (tentativa ${tentativa}/${MAX_TENTATIVAS_RECUPERAR_ABA}): ${erro.message}`);
+    });
+    try {
+      await aplicarFiltroEBuscar(page);
+      return; // sucesso — não precisa das próximas tentativas
+    } catch (erro) {
+      logErro(
+        `[Coleta Acomp]${rotulo} ⚠️ Falha ao refazer a busca (tentativa ${tentativa}/${MAX_TENTATIVAS_RECUPERAR_ABA}): ${erro.message}`,
+      );
+      if (tentativa >= MAX_TENTATIVAS_RECUPERAR_ABA) {
+        if (!estadoDiagnostico.recuperacaoSalvo) {
+          estadoDiagnostico.recuperacaoSalvo = true;
+          await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_recuperacao_falhou`);
+        }
+        return;
+      }
+      await page.waitForTimeout(3000);
+    }
+  }
+}
+
 // Cada worker (1 por aba) consome números de etapa da fila COMPARTILHADA
 // (`filaEtapas.shift()` — síncrono, sem race condition real mesmo com
 // vários workers "concorrentes", já que JS processa um passo de cada vez)
@@ -490,40 +524,22 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
       indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
     }
     if (indice === -1 && textos.length === 0) {
-      // Visto ao vivo (diagnóstico automático confirmou a causa real): a aba
-      // não está "com a busca perdida" na tela de Acompanhamento — ela ficou
-      // PRESA na tela de detalhe de uma OS (URL editarTarefasLeituraAction.do,
-      // "DADOS DA OS"/"DADOS DE EXECUÇÃO"), que nunca foi fechada. Acontece
-      // quando "All promises were rejected" (nem popup nem "DADOS DE
-      // EXECUÇÃO" dentro do timeout) e a checagem de "apareceu tarde" (ver
-      // catch em processarEtapa) roda cedo demais — se a navegação real
-      // demorar mais que isso (comum sob 8 abas competindo pela mesma
-      // sessão), a tela de detalhe aparece DEPOIS da checagem e fica presa
-      // pra sempre, sem ninguém saber que ela existe.
-      //
-      // Um `aplicarFiltroEBuscar` direto falhava aqui: `selectOption` no
-      // formulário de filtro não existe na tela de detalhe de OS. `goto()`
-      // força a navegação pra URL de Acompanhamento independente de qual
-      // tela a aba estava presa — mais robusto que tentar achar e clicar em
-      // CANCELAR numa tela que pode nem ser a de detalhe esperada.
+      // Visto ao vivo (diagnóstico automático confirmou duas causas
+      // diferentes ao longo da investigação): 1) a aba pode ficar PRESA na
+      // tela de detalhe de uma OS (URL editarTarefasLeituraAction.do) que
+      // nunca foi fechada — "All promises were rejected" seguido da
+      // navegação real completando só depois da checagem de "apareceu
+      // tarde"; 2) mesmo com goto() forçando a URL certa de volta, o
+      // FORMULÁRIO de filtro às vezes simplesmente não carrega — corpo da
+      // página vazio, só o menu, mesmo depois dos 30s de auto-wait do
+      // Playwright em cima do `selectOption`. O segundo caso parece
+      // transitório (sobrecarga momentânea do servidor sob várias abas
+      // competindo pela mesma sessão) — vale a pena tentar de novo em vez
+      // de desistir na primeira falha.
       logWarn(
         `[Coleta Acomp]${rotulo} 🔁 Nenhuma etapa na página (aba provavelmente presa em outra tela) — renavegando e refazendo busca.`,
       );
-      await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(erro => {
-        logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao renavegar: ${erro.message}`);
-      });
-      await aplicarFiltroEBuscar(page).catch(async erro => {
-        logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao refazer a busca: ${erro.message}`);
-        // Diagnóstico dedicado: o goto() explícito pra URL_ACOMPANHAMENTO
-        // ainda assim não bastou (visto ao vivo) — precisa ver o que a
-        // página realmente mostra depois do goto pra saber se caiu numa
-        // tela de login (sessão expirada de verdade, não só "aba perdida")
-        // ou outra coisa. Só uma vez por aba, pra não spammar.
-        if (!estadoDiagnostico.recuperacaoSalvo) {
-          estadoDiagnostico.recuperacaoSalvo = true;
-          await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_recuperacao_falhou`);
-        }
-      });
+      await recuperarAba(page, rotulo, estadoDiagnostico);
       textos = await etapas.allInnerTexts();
       indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
     }

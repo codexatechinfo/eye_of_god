@@ -62,6 +62,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   exclusão mútua (`copelSessaoLock.js`) serializa as duas coletas — nunca mais logam ao
   mesmo tempo. Ver [ADR 0019](docs/adr/0019-lock-sessao-copel-entre-jobs.md).
 
+### Alterado
+
+- `COPEL_PARALELISMO_ACOMP` reduzido de 8 para 5 no `.env` local — mesmo com as correções de
+  recuperação, um ciclo real de ~10 minutos com 8 abas teve praticamente todas passando por
+  "All promises were rejected" numa janela curta (sobrecarga real da sessão compartilhada
+  sob 8 conexões simultâneas), resultando em muita perda parcial (etapas grandes com só 1
+  livro coletado de dezenas/centenas esperados, apesar de nenhuma etapa ter sido totalmente
+  perdida). Sugestão do usuário, aplicada como teste empírico — o default do código
+  (`.env.example`) continua 8. Ver Adendo da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+
 ### Corrigido
 
 - Scraper de Acompanhamento paralelizado: a correção anterior (refazer busca quando a lista

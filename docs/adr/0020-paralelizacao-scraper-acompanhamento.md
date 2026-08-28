@@ -271,3 +271,32 @@ busca, presa numa URL completamente diferente.
 
 `npm test` (12 testes) continua passando. Corrigido e reiniciado o backend na mesma sessão —
 segunda rodada de validação ao vivo em andamento.
+
+## Adendo — mesmo com `goto()`, 8 abas seguem sobrecarregando; reduzido para 5
+
+Terceira rodada ao vivo, com diagnóstico dedicado na falha de recuperação (commit anterior):
+a recuperação com `page.goto()` **também falhou** algumas vezes (`page.selectOption:
+Timeout` de novo, mesmo já tendo forçado a navegação). Mas dessa vez, ao longo do ciclo
+inteiro (~10 minutos, 603634ms), a maioria das abas conseguiu se recuperar em alguma
+tentativa seguinte — resultado real conferido no banco: **as 16 etapas apareceram todas**
+(nenhuma foi totalmente perdida, diferente da primeira rodada, que perdeu 8 de 16). Mas
+ainda com muita perda **parcial**: etapas grandes (17 com 97 livros esperados, 18, 19, 21,
+23, 24) ficaram com só 1 livro cada — a aba trava, se recupera, mas ao se recuperar já pula
+para a próxima etapa disponível na fila, abandonando a etapa anterior naquele ponto. Total do
+ciclo: ~2059 UCs coletadas, bem abaixo do volume observado em execuções sequenciais bem
+sucedidas.
+
+Ao longo da rodada, praticamente **todas as 8 abas** passaram por "All promises were
+rejected" dentro de uma janela de ~30 segundos — sinal mais forte ainda de sobrecarga real
+sob 8 conexões simultâneas competindo pela mesma sessão, não um problema isolado de uma ou
+duas abas.
+
+Usuário sugeriu, antecipando esse cenário: se o erro continuar, reduzir para 5 abas pra ver
+se fica mais administrável. Aplicado: `COPEL_PARALELISMO_ACOMP=5` no `.env` local (o default
+do código, documentado em `.env.example`, continua 8 — essa é uma configuração empírica
+específica deste ambiente/conta, não uma mudança de comportamento padrão). Dados do ciclo
+anterior (incompleto) limpos da tabela antes de reiniciar.
+
+Não validado ao vivo ainda com 5 abas — fica pra próxima execução confirmar se a frequência
+de "All promises were rejected"/travamento cai o suficiente para completar mais livros por
+etapa antes de pular para a próxima.

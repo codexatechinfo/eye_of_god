@@ -400,7 +400,91 @@ houver pelo menos 5 livros no total, independente de quantas etapas existirem.
   `aguardarTabelaEstabilizar`) nem na estrutura dos registros salvos — só a forma como o
   trabalho é distribuído entre abas mudou.
 - `node --check` confirma sintaxe válida do arquivo reescrito.
-- Não validado ao vivo nesta sessão — fica pra próxima execução do usuário confirmar que: (1)
-  a fila por livro elimina o desbalanceamento observado antes (nenhuma aba grande "prende"
-  as outras), (2) nenhum livro aparece duplicado no resultado final, (3) o volume total de
-  UCs coletadas bate com o esperado.
+
+## Adendo — validado ao vivo: fila por livro funciona, mas o CLIQUE pra abrir cada OS ainda causa uma aba travada
+
+Primeira execução ao vivo da fila por livro (5 abas, 590 livros encontrados em 16 etapas): a
+montagem da fila numa passada só funcionou exatamente como esperado (nenhum clique/expansão de
+etapa pra ler os livros), e as 5 abas começaram a processar livros diferentes em paralelo real
+(mesmo intervalo `[INÍCIO,FIM]` sobreposto entre abas, ao contrário da suspeita antiga de
+serialização de servidor).
+
+Só que sobrou um resquício do modelo antigo: **abrir a OS de um livro ainda dependia de
+`.click()` no link "número da OS"**, o que exige a linha estar VISÍVEL — e como a tabela de
+cada etapa só fica visível depois de clicar no cabeçalho "ETAPA N" (`ShowHide()`), toda troca
+de etapa entre livros consecutivos da fila ainda disparava um ciclo de "etapa recolhida —
+reabrindo" (`garantirEtapaVisivel`, até 3 tentativas). Na prática, uma das 5 abas ficou presa
+nesse ciclo: 6+ vezes seguidas, `recuperarAba()` (que dispara quando a lista de etapas está
+totalmente vazia) falhou nas 3 tentativas internas com `page.selectOption: Timeout 30000ms
+exceeded` — mesmo sintoma de sempre (URL certa, corpo só com o menu, sem formulário). Resultado
+depois de ~7min: distribuição 18/19/16/**5**/28 livros entre as 5 abas — a aba travada
+processou um terço do que as saudáveis processaram, desperdiçando ~90s por tentativa sem
+contribuir. RAM do host não era o gargalo (13,5GB livres de 31,7GB) — instabilidade do lado do
+servidor Copel, não do cliente.
+
+### Causa raiz do "precisar clicar": o link nunca fez nada além de chamar uma função JS
+
+Usuário apontou a saída: o `href` de cada link "número da OS" é literalmente
+`javascript:update('12105126','editarTarefasLeituraAction.do?acompanhamento=S');` — uma chamada
+direta a uma função `update(valueId, url)` que o próprio site define (visível no `<script>` da
+página): ela só seta 3 campos ocultos do formulário principal (`id`, `backAddress`,
+`actionType`) e chama `document.forms[0].submit()`. Não depende da linha estar visível, não
+depende de nenhum estado de UI — só precisa que a função e o formulário existam na página, o
+que é verdade desde que a busca carregou, independente de qual etapa está expandida.
+
+### Correção: chamar `update()` direto via `page.evaluate()`, sem clicar em nada
+
+- **`abrirEExtrairOs()`** reescrita: em vez de localizar a linha do livro na tabela e clicar no
+  link, chama `page.evaluate((osId, url) => window.update(osId, url), ...)` — mesmo efeito
+  exato de um clique real (é a mesma função JS), mas sem exigir visibilidade. Elimina de vez o
+  ciclo de "etapa recolhida — reabrindo": nenhuma etapa precisa ser expandida pra abrir a OS de
+  um livro que pertence a ela.
+- **`processarLivro()`** simplificada drasticamente: não localiza mais a etapa nem a linha do
+  livro na página do worker — só checa rapidamente (`paginaUtilizavel()`, um
+  `page.evaluate(() => typeof window.update === 'function' && document.forms.length > 0)`) se a
+  página está num estado saudável antes de tentar abrir a OS. Se não estiver, dispara
+  `recuperarAba()` direto (mesmo sintoma de sempre: sessão/busca perdida), sem gastar 20s de
+  timeout de popup primeiro.
+- Funções removidas por ficarem sem uso: `garantirEtapaVisivel()` (não há mais nada que precise
+  ficar visível) e a busca de linha por `osId` dentro de `processarLivro` (o osId já é
+  suficiente pra chamar `update()` direto, não precisa mais localizar a linha correspondente no
+  DOM).
+- **Mudança de comportamento em retry**: antes, uma falha ao abrir a OS (`All promises were
+  rejected`) abandonava o livro na hora, sem nova tentativa — comportamento herdado do fluxo
+  sequencial antigo, não uma decisão deliberada. Como o mecanismo de retry-com-contador
+  (`tentativasPorLivro`/`MAX_TENTATIVAS_PROCESSAR_LIVRO`, renomeado de
+  `MAX_TENTATIVAS_LOCALIZAR_LIVRO`) já existe de qualquer forma pra cobrir sessão perdida, esse
+  tipo de falha passou a ser retentado também (até o mesmo limite de 5) — mais resiliente a
+  timeouts transitórios sob carga, sem custo de código adicional.
+
+### Resultado validado ao vivo com a correção
+
+Novo ciclo, 552 livros em 16 etapas (número mudou porque o portal atualiza em tempo real):
+**zero linhas de "recolhida — reabrindo"** — as 5 abas foram direto pra abertura de OS. Ciclo
+completo em 2.270.887ms (~37,8min): **552/552 livros processados, 0 desistidos
+definitivamente, 21.608 UCs coletadas**, distribuição quase perfeita entre abas
+(108/114/113/115/102 — comparar com 18/19/16/5/28 da versão com clique). 18 casos de "sessão
+perdida" e 10 falhas de abrir OS ocorreram ao longo do ciclo, mas todos se recuperaram via
+retry sem perda permanente. Confirmado independentemente no banco (fora do log da aplicação,
+que poderia mentir): `SELECT COUNT(*)` e `SELECT COUNT(DISTINCT livro)` em
+`contr_execucao_leitura` bateram exatamente com 21.608 e 552.
+
+`npm test` (12 testes) continua passando.
+
+## Adendo — URL de destino também extraída por linha, não fixada como constante
+
+Na correção anterior, a URL passada pra `update(osId, url)` ficou fixa numa constante
+(`URL_EDITAR_TAREFA = 'editarTarefasLeituraAction.do?acompanhamento=S'`), assumindo que todo
+livro usa a mesma URL — verificado manualmente contra a amostra de HTML fornecida (todas as
+linhas "LE"/"B" usavam essa URL), mas sem garantia de que TODO tipo de OS (releitura, alguma
+situação especial) usa exatamente a mesma.
+
+Corrigido: `extrairDadosOs(href)` (renomeada de `extrairOsId`) agora captura os DOIS argumentos
+do `update('ID','URL')` via regex, não só o primeiro — e cada item da fila (`filaLivros`) passa
+a carregar sua própria `url`, lida do `href` real daquela linha específica. `abrirEExtrairOs()`
+usa `alvo.url` em vez da constante. Custo adicional: zero — o `href` já era lido de qualquer
+forma pra extrair o osId, é a mesma chamada, só captura um grupo a mais do regex.
+
+`npm test` (12 testes) continua passando. Aplicado antes de confirmar ao vivo com um ciclo
+completo — o `nodemon` reiniciou o backend no meio do login do ciclo seguinte (sem perda real,
+nenhum livro tinha sido tocado ainda) para já rodar com essa versão.

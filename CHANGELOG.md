@@ -16,10 +16,26 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   ociosas — causa raiz do desbalanceamento relatado no adendo "abas pareciam se revezar".
   Agora a fila é montada lendo os livros de todas as etapas de uma vez (`extrairLivrosDaEtapa`,
   sem precisar clicar/expandir cada etapa) e cada aba consome um livro por vez
-  (`processarLivro`, identificado pelo id da OS extraído do link — `extrairOsId` — não pelo
+  (`processarLivro`, identificado pelo id da OS extraído do link — `extrairDadosOs` — não pelo
   número do livro, que não é garantidamente único entre etapas). Cada livro só existe uma vez
   no array da fila, então nenhum pode ser processado duas vezes por abas diferentes. Ver
   Adendo "fila por LIVRO em vez de fila por ETAPA" da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+- Scraper de Acompanhamento: abrir a OS de um livro passou a chamar direto a função JS
+  `update(osId, url)` que o site define (`page.evaluate`), em vez de clicar no link "número da
+  OS". Validado ao vivo que a fila por livro sozinha ainda deixava uma aba presa em ciclos de
+  "etapa recolhida — reabrindo" (o `.click()` do Playwright exige a linha visível, e cada troca
+  de etapa entre livros consecutivos da fila reexigia expandir a tabela) — numa rodada de 590
+  livros, uma das 5 abas processou só 5 enquanto as outras processavam 16-28. Chamar `update()`
+  direto não exige visibilidade nenhuma (é a mesma função que o clique chamaria). Resultado
+  validado com 552 livros: **0 linhas de "recolhida — reabrindo"**, distribuição quase perfeita
+  entre abas (108/114/113/115/102), 552/552 livros e 21.608 UCs coletadas, 0 desistidos —
+  conferido também direto no banco (`COUNT(*)`/`COUNT(DISTINCT livro)` em
+  `contr_execucao_leitura`), não só no log da aplicação. A URL de destino passada pra
+  `update()` também deixou de ser uma constante fixa e passou a ser extraída do `href` de cada
+  linha (`extrairDadosOs`), eliminando a suposição de que todo tipo de OS usa a mesma URL — sem
+  custo adicional (o `href` já era lido pra extrair o osId). Ver adendos "validado ao vivo... a
+  correção" e "URL de destino também extraída por linha" da
   [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
 
 ### Corrigido

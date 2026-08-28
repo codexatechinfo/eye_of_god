@@ -71,11 +71,10 @@ async function fecharTelaDetalheMesmaPagina(page) {
     logWarn('[Coleta Acomp] ⚠️ Botão CANCELAR não encontrado — usando page.goBack() como fallback.');
     await page.goBack().catch(() => {});
   }
-  // Não espera a tabela ficar visível aqui: depois de CANCELAR a etapa
-  // quase sempre volta RECOLHIDA e só reaparece quando alguém reclica no
-  // link da etapa — não sozinha. garantirEtapaVisivel(), chamada antes de
-  // processar o próximo livro da fila, já cuida de checar visibilidade e
-  // reclicar ativamente se preciso.
+  // Não espera nada ficar visível aqui: a etapa pode voltar RECOLHIDA
+  // depois de CANCELAR, mas isso deixou de importar — abrirEExtrairOs()
+  // não depende mais de a linha do livro estar visível pra abrir a
+  // próxima OS (chama a função update() do site direto via JS).
 }
 
 // Lê o cabeçalho (etapa/localidade/livro/...) e o número do livro de uma
@@ -195,16 +194,22 @@ function numeroDaEtapa(texto) {
   return match ? match[1] : null;
 }
 
-// Extrai o id interno da OS a partir do href
+// Extrai id da OS e URL de destino a partir do href
 // `javascript:update('12105126','editarTarefasLeituraAction.do?...')` do
-// link "número da OS" de cada linha — é o identificador globalmente único
-// de cada livro/OS na página (diferente do "número do livro" exibido, que
-// é só um rótulo e pode não ser único entre etapas). Usado como chave da
-// fila de livros: como cada osId só é extraído UMA vez ao montar a fila,
+// link "número da OS" de cada linha. O osId é o identificador globalmente
+// único de cada livro/OS na página (diferente do "número do livro" exibido,
+// que é só um rótulo e pode não ser único entre etapas) — usado como chave
+// da fila de livros: como cada osId só é extraído UMA vez ao montar a fila,
 // não existe forma de duas abas processarem o mesmo livro duas vezes.
-function extrairOsId(href) {
-  const match = String(href ?? '').match(/update\('(\d+)'/);
-  return match ? match[1] : null;
+// A URL é capturada linha a linha (não fixada como constante) porque é o
+// SEGUNDO argumento que o próprio site passa pra update() em cada link —
+// mesmo que toda amostra observada até agora use sempre a mesma URL, nada
+// garante que TODO tipo de OS (ex.: releitura, alguma situação especial)
+// use a mesma; ler direto do href de cada linha elimina essa suposição sem
+// custo nenhum (o href já é lido de qualquer forma pra tirar o osId).
+function extrairDadosOs(href) {
+  const match = String(href ?? '').match(/update\('(\d+)'\s*,\s*'([^']*)'\)/);
+  return match ? { osId: match[1], url: match[2] } : null;
 }
 
 // Lê TODOS os livros de uma etapa (já com a tabela no DOM, visível ou não —
@@ -223,9 +228,9 @@ async function extrairLivrosDaEtapa(etapaLink, etapaNumero) {
     const linkOs = linha.locator('td').nth(3).locator('a');
     if ((await linkOs.count()) === 0) continue;
     const href = await linkOs.getAttribute('href');
-    const osId = extrairOsId(href);
-    if (!osId) continue;
-    livros.push({ osId, ...cabecalho });
+    const dadosOs = extrairDadosOs(href);
+    if (!dadosOs) continue;
+    livros.push({ ...dadosOs, ...cabecalho });
   }
   return livros;
 }
@@ -242,43 +247,27 @@ async function aplicarFiltroEBuscar(page) {
   await aguardarTodasEtapasCarregadas(page);
 }
 
-const MAX_TENTATIVAS_REABRIR_ETAPA = 3;
-
-// Garante que a tabela de livros da etapa DESTE livro está visível nesta
-// aba antes de tentar clicar num livro dentro dela — o site recolhe a
-// etapa a cada CANCELAR (ver fecharTelaDetalheMesmaPagina), então isso é
-// esperado a cada livro processado, não uma falha. Como a fila agora
-// mistura livros de etapas diferentes, essa checagem roda por livro (não
-// mais uma vez só por etapa inteira).
-async function garantirEtapaVisivel(etapaLink, tabelaAtual, rotulo, etapaNumero) {
-  for (let tentativa = 0; tentativa < MAX_TENTATIVAS_REABRIR_ETAPA; tentativa++) {
-    if (await tabelaAtual.isVisible().catch(() => false)) return true;
-    log(
-      `[Coleta Acomp]${rotulo} 🔄 Etapa '${etapaNumero}' recolhida — reabrindo ` +
-        `(tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
-    );
-    await etapaLink.click().catch(() => {});
-    await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-  }
-  return tabelaAtual.isVisible().catch(() => false);
-}
-
-// Abre a OS de um único livro (clique no link "número da OS"), extrai as
-// UCs do detalhe e fecha a tela (popup ou mesma página). Extraído do fluxo
-// original pra rodar por livro isolado em vez de dentro de um loop de
-// etapa inteira.
-async function abrirEExtrairOs({ page, linhaAlvo, cabecalhoAlvo, registros, rotulo, estadoDiagnostico }) {
-  const linkOs = linhaAlvo.locator('td').nth(3).locator('a');
+// Abre a OS de um único livro chamando DIRETO a função JS `update(osId,url)`
+// que o próprio site define (é literalmente tudo que o link "número da OS"
+// faz: href="javascript:update('12105126','editarTarefasLeituraAction.do?...)").
+// Como o osId já foi extraído ao montar a fila (ver extrairLivrosDaEtapa) e
+// a função + o formulário que ela usa (`document.forms[0]`) já existem na
+// página independente de qual etapa está expandida, não precisa localizar
+// a etapa nem clicar em nada pra revelar a linha — `.click()` do Playwright
+// é que exige visibilidade, chamar a função via `page.evaluate()` não.
+// Elimina de vez o ciclo de "etapa recolhida — reabrindo" que só existia
+// por essa exigência de visibilidade, não por falta de dado carregado.
+async function abrirEExtrairOs({ page, alvo, registros, rotulo, estadoDiagnostico }) {
   let popup = null;
   let usouMesmaPagina = false;
   try {
-    // waitForEvent('popup') precisa ser registrado ANTES do clique (senão
-    // corre risco de perder o evento se o popup abrir rápido demais) — mas
-    // isso deixa a promise "solta" rejeitando sozinha por timeout enquanto
-    // o código ainda está no `await linkOs.click()`. `.catch(() => {})`
-    // preventivo precisa estar em CADA nível (original, `.then()`, e a
-    // combinação final) pra realmente eliminar o risco de unhandled
-    // rejection — um catch só na promise original não bastou.
+    // waitForEvent('popup') precisa ser registrado ANTES de disparar a
+    // navegação (senão corre risco de perder o evento se o popup abrir
+    // rápido demais) — mas isso deixa a promise "solta" rejeitando sozinha
+    // por timeout enquanto o código ainda está no `await page.evaluate(...)`.
+    // `.catch(() => {})` preventivo precisa estar em CADA nível (original,
+    // `.then()`, e a combinação final) pra realmente eliminar o risco de
+    // unhandled rejection — um catch só na promise original não bastou.
     const promPopup = page.waitForEvent('popup', { timeout: 20000 });
     promPopup.catch(() => {});
     const promMesmaPagina = page
@@ -298,9 +287,25 @@ async function abrirEExtrairOs({ page, linhaAlvo, cabecalhoAlvo, registros, rotu
     combinada.catch(() => {});
 
     const inicioReq = Date.now();
-    log(`[Coleta Acomp]${rotulo} ⏱️ INÍCIO abrir OS livro '${cabecalhoAlvo.livro}' (etapa ${cabecalhoAlvo.etapa})`);
+    log(`[Coleta Acomp]${rotulo} ⏱️ INÍCIO abrir OS livro '${alvo.livro}' (etapa ${alvo.etapa})`);
 
-    await linkOs.click();
+    // Mesmo efeito de clicar no link, sem exigir que a linha esteja
+    // visível: chama a função global que o href="javascript:..." chamaria,
+    // com a URL exata que o próprio site definiu pra ESTE livro (extraída
+    // do href na montagem da fila — ver extrairDadosOs), não uma constante
+    // genérica pra todos.
+    const executou = await page.evaluate(
+      ({ osId, url }) => {
+        if (typeof window.update !== 'function') return false;
+        window.update(osId, url);
+        return true;
+      },
+      { osId: alvo.osId, url: alvo.url },
+    );
+    if (!executou) {
+      throw new Error('função update() indisponível nesta página (sessão/busca perdida)');
+    }
+
     const resultado = await combinada;
 
     if (resultado.tipo === 'popup') {
@@ -317,32 +322,31 @@ async function abrirEExtrairOs({ page, linhaAlvo, cabecalhoAlvo, registros, rotu
     // extrair (ver aguardarTabelaEstabilizar).
     await aguardarTabelaEstabilizar(paginaDetalhe);
     const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
-    log(`[Coleta Acomp]${rotulo} ⏱️ FIM abrir OS livro '${cabecalhoAlvo.livro}' (${Date.now() - inicioReq}ms)`);
+    log(`[Coleta Acomp]${rotulo} ⏱️ FIM abrir OS livro '${alvo.livro}' (${Date.now() - inicioReq}ms)`);
     for (const uc of linhasUc) {
-      registros.push({ ...cabecalhoAlvo, ...uc });
+      registros.push({ ...alvo, ...uc });
     }
     if (linhasUc.length > 0) {
       log(
-        `[Coleta Acomp]${rotulo} 📖 Livro '${cabecalhoAlvo.livro}' (etapa ${cabecalhoAlvo.etapa}) — ` +
+        `[Coleta Acomp]${rotulo} 📖 Livro '${alvo.livro}' (etapa ${alvo.etapa}) — ` +
           `${linhasUc.length} UCs coletadas.`,
       );
     } else {
-      logWarn(`[Coleta Acomp]${rotulo} ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
+      logWarn(`[Coleta Acomp]${rotulo} ⚠️ Livro '${alvo.livro}' abriu a OS mas 0 UCs extraídas.`);
     }
+    return 'ok';
   } catch (erroOs) {
-    logErro(
-      `[Coleta Acomp]${rotulo} ⚠️ Falha ao abrir OS do livro '${cabecalhoAlvo.livro}' (etapa ${cabecalhoAlvo.etapa}): ${erroOs.message}`,
-    );
+    logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao abrir OS do livro '${alvo.livro}' (etapa ${alvo.etapa}): ${erroOs.message}`);
     if (!estadoDiagnostico.osSalvo) {
       estadoDiagnostico.osSalvo = true;
-      await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_os_${cabecalhoAlvo.livro}_falhou`);
+      await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_os_${alvo.livro}_falhou`);
     }
     // "All promises were rejected" (nem popup nem "DADOS DE EXECUÇÃO"
-    // apareceram a tempo) não significa que o clique não teve efeito — a
-    // navegação real pode só ter completado DEPOIS do timeout (rede lenta,
-    // mais comum sob várias abas competindo pela mesma sessão). Poll de
-    // até 10s (bem mais curto que os 20s do timeout original, só cobrindo
-    // o "quase lá") em vez de uma checagem única.
+    // apareceram a tempo) não significa que a navegação não teve efeito —
+    // ela pode só ter completado DEPOIS do timeout (rede lenta, mais comum
+    // sob várias abas competindo pela mesma sessão). Poll de até 10s (bem
+    // mais curto que os 20s do timeout original, só cobrindo o "quase lá")
+    // em vez de uma checagem única.
     if (!popup && !usouMesmaPagina) {
       const textoExecucao = page.getByText('DADOS DE EXECUÇÃO', { exact: false }).first();
       for (let tentativa = 0; tentativa < 10 && !usouMesmaPagina; tentativa++) {
@@ -354,6 +358,7 @@ async function abrirEExtrairOs({ page, linhaAlvo, cabecalhoAlvo, registros, rotu
         await page.waitForTimeout(1000);
       }
     }
+    return 'falhou_abrir_os';
   } finally {
     if (popup) {
       await popup.close().catch(() => {});
@@ -397,66 +402,37 @@ async function recuperarAba(page, rotulo, estadoDiagnostico) {
   }
 }
 
-// Processa UM livro da fila compartilhada: localiza a etapa dele NA
-// PRÓPRIA página do worker (cada aba carregou sua cópia da lista de forma
-// independente), garante que a tabela dessa etapa está visível, localiza a
-// linha certa por osId (não por índice nem por número do livro — ver
-// extrairOsId) e abre a OS. Retorna 'ok' em caso de sucesso, ou um motivo
-// curto de falha pra o worker decidir se devolve o livro pra fila.
+// Checa rapidamente se a página está num estado utilizável (a função
+// update() e o formulário principal existem) ANTES de tentar abrir a OS —
+// mais barato e mais rápido que descobrir isso só depois de um timeout de
+// 20s esperando popup/"DADOS DE EXECUÇÃO". Mesmo sintoma já documentado no
+// ADR 0020 (URL certa, mas corpo da página só com o menu, sem formulário)
+// vira `false` aqui, sem precisar de nenhuma tentativa de interação.
+async function paginaUtilizavel(page) {
+  return page
+    .evaluate(() => typeof window.update === 'function' && document.forms.length > 0)
+    .catch(() => false);
+}
+
+// Processa UM livro da fila compartilhada: confirma que a página desta aba
+// está num estado saudável e delega a abertura da OS pra abrirEExtrairOs
+// (que chama update() direto — não precisa mais localizar/expandir a etapa
+// nem achar a linha certa na tabela, ver comentário lá). Retorna 'ok' em
+// sucesso, 'sessao_perdida' se a página precisou ser recuperada (o worker
+// devolve o livro pra fila pra tentar de novo), ou 'falhou_abrir_os' se a
+// OS em si não abriu a tempo (não é retentado — mesmo comportamento de
+// antes: um livro cuja OS falha ao abrir é abandonado, não fica em loop).
 async function processarLivro({ page, alvo, registros, rotulo, estadoDiagnostico }) {
-  const etapas = page.locator('a.color:has-text("ETAPA")');
-  let textos = await etapas.allInnerTexts();
-  let indice = textos.findIndex(t => numeroDaEtapa(t) === alvo.etapa);
-
-  if (indice === -1) {
-    // Pode ser que ESTA aba especificamente ainda não tenha terminado de
-    // rolar até o fim quando este livro foi retirado da fila.
-    log(
-      `[Coleta Acomp]${rotulo} 🔄 Etapa '${alvo.etapa}' (livro '${alvo.livro}') não encontrada ainda nesta ` +
-        'aba — rolando mais pra procurar.',
-    );
-    await aguardarTodasEtapasCarregadas(page);
-    textos = await etapas.allInnerTexts();
-    indice = textos.findIndex(t => numeroDaEtapa(t) === alvo.etapa);
-  }
-
-  if (indice === -1 && textos.length === 0) {
-    // A aba pode ter ficado PRESA na tela de detalhe de uma OS anterior, ou
-    // o formulário de filtro simplesmente não carregou (sobrecarga
-    // momentânea do servidor sob várias abas competindo pela mesma sessão).
+  if (!(await paginaUtilizavel(page))) {
     logWarn(
-      `[Coleta Acomp]${rotulo} 🔁 Nenhuma etapa na página (aba provavelmente presa em outra tela) — ` +
+      `[Coleta Acomp]${rotulo} 🔁 Sessão/busca perdida nesta aba (livro '${alvo.livro}') — ` +
         'renavegando e refazendo busca.',
     );
     await recuperarAba(page, rotulo, estadoDiagnostico);
-    textos = await etapas.allInnerTexts();
-    indice = textos.findIndex(t => numeroDaEtapa(t) === alvo.etapa);
+    return 'sessao_perdida';
   }
 
-  if (indice === -1) return 'etapa_nao_encontrada';
-
-  const etapaLink = etapas.nth(indice);
-  const tabelaAtual = tabelaDaEtapa(etapaLink);
-  const visivel = await garantirEtapaVisivel(etapaLink, tabelaAtual, rotulo, alvo.etapa);
-  if (!visivel) return 'etapa_nao_abriu';
-
-  const linhas = tabelaAtual.locator('tbody tr');
-  const total = await linhas.count();
-  let linhaAlvo = null;
-  for (let i = 0; i < total; i++) {
-    const linkOs = linhas.nth(i).locator('td').nth(3).locator('a');
-    if ((await linkOs.count()) === 0) continue;
-    const href = await linkOs.getAttribute('href');
-    if (extrairOsId(href) === alvo.osId) {
-      linhaAlvo = linhas.nth(i);
-      break;
-    }
-  }
-
-  if (!linhaAlvo) return 'linha_nao_encontrada';
-
-  await abrirEExtrairOs({ page, linhaAlvo, cabecalhoAlvo: alvo, registros, rotulo, estadoDiagnostico });
-  return 'ok';
+  return abrirEExtrairOs({ page, alvo, registros, rotulo, estadoDiagnostico });
 }
 
 // Cada worker (1 por aba) consome LIVROS (não mais etapas inteiras) da
@@ -473,10 +449,15 @@ async function processarLivro({ page, alvo, registros, rotulo, estadoDiagnostico
 //
 // `tentativasPorLivro` (Map compartilhado entre workers, chaveado por
 // osId) limita quantas vezes um livro pode ser devolvido à fila por falha
-// — sem isso, um livro que genuinamente não é localizável (osId extraído
-// errado, OS removida do portal entre a montagem da fila e a tentativa)
-// ficaria sendo re-adicionado pra sempre, travando a coleta.
-const MAX_TENTATIVAS_LOCALIZAR_LIVRO = 5;
+// (sessão perdida na aba, ou a OS não abriu a tempo) — sem isso, um livro
+// que genuinamente nunca funciona (OS removida do portal entre a montagem
+// da fila e a tentativa) ficaria sendo re-adicionado pra sempre, travando
+// a coleta. Diferença de comportamento em relação à versão anterior: antes
+// uma falha ao abrir a OS abandonava o livro na hora (sem retry); agora
+// esse tipo de falha também é retentado até o limite, já que o mecanismo
+// de retry passou a existir de qualquer forma pra cobrir sessão perdida —
+// mais resiliente a timeouts transitórios sob carga, sem custo extra.
+const MAX_TENTATIVAS_PROCESSAR_LIVRO = 5;
 
 async function worker(page, rotulo, filaLivros, registros, tentativasPorLivro) {
   const estadoDiagnostico = { osSalvo: false, etapaSalvo: false };
@@ -503,7 +484,7 @@ async function worker(page, rotulo, filaLivros, registros, tentativasPorLivro) {
 
     const tentativas = (tentativasPorLivro.get(alvo.osId) ?? 0) + 1;
     tentativasPorLivro.set(alvo.osId, tentativas);
-    if (tentativas >= MAX_TENTATIVAS_LOCALIZAR_LIVRO) {
+    if (tentativas >= MAX_TENTATIVAS_PROCESSAR_LIVRO) {
       logErro(
         `[Coleta Acomp]${rotulo} ❌ Livro '${alvo.livro}' (etapa ${alvo.etapa}) falhou ${tentativas}x ` +
           `(${resultado}) — desistindo dele pra não travar a coleta.`,
@@ -517,7 +498,7 @@ async function worker(page, rotulo, filaLivros, registros, tentativasPorLivro) {
 
     logWarn(
       `[Coleta Acomp]${rotulo} ⚠️ Livro '${alvo.livro}' (etapa ${alvo.etapa}) — ${resultado} ` +
-        `(tentativa ${tentativas}/${MAX_TENTATIVAS_LOCALIZAR_LIVRO}) — devolvendo pra fila.`,
+        `(tentativa ${tentativas}/${MAX_TENTATIVAS_PROCESSAR_LIVRO}) — devolvendo pra fila.`,
     );
     filaLivros.push(alvo);
   }

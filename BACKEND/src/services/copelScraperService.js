@@ -415,18 +415,26 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
       // "All promises were rejected" (nem popup nem "DADOS DE EXECUÇÃO"
       // apareceram a tempo) não significa que o clique não teve efeito —
       // a navegação real pode só ter completado DEPOIS do timeout (rede
-      // lenta). Nesse caso nem popup nem usouMesmaPagina foram marcados,
-      // então o finally normal não fecharia nada, deixando a tela de
-      // detalhe aberta e a etapa presa tentando "reabrir" uma lista que
-      // não é mais a tela ativa. Checa aqui, de forma ativa, se a tela
-      // de detalhe apareceu tarde e fecha antes de seguir.
+      // lenta, mais comum sob 8 abas competindo pela mesma sessão). Nesse
+      // caso nem popup nem usouMesmaPagina foram marcados, então o finally
+      // normal não fecharia nada, deixando a tela de detalhe (URL
+      // editarTarefasLeituraAction.do) aberta e a aba PRESA nela pro resto
+      // da execução — sem nenhuma etapa visível, sem formulário de busca,
+      // incapaz de se recuperar sozinha (confirmado com diagnóstico real:
+      // uma checagem única e instantânea aqui não bastava — a tela às vezes
+      // só aparecia alguns segundos depois dela). Poll de até 10s (bem mais
+      // curto que os 20s do timeout original, só cobrindo o "quase lá") em
+      // vez de uma checagem única.
       if (!popup && !usouMesmaPagina) {
-        const apareceuTarde = await page
-          .getByText('DADOS DE EXECUÇÃO', { exact: false })
-          .first()
-          .isVisible()
-          .catch(() => false);
-        if (apareceuTarde) usouMesmaPagina = true;
+        const textoExecucao = page.getByText('DADOS DE EXECUÇÃO', { exact: false }).first();
+        for (let tentativa = 0; tentativa < 10 && !usouMesmaPagina; tentativa++) {
+          const apareceuTarde = await textoExecucao.isVisible().catch(() => false);
+          if (apareceuTarde) {
+            usouMesmaPagina = true;
+            break;
+          }
+          await page.waitForTimeout(1000);
+        }
       }
     } finally {
       if (popup) {
@@ -482,15 +490,28 @@ async function worker(page, rotulo, filaEtapas, registros, tentativasPorEtapa) {
       indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
     }
     if (indice === -1 && textos.length === 0) {
-      // Visto ao vivo (diagnóstico automático confirmou): não é questão de
-      // "essa etapa específica ainda não carregou" — a página INTEIRA perde
-      // a busca em algum momento (menu completo continua visível, sessão
-      // continua logada, mas o corpo fica vazio, sem NENHUM link "ETAPA").
-      // Rolar não ajuda nesse caso — não há nada pra carregar, porque a
-      // busca nunca foi refeita. Refaz filtro + busca do zero.
+      // Visto ao vivo (diagnóstico automático confirmou a causa real): a aba
+      // não está "com a busca perdida" na tela de Acompanhamento — ela ficou
+      // PRESA na tela de detalhe de uma OS (URL editarTarefasLeituraAction.do,
+      // "DADOS DA OS"/"DADOS DE EXECUÇÃO"), que nunca foi fechada. Acontece
+      // quando "All promises were rejected" (nem popup nem "DADOS DE
+      // EXECUÇÃO" dentro do timeout) e a checagem de "apareceu tarde" (ver
+      // catch em processarEtapa) roda cedo demais — se a navegação real
+      // demorar mais que isso (comum sob 8 abas competindo pela mesma
+      // sessão), a tela de detalhe aparece DEPOIS da checagem e fica presa
+      // pra sempre, sem ninguém saber que ela existe.
+      //
+      // Um `aplicarFiltroEBuscar` direto falhava aqui: `selectOption` no
+      // formulário de filtro não existe na tela de detalhe de OS. `goto()`
+      // força a navegação pra URL de Acompanhamento independente de qual
+      // tela a aba estava presa — mais robusto que tentar achar e clicar em
+      // CANCELAR numa tela que pode nem ser a de detalhe esperada.
       logWarn(
-        `[Coleta Acomp]${rotulo} 🔁 Nenhuma etapa na página (a busca parece ter se perdido nesta aba) — refazendo filtro + busca.`,
+        `[Coleta Acomp]${rotulo} 🔁 Nenhuma etapa na página (aba provavelmente presa em outra tela) — renavegando e refazendo busca.`,
       );
+      await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(erro => {
+        logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao renavegar: ${erro.message}`);
+      });
       await aplicarFiltroEBuscar(page).catch(erro => {
         logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao refazer a busca: ${erro.message}`);
       });

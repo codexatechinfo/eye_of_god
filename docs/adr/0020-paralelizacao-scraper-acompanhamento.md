@@ -239,3 +239,35 @@ compartilhada (não é só "paralelismo aparente", é corrupção de estado entr
 `npm test` (12 testes) continua passando. Corrigido e reiniciado o backend na mesma sessão —
 falta confirmar ao vivo se a recuperação funciona e se a frequência de perda de etapas cai
 significativamente.
+
+## Adendo — a causa era mais específica: aba presa na tela de detalhe de uma OS, não "busca perdida"
+
+Reiniciado com a correção acima, rodada ao vivo de novo: a recuperação por
+`aplicarFiltroEBuscar()` também falhou — `page.selectOption: Timeout 30000ms exceeded`. O
+diagnóstico automático (agora salvo no momento da falha fatal, `catch` do worker) revelou a
+causa real, mais precisa que a hipótese anterior: a página estava na URL
+`editarTarefasLeituraAction.do?acompanhamento=S`, mostrando "DADOS DA OS" e "DADOS DE
+EXECUÇÃO" com a lista de leituristas — ou seja, a aba estava presa na tela de **detalhe de
+uma OS específica**, não numa tela de Acompanhamento "sem busca". Faz sentido: o `select`
+de concessionária que `aplicarFiltroEBuscar()` tentava usar não existe nessa tela — daí o
+timeout.
+
+Rastreada a origem: quando "All promises were rejected" acontece (nem popup nem "DADOS DE
+EXECUÇÃO" dentro dos 20s de timeout), o `catch` de `processarEtapa()` fazia UMA checagem
+**instantânea** de "a tela apareceu tarde?" antes de decidir fechar. Sob a carga de 8 abas
+competindo pela mesma sessão, a navegação real pode demorar mais que isso — a tela de
+detalhe aparece *depois* dessa checagem única, e como ninguém mais olha para trás, ela fica
+aberta para sempre. A aba fica cega dali em diante: sem etapas visíveis, sem formulário de
+busca, presa numa URL completamente diferente.
+
+### Duas correções
+
+1. A checagem de "apareceu tarde" virou um poll de até 10s (10 tentativas de 1s) em vez de
+   uma checagem única — cobre o caso realista de "só faltava mais um pouco".
+2. Se mesmo assim a aba ficar sem nenhuma etapa (`worker()`), a recuperação agora começa com
+   `page.goto(URL_ACOMPANHAMENTO)` **antes** de `aplicarFiltroEBuscar()` — força a navegação
+   para a URL certa independente de qual tela a aba estava presa, em vez de depender de
+   achar e clicar num botão CANCELAR que pode nem existir na tela em que ela realmente está.
+
+`npm test` (12 testes) continua passando. Corrigido e reiniciado o backend na mesma sessão —
+segunda rodada de validação ao vivo em andamento.

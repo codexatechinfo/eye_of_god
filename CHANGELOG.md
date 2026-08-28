@@ -64,6 +64,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Scraper de Acompanhamento paralelizado: a correção anterior (refazer busca quando a lista
+  fica vazia) também falhava ao vivo — `page.selectOption: Timeout` — porque a causa real era
+  mais específica: a aba ficava presa na tela de **detalhe de uma OS**
+  (`editarTarefasLeituraAction.do`, "DADOS DA OS"/"DADOS DE EXECUÇÃO"), não numa tela de
+  Acompanhamento sem busca. Origem: a checagem de "a tela apareceu tarde" (depois de "All
+  promises were rejected") era instantânea — sob 8 abas competindo pela sessão, a navegação
+  real podia demorar mais que isso, e a tela ficava presa aberta pra sempre sem que ninguém
+  soubesse. Corrigido: checagem virou um poll de até 10s; e a recuperação no `worker()` agora
+  usa `page.goto()` direto para a URL de Acompanhamento antes de refazer a busca, em vez de
+  depender do formulário de filtro existir na tela atual. Ver Adendo da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
 - Scraper de Acompanhamento paralelizado: rodando ao vivo com os timestamps instrumentados,
   8 das 16 etapas de um ciclo foram completamente perdidas — 5 das 8 abas ficaram
   permanentemente incapazes de localizar qualquer etapa depois de um evento simultâneo.

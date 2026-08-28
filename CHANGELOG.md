@@ -64,6 +64,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Scraper de Acompanhamento (`copelScraperService.js`) paralelizado: em vez de processar as
+  etapas uma de cada vez, abre várias abas (padrão 8, `COPEL_PARALELISMO_ACOMP`) dentro do
+  MESMO `browserContext` — compartilham a sessão (login único), sem risco de derrubar uma à
+  outra. Cada aba consome de uma fila compartilhada de etapas pendentes (coordenada por
+  número de etapa, não por texto completo nem índice — o texto muda de aba pra aba porque
+  cada uma carrega sua própria cópia da lista) e processa uma etapa por vez, nunca duas abas
+  na mesma etapa. Diagnóstico de erro passou a ser por aba, não mais global, pra não
+  esconder problemas de abas diferentes atrás do primeiro screenshot salvo. Ver
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
 - Jobs de coleta (`coletaJob.js`/`coletaMassivasJob.js`): removida a janela de horário
   (07h-19h) a pedido do usuário — agora rodam continuamente enquanto a API estiver no ar,
   sem pausar à noite. `node-cron` deixou de ser usado nesses arquivos; o watchdog continua

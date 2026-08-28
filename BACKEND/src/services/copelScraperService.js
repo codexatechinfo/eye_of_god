@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DIR_DIAGNOSTICO = path.join(__dirname, '..', '..', 'diagnosticos');
+const URL_ACOMPANHAMENTO = 'https://www.copel.com/lis/acompanhamentoAction.do#';
 
 async function salvarDiagnostico(page, motivo) {
   try {
@@ -180,6 +181,294 @@ async function aguardarTabelaEstabilizar(paginaDetalhe) {
   return anterior;
 }
 
+// Extrai só o número da etapa ("18" de "ETAPA 18 - (309)") — o texto
+// completo inclui a contagem de livros ENTRE PARÊNTESES, que muda a cada
+// consulta e não é confiável como identificador entre abas diferentes (ver
+// coordenarAbas mais abaixo: cada aba carrega sua PRÓPRIA cópia da lista,
+// de forma independente, então o texto completo pode divergir ligeiramente
+// entre elas mesmo sendo a mesma etapa).
+function numeroDaEtapa(texto) {
+  const match = String(texto ?? '').match(/ETAPA\s+(\d+)/i);
+  return match ? match[1] : null;
+}
+
+// Aplica os mesmos filtros (concessionária/empreiteira) e busca — comum
+// tanto à aba principal (depois do login) quanto às abas extras (que já
+// herdam a sessão via cookies do mesmo browser context, sem precisar logar
+// de novo). Deixa a lista de etapas completamente carregada ao final.
+async function aplicarFiltroEBuscar(page) {
+  await page.selectOption('select[name="searchConcessionariaId"]', { label: 'COMPANHIA PARANAENSE DE ENERGIA' });
+  await page.selectOption('select[name="searchEmpreiteiraId"]', { label: 'F IMM BRASIL LTDA' });
+  await page.click('#botaoBuscar');
+  await page.waitForSelector('a.color:has-text("ETAPA")', { timeout: 60000 });
+  await aguardarTodasEtapasCarregadas(page);
+}
+
+// Processa TODOS os livros de uma etapa já aberta (clique já feito antes de
+// chamar) — extraído do loop original pra poder rodar em qualquer `page`,
+// permitindo que várias abas processem etapas diferentes em paralelo (ver
+// coletarDadosAcompanhamento). `estadoDiagnostico` é um objeto mutável
+// {osSalvo, etapaSalvo} — um por ABA (worker), não global: cada aba só
+// salva 1 diagnóstico de cada categoria por ela mesma, evitando spam de
+// screenshots sem perder o sinal quando várias abas falham por motivos
+// diferentes ao mesmo tempo.
+async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estadoDiagnostico }) {
+  console.log(`[Coleta Acomp]${rotulo} ➡️ Processando etapa: ${etapa}`);
+  await etapaLink.click();
+  // Nada de tempo fixo: espera a tabela de livros DESTA etapa (não
+  // qualquer #item — ver tabelaDaEtapa) ficar visível. Isso já é o
+  // sinal certo — um waitForLoadState('networkidle') extra só atrasava
+  // sem necessidade (ver comentário em fecharTelaDetalheMesmaPagina).
+  const tabelaAtual = tabelaDaEtapa(etapaLink);
+  await tabelaAtual.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
+
+  const totalLivrosInicial = await tabelaAtual.locator('tbody tr').count();
+  console.log(`[Coleta Acomp]${rotulo} 📄 ${totalLivrosInicial} livros na etapa '${etapa}' — abrindo cada OS...`);
+
+  // Processa livro a livro RELENDO A LISTA DO ZERO a cada vez, rastreando
+  // por número do livro (não por índice de posição). Usuário observou ao
+  // vivo, com índice fixo, o código reabrindo o MESMO "número da OS" em
+  // vez de avançar pro próximo — sinal de que a lista de livros pode
+  // reordenar/remontar via AJAX depois de fechar uma OS, então a posição
+  // N nem sempre aponta pro mesmo livro entre uma leitura e a próxima.
+  // Só o número do livro em si é uma identidade confiável.
+  const livrosProcessados = new Set();
+  let livrosComUc = 0;
+  let totalUcs = 0;
+  // Trava de segurança contra loop infinito, caso a lista fique
+  // crescendo/reaparecendo de um jeito que nunca convirja — não deve
+  // acontecer no fluxo normal, mas é melhor abortar com log claro do
+  // que travar o processo indefinidamente numa etapa.
+  const limiteLivros = totalLivrosInicial + 50;
+  const MAX_TENTATIVAS_REABRIR_ETAPA = 3;
+
+  async function garantirEtapaVisivel() {
+    for (let tentativa = 0; tentativa < MAX_TENTATIVAS_REABRIR_ETAPA; tentativa++) {
+      if (await tabelaAtual.isVisible().catch(() => false)) return true;
+      // Não é erro — o site recolhe a etapa a cada CANCELAR (ver
+      // Adendo 7), então isso é esperado a cada livro, não uma falha.
+      console.log(
+        `[Coleta Acomp]${rotulo} 🔄 Etapa '${etapa}' recolheu (comportamento normal do site) — ` +
+          `reabrindo (${livrosProcessados.size}/${totalLivrosInicial} livros já coletados, ` +
+          `tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
+      );
+      await etapaLink.click().catch(() => {});
+      await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+    }
+    return tabelaAtual.isVisible().catch(() => false);
+  }
+
+  while (true) {
+    if (livrosProcessados.size < totalLivrosInicial) {
+      await garantirEtapaVisivel();
+    }
+
+    const linhasAtuais = tabelaAtual.locator('tbody tr');
+    const totalAtual = await linhasAtuais.count();
+
+    let linhaAlvo = null;
+    let cabecalhoAlvo = null;
+    for (let i = 0; i < totalAtual; i++) {
+      const cabecalho = await lerCabecalhoLinha(linhasAtuais.nth(i), etapa);
+      if (!cabecalho) continue;
+      if (livrosProcessados.has(cabecalho.livro)) continue;
+      linhaAlvo = linhasAtuais.nth(i);
+      cabecalhoAlvo = cabecalho;
+      break;
+    }
+
+    if (!linhaAlvo) {
+      // totalAtual > 0 mas nenhuma linha "bateu" (nem vazia nem já
+      // processada) — sinal de que a lista existe mas está num estado
+      // inesperado (linhas vazias, ou o "número do livro" mudou de
+      // valor entre leituras). Loga e salva diagnóstico pra investigar,
+      // já que a contagem esperada (totalLivrosInicial) não bate com o
+      // que foi de fato processado.
+      if (livrosProcessados.size < totalLivrosInicial && !estadoDiagnostico.osSalvo) {
+        const amostra =
+          totalAtual > 0
+            ? await linhasAtuais
+                .nth(0)
+                .locator('td')
+                .allInnerTexts()
+                .catch(() => ['<falhou ao ler>'])
+            : [];
+        console.error(
+          `[Coleta Acomp]${rotulo} ❌ Etapa '${etapa}': parou em ${livrosProcessados.size} livros ` +
+            `processados (esperado ${totalLivrosInicial}), tabela com ${totalAtual} linhas ` +
+            `visíveis depois de tentar reabrir. 1ª linha: ${JSON.stringify(amostra)}`,
+        );
+        estadoDiagnostico.osSalvo = true;
+        await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_lista_travada_${etapa.replace(/[^\w-]/g, '_')}`);
+      }
+      break; // nenhum livro pendente sobrou na lista atual
+    }
+
+    if (livrosProcessados.size >= limiteLivros) {
+      console.error(
+        `[Coleta Acomp]${rotulo} ❌ Etapa '${etapa}' passou de ${limiteLivros} livros processados ` +
+          `(esperado ~${totalLivrosInicial}) — abortando a etapa pra não travar indefinidamente.`,
+      );
+      break;
+    }
+
+    livrosProcessados.add(cabecalhoAlvo.livro);
+
+    // "Número da OS" (numero_os no parser antigo) é a célula de índice
+    // 3 contando com o checkbox — ex.: <a href="javascript:update('ID',
+    // 'editarTarefasLeituraAction.do?acompanhamento=S')">2026...</a>.
+    // Clicar de verdade (não simular via fetch) porque a função
+    // update() do site pode depender de estado JS/sessão que não dá
+    // pra replicar de fora.
+    const linkOs = linhaAlvo.locator('td').nth(3).locator('a');
+    if ((await linkOs.count()) === 0) continue;
+
+    let popup = null;
+    let usouMesmaPagina = false;
+    try {
+      // waitForEvent('popup') precisa ser registrado ANTES do clique
+      // (senão corre risco de perder o evento se o popup abrir rápido
+      // demais) — mas isso deixa a promise "solta" rejeitando sozinha
+      // por timeout enquanto o código ainda está no `await
+      // linkOs.click()`. `.catch(() => {})` preventivo precisa estar em
+      // CADA nível (original, `.then()`, e a combinação final) pra
+      // realmente eliminar o risco de unhandled rejection — um catch só
+      // na promise original não bastou (ver Adendo 6 da ADR 0018).
+      const promPopup = page.waitForEvent('popup', { timeout: 20000 });
+      promPopup.catch(() => {});
+      const promMesmaPagina = page
+        .getByText('DADOS DE EXECUÇÃO', { exact: false })
+        .first()
+        .waitFor({ timeout: 20000, state: 'visible' });
+      promMesmaPagina.catch(() => {});
+
+      // Promise.any (não race): resolve assim que QUALQUER uma tiver
+      // sucesso, e só rejeita se as DUAS falharem.
+      const esperaPopup = promPopup.then(p => ({ tipo: 'popup', p }));
+      esperaPopup.catch(() => {});
+      const esperaMesmaPagina = promMesmaPagina.then(() => ({ tipo: 'mesmaPagina' }));
+      esperaMesmaPagina.catch(() => {});
+
+      const combinada = Promise.any([esperaPopup, esperaMesmaPagina]);
+      combinada.catch(() => {});
+
+      await linkOs.click();
+      const resultado = await combinada;
+
+      if (resultado.tipo === 'popup') {
+        popup = resultado.p;
+        await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+      } else {
+        usouMesmaPagina = true;
+        await page.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+      }
+
+      const paginaDetalhe = popup || page;
+      // A tabela de UCs pode popular as linhas de forma assíncrona
+      // depois de #tabFixedHeader já existir — espera a contagem
+      // estabilizar antes de extrair (ver aguardarTabelaEstabilizar).
+      await aguardarTabelaEstabilizar(paginaDetalhe);
+      const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
+      for (const uc of linhasUc) {
+        registros.push({ ...cabecalhoAlvo, ...uc });
+      }
+      if (linhasUc.length > 0) {
+        livrosComUc++;
+        totalUcs += linhasUc.length;
+        console.log(
+          `[Coleta Acomp]${rotulo} 📖 Livro '${cabecalhoAlvo.livro}' — ${linhasUc.length} UCs ` +
+            `(${livrosProcessados.size}/${totalLivrosInicial} da etapa '${etapa}').`,
+        );
+      } else {
+        console.warn(`[Coleta Acomp]${rotulo} ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
+      }
+    } catch (erroOs) {
+      console.error(
+        `[Coleta Acomp]${rotulo} ⚠️ Falha ao abrir OS do livro '${cabecalhoAlvo.livro}' (etapa ${etapa}): ${erroOs.message}`,
+      );
+      if (!estadoDiagnostico.osSalvo) {
+        estadoDiagnostico.osSalvo = true;
+        await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_os_${cabecalhoAlvo.livro}_falhou`);
+      }
+      // "All promises were rejected" (nem popup nem "DADOS DE EXECUÇÃO"
+      // apareceram a tempo) não significa que o clique não teve efeito —
+      // a navegação real pode só ter completado DEPOIS do timeout (rede
+      // lenta). Nesse caso nem popup nem usouMesmaPagina foram marcados,
+      // então o finally normal não fecharia nada, deixando a tela de
+      // detalhe aberta e a etapa presa tentando "reabrir" uma lista que
+      // não é mais a tela ativa. Checa aqui, de forma ativa, se a tela
+      // de detalhe apareceu tarde e fecha antes de seguir.
+      if (!popup && !usouMesmaPagina) {
+        const apareceuTarde = await page
+          .getByText('DADOS DE EXECUÇÃO', { exact: false })
+          .first()
+          .isVisible()
+          .catch(() => false);
+        if (apareceuTarde) usouMesmaPagina = true;
+      }
+    } finally {
+      if (popup) {
+        await popup.close().catch(() => {});
+      } else if (usouMesmaPagina) {
+        await fecharTelaDetalheMesmaPagina(page);
+      }
+    }
+  }
+
+  console.log(
+    `[Coleta Acomp]${rotulo} ✅ Etapa '${etapa}': ${livrosComUc}/${livrosProcessados.size} livros com OS aberta ` +
+      `(${totalLivrosInicial} na lista original), ${totalUcs} UCs coletadas.`,
+  );
+
+  await etapaLink.click(); // recolhe a etapa atual antes de ir pra próxima
+}
+
+// Cada worker (1 por aba) consome números de etapa da fila COMPARTILHADA
+// (`filaEtapas.shift()` — síncrono, sem race condition real mesmo com
+// vários workers "concorrentes", já que JS processa um passo de cada vez)
+// até ela esvaziar. Localiza a etapa correspondente NA SUA PRÓPRIA página
+// pelo número (não por índice nem pelo texto completo — ver numeroDaEtapa),
+// já que cada aba carregou sua cópia da lista de forma independente.
+async function worker(page, rotulo, filaEtapas, registros) {
+  const estadoDiagnostico = { osSalvo: false, etapaSalvo: false };
+
+  while (filaEtapas.length > 0) {
+    const numeroAlvo = filaEtapas.shift();
+    if (numeroAlvo === undefined) break;
+
+    const etapas = page.locator('a.color:has-text("ETAPA")');
+    const textos = await etapas.allInnerTexts();
+    const indice = textos.findIndex(t => numeroDaEtapa(t) === numeroAlvo);
+    if (indice === -1) {
+      console.warn(`[Coleta Acomp]${rotulo} ⚠️ Etapa número ${numeroAlvo} não encontrada nesta aba — pulando.`);
+      continue;
+    }
+
+    const etapaLink = etapas.nth(indice);
+    const etapaTexto = textos[indice].trim();
+
+    // Todo o processamento desta etapa fica dentro de um try/catch de nível
+    // de etapa — um erro fatal não tratado internamente (ex.: o clique de
+    // recolher no fim de processarEtapa) não pode derrubar o worker
+    // inteiro, senão as etapas restantes da fila ficam sem ninguém pra
+    // processá-las (ver Adendo 12 da ADR 0018 — mesmo raciocínio, agora por
+    // worker em vez de por execução inteira).
+    try {
+      await processarEtapa({ page, etapaLink, etapa: etapaTexto, registros, rotulo, estadoDiagnostico });
+    } catch (erroEtapa) {
+      console.error(
+        `[Coleta Acomp]${rotulo} ❌ Etapa '${etapaTexto}' interrompida por erro irrecuperável: ${erroEtapa.message} — ` +
+          'seguindo para a próxima etapa da fila.',
+      );
+      if (!estadoDiagnostico.etapaSalvo) {
+        estadoDiagnostico.etapaSalvo = true;
+        await salvarDiagnostico(page, `${rotulo.replace(/[^\w-]/g, '_')}_etapa_falhou_${etapaTexto.replace(/[^\w-]/g, '_')}`);
+      }
+    }
+  }
+  console.log(`[Coleta Acomp]${rotulo} 🏁 Fila de etapas esgotada — aba encerrada.`);
+}
+
 async function coletarDadosAcompanhamento() {
   // COPEL_HEADLESS=false abre o Chromium com janela visível — útil pra
   // acompanhar ao vivo o que o site está fazendo durante uma investigação;
@@ -187,11 +476,20 @@ async function coletarDadosAcompanhamento() {
   // dia inteiro em produção.
   const headless = process.env.COPEL_HEADLESS !== 'false';
   const browser = await chromium.launch({ headless, slowMo: headless ? 100 : 300 });
-  const page = await browser.newPage();
+  // Um `browserContext` explícito, compartilhado por TODAS as abas — é o
+  // que faz elas dividirem a mesma sessão (cookies), sem precisar logar de
+  // novo em cada uma. `browser.newPage()` direto criaria um context NOVO E
+  // ISOLADO a cada chamada (sem cookies compartilhados), recaindo no mesmo
+  // problema de sessão única por usuário que o lock entre Coleta Acomp e
+  // Massivas já corrige em outro nível (ver copelSessaoLock.js) — aqui
+  // dentro da MESMA coleta, ter várias sessões brigando pelo mesmo login
+  // seria exatamente esse problema, só que multiplicado por N abas.
+  const context = await browser.newContext();
+  const page = await context.newPage();
 
   try {
     console.log('[Coleta Acomp] 🔐 Fazendo login...');
-    await page.goto('https://www.copel.com/lis/acompanhamentoAction.do#', { timeout: 60000 });
+    await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 });
     await page.fill("input[name='j_username']", process.env.COPEL_USERNAME);
     await page.fill("input[name='j_password']", process.env.COPEL_PASSWORD);
     await page.click("input[type='submit'].lgn_btn");
@@ -206,329 +504,42 @@ async function coletarDadosAcompanhamento() {
 
     console.log('[Coleta Acomp] 🔎 Acessando aba Acompanhamento...');
     await page.click("a.submenu:has-text('acompanhamento')");
-    await page.selectOption('select[name="searchConcessionariaId"]', { label: 'COMPANHIA PARANAENSE DE ENERGIA' });
-    await page.selectOption('select[name="searchEmpreiteiraId"]', { label: 'F IMM BRASIL LTDA' });
-    await page.click('#botaoBuscar');
-    await page.waitForSelector('a.color:has-text("ETAPA")', { timeout: 60000 });
-    await aguardarTodasEtapasCarregadas(page);
+    await aplicarFiltroEBuscar(page);
+
+    // Números de etapa únicos (não o texto inteiro — ver numeroDaEtapa),
+    // na ordem em que aparecem. Vira a fila de trabalho compartilhada entre
+    // todas as abas.
+    const textosEtapas = await page.locator('a.color:has-text("ETAPA")').allInnerTexts();
+    const filaEtapas = [...new Set(textosEtapas.map(numeroDaEtapa).filter(Boolean))];
+    console.log(`[Coleta Acomp] 📋 ${filaEtapas.length} etapas encontradas: ${filaEtapas.join(', ')}`);
+
+    if (filaEtapas.length === 0) {
+      console.log('[Coleta Acomp] ✅ Nenhuma etapa para processar.');
+      return [];
+    }
+
+    // Não abre mais abas do que etapas existem — sem sentido ter 8 abas
+    // ociosas pra processar 2 etapas.
+    const paralelismoConfigurado = Math.max(1, parseInt(process.env.COPEL_PARALELISMO_ACOMP || '8', 10));
+    const totalAbas = Math.min(paralelismoConfigurado, filaEtapas.length);
+    console.log(`[Coleta Acomp] 🧵 Abrindo ${totalAbas} aba(s) em paralelo para processar as etapas.`);
+
+    const paginas = [page];
+    for (let i = 1; i < totalAbas; i++) {
+      const novaPagina = await context.newPage();
+      await novaPagina.goto(URL_ACOMPANHAMENTO, { timeout: 60000 });
+      await aplicarFiltroEBuscar(novaPagina);
+      paginas.push(novaPagina);
+    }
 
     const registros = [];
-    let etapaIndex = 0;
-    const etapasProcessadas = new Set();
-    // Só salva um diagnóstico (screenshot + texto) por execução inteira do
-    // scraper, não um por livro que falhar — evita gerar centenas de
-    // capturas se o problema for sistêmico (ex.: popup nunca abre).
-    let diagnosticoOsSalvo = false;
-    // Diagnóstico separado para falha fatal de ETAPA INTEIRA (ver catch mais
-    // abaixo) — categoria diferente de diagnosticoOsSalvo (falha pontual de
-    // 1 livro), então uma não deve impedir a outra de ser salva.
-    let diagnosticoEtapaSalvo = false;
+    await Promise.all(
+      paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaEtapas, registros)),
+    );
 
-    while (true) {
-      const etapas = page.locator('a.color:has-text("ETAPA")');
-      let count = await etapas.count();
-      if (etapaIndex >= count) {
-        // Pode não ser o fim de verdade — a lista carrega mais etapas
-        // conforme rola pra baixo (ver aguardarTodasEtapasCarregadas). Só
-        // decide que acabou depois de confirmar que rolar até o fim não
-        // revela mais nenhuma etapa nova.
-        count = await aguardarTodasEtapasCarregadas(page);
-        if (etapaIndex >= count) break;
-      }
-
-      const etapaLink = etapas.nth(etapaIndex);
-      const etapa = (await etapaLink.innerText()).trim();
-      if (etapasProcessadas.has(etapa)) {
-        etapaIndex++;
-        continue;
-      }
-
-      // Todo o processamento desta etapa (abertura, livros, recolhimento)
-      // fica dentro de um try/catch de nível de etapa — antes, qualquer erro
-      // fatal não tratado internamente (ex.: o clique de recolher no fim,
-      // linha ~460) propagava e derrubava a função inteira, perdendo TODAS
-      // as etapas seguintes mesmo que fossem processar normalmente. Visto ao
-      // vivo: uma etapa de 187 livros degradou no meio (sessão/página num
-      // estado ruim depois de falhas repetidas de abrir OS) e o timeout
-      // fatal no clique final abortou a coleta inteira, reiniciando o ciclo
-      // do zero. Agora uma etapa irrecuperável só perde ela mesma — o código
-      // segue tentando as etapas seguintes.
-      try {
-        console.log(`[Coleta Acomp] ➡️ Processando etapa ${etapaIndex + 1}/${count}: ${etapa}`);
-        await etapaLink.click();
-      // Nada de tempo fixo: espera a tabela de livros DESTA etapa (não
-      // qualquer #item — ver tabelaDaEtapa) ficar visível. Isso já é o
-      // sinal certo — um waitForLoadState('networkidle') extra só atrasava
-      // sem necessidade (ver comentário em fecharTelaDetalheMesmaPagina).
-      const tabelaAtual = tabelaDaEtapa(etapaLink);
-      await tabelaAtual.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
-
-      const totalLivrosInicial = await tabelaAtual.locator('tbody tr').count();
-      console.log(`[Coleta Acomp] 📄 ${totalLivrosInicial} livros na etapa '${etapa}' — abrindo cada OS...`);
-
-      // Processa livro a livro RELENDO A LISTA DO ZERO a cada vez, rastreando
-      // por número do livro (não por índice de posição). Usuário observou ao
-      // vivo, com índice fixo, o código reabrindo o MESMO "número da OS" em
-      // vez de avançar pro próximo — sinal de que a lista de livros pode
-      // reordenar/remontar via AJAX depois de fechar uma OS, então a posição
-      // N nem sempre aponta pro mesmo livro entre uma leitura e a próxima.
-      // Só o número do livro em si é uma identidade confiável.
-      const livrosProcessados = new Set();
-      let livrosComUc = 0;
-      let totalUcs = 0;
-      // Trava de segurança contra loop infinito, caso a lista fique
-      // crescendo/reaparecendo de um jeito que nunca convirja — não deve
-      // acontecer no fluxo normal, mas é melhor abortar com log claro do
-      // que travar o processo indefinidamente numa etapa.
-      const limiteLivros = totalLivrosInicial + 50;
-      // "CANCELAR" fecha a tela de detalhe, mas pode devolver com a etapa
-      // inteira RECOLHIDA (não só "lista vazia") — confirmado com
-      // diagnóstico real: depois de processar o 1º livro, um screenshot
-      // mostrou a etapa de volta ao estado fechado (só o cabeçalho "ETAPA
-      // 15 - (2)" visível, sem a tabela de livros abaixo). Nesse caso o
-      // elemento da 2ª linha AINDA EXISTE no DOM (Playwright resolve o
-      // locator normalmente) mas fica invisível — `count()` de linhas não
-      // detecta isso (a linha "existe"), só checar visibilidade da tabela
-      // detecta. Sem essa checagem, o clique subsequente ficava 30s inteiro
-      // tentando em vão ("element is not visible") em vez de reabrir a
-      // etapa primeiro. Verificada a cada volta do loop, antes de procurar
-      // o próximo livro pendente.
-      const MAX_TENTATIVAS_REABRIR_ETAPA = 3;
-
-      async function garantirEtapaVisivel() {
-        for (let tentativa = 0; tentativa < MAX_TENTATIVAS_REABRIR_ETAPA; tentativa++) {
-          if (await tabelaAtual.isVisible().catch(() => false)) return true;
-          // Não é erro — o site recolhe a etapa a cada CANCELAR (ver
-          // Adendo 7), então isso é esperado a cada livro, não uma falha.
-          // console.log em vez de warn/error pra não soar alarmante numa
-          // execução normal.
-          console.log(
-            `[Coleta Acomp] 🔄 Etapa '${etapa}' recolheu (comportamento normal do site) — ` +
-              `reabrindo (${livrosProcessados.size}/${totalLivrosInicial} livros já coletados, ` +
-              `tentativa ${tentativa + 1}/${MAX_TENTATIVAS_REABRIR_ETAPA}).`,
-          );
-          await etapaLink.click().catch(() => {});
-          await tabelaAtual.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-        }
-        return tabelaAtual.isVisible().catch(() => false);
-      }
-
-      while (true) {
-        if (livrosProcessados.size < totalLivrosInicial) {
-          await garantirEtapaVisivel();
-        }
-
-        const linhasAtuais = tabelaAtual.locator('tbody tr');
-        const totalAtual = await linhasAtuais.count();
-
-        let linhaAlvo = null;
-        let cabecalhoAlvo = null;
-        for (let i = 0; i < totalAtual; i++) {
-          const cabecalho = await lerCabecalhoLinha(linhasAtuais.nth(i), etapa);
-          if (!cabecalho) continue;
-          if (livrosProcessados.has(cabecalho.livro)) continue;
-          linhaAlvo = linhasAtuais.nth(i);
-          cabecalhoAlvo = cabecalho;
-          break;
-        }
-
-        if (!linhaAlvo) {
-          // totalAtual > 0 mas nenhuma linha "bateu" (nem vazia nem já
-          // processada) — sinal de que a lista existe mas está num estado
-          // inesperado (linhas vazias, ou o "número do livro" mudou de
-          // valor entre leituras). Loga e salva diagnóstico pra investigar,
-          // já que a contagem esperada (totalLivrosInicial) não bate com o
-          // que foi de fato processado.
-          if (livrosProcessados.size < totalLivrosInicial && !diagnosticoOsSalvo) {
-            const amostra =
-              totalAtual > 0
-                ? await linhasAtuais
-                    .nth(0)
-                    .locator('td')
-                    .allInnerTexts()
-                    .catch(() => ['<falhou ao ler>'])
-                : [];
-            console.error(
-              `[Coleta Acomp] ❌ Etapa '${etapa}': parou em ${livrosProcessados.size} livros ` +
-                `processados (esperado ${totalLivrosInicial}), tabela com ${totalAtual} linhas ` +
-                `visíveis depois de tentar reabrir. 1ª linha: ${JSON.stringify(amostra)}`,
-            );
-            diagnosticoOsSalvo = true;
-            await salvarDiagnostico(page, `lista_travada_${etapa.replace(/[^\w-]/g, '_')}`);
-          }
-          break; // nenhum livro pendente sobrou na lista atual
-        }
-
-        if (livrosProcessados.size >= limiteLivros) {
-          console.error(
-            `[Coleta Acomp] ❌ Etapa '${etapa}' passou de ${limiteLivros} livros processados ` +
-              `(esperado ~${totalLivrosInicial}) — abortando a etapa pra não travar indefinidamente.`,
-          );
-          break;
-        }
-
-        livrosProcessados.add(cabecalhoAlvo.livro);
-
-        // "Número da OS" (numero_os no parser antigo) é a célula de índice
-        // 3 contando com o checkbox — ex.: <a href="javascript:update('ID',
-        // 'editarTarefasLeituraAction.do?acompanhamento=S')">2026...</a>.
-        // Clicar de verdade (não simular via fetch) porque a função
-        // update() do site pode depender de estado JS/sessão que não dá
-        // pra replicar de fora.
-        //
-        // Usuário descreveu como "abre em popup/nova aba", mas o primeiro
-        // ciclo real deu timeout esperando o evento 'popup' em todos os
-        // livros — a "nova tela" é, na prática, um modal/iframe carregado
-        // via AJAX dentro da MESMA página. Cobre os dois casos: espera
-        // popup E o texto "DADOS DE EXECUÇÃO" (cabeçalho de seção exclusivo
-        // da tela de detalhe da OS, visto no print do usuário) aparecer na
-        // própria `page`, em paralelo, usa o que vier primeiro.
-        //
-        // Não usa #tabFixedHeader como sinal de "mudou de tela": esse id é
-        // de um plugin JS genérico de tabela com cabeçalho fixo
-        // ("fixedheader fht-table", visto na classe CSS do HTML fornecido
-        // pelo usuário) que pode estar reaproveitado em MAIS de uma tela do
-        // sistema, inclusive talvez na própria lista de livros — usá-lo
-        // como sinal de mudança foi a causa real de um bug encontrado ao
-        // vivo: 1 registro por livro em vez de todas as UCs (a extração
-        // rodava contra a tabela errada, ou cedo demais).
-        const linkOs = linhaAlvo.locator('td').nth(3).locator('a');
-        if ((await linkOs.count()) === 0) continue;
-
-        let popup = null;
-        let usouMesmaPagina = false;
-        try {
-          // waitForEvent('popup') precisa ser registrado ANTES do clique
-          // (senão corre risco de perder o evento se o popup abrir rápido
-          // demais) — mas isso deixa a promise "solta" rejeitando sozinha
-          // por timeout enquanto o código ainda está no `await
-          // linkOs.click()`. Bug real visto ao vivo: se o clique demorasse
-          // mais que os 10s do timeout, a rejeição acontecia ANTES do
-          // Promise.any ter chance de consumi-la, virando uma unhandled
-          // rejection que derrubava o processo Node inteiro (nodemon "app
-          // crashed").
-          //
-          // Confirmado com um teste isolado (fora deste arquivo) que o V8
-          // marca como "unhandled" QUALQUER promise da cadeia que rejeita
-          // antes de ter um handler anexado — inclusive as derivadas de
-          // `.then()` e o resultado final do `Promise.any()`, não só as
-          // promises originais. `.catch(() => {})` preventivo precisa
-          // estar em CADA nível (original, `.then()`, e a combinação final)
-          // pra realmente eliminar o risco; um catch só na promise
-          // original não bastou.
-          const promPopup = page.waitForEvent('popup', { timeout: 20000 });
-          promPopup.catch(() => {});
-          const promMesmaPagina = page
-            .getByText('DADOS DE EXECUÇÃO', { exact: false })
-            .first()
-            .waitFor({ timeout: 20000, state: 'visible' });
-          promMesmaPagina.catch(() => {});
-
-          // Promise.any (não race): resolve assim que QUALQUER uma tiver
-          // sucesso, e só rejeita se as DUAS falharem. Com race, a que
-          // expira primeiro derrubaria a tentativa mesmo que a outra ainda
-          // estivesse a caminho de dar certo.
-          const esperaPopup = promPopup.then(p => ({ tipo: 'popup', p }));
-          esperaPopup.catch(() => {});
-          const esperaMesmaPagina = promMesmaPagina.then(() => ({ tipo: 'mesmaPagina' }));
-          esperaMesmaPagina.catch(() => {});
-
-          const combinada = Promise.any([esperaPopup, esperaMesmaPagina]);
-          combinada.catch(() => {});
-
-          await linkOs.click();
-          const resultado = await combinada;
-
-          if (resultado.tipo === 'popup') {
-            popup = resultado.p;
-            await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
-          } else {
-            usouMesmaPagina = true;
-            await page.waitForSelector('#tabFixedHeader', { timeout: 15000 });
-          }
-
-          const paginaDetalhe = popup || page;
-          // A tabela de UCs pode popular as linhas de forma assíncrona
-          // depois de #tabFixedHeader já existir — espera a contagem
-          // estabilizar antes de extrair (ver aguardarTabelaEstabilizar).
-          await aguardarTabelaEstabilizar(paginaDetalhe);
-          const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
-          for (const uc of linhasUc) {
-            registros.push({ ...cabecalhoAlvo, ...uc });
-          }
-          if (linhasUc.length > 0) {
-            livrosComUc++;
-            totalUcs += linhasUc.length;
-            // Log por livro: sem isso, uma etapa de centenas de livros só
-            // mostra 1 linha de progresso no final inteiro (usuário
-            // reportou "pelo console parece que não estava coletando",
-            // mesmo funcionando corretamente — os avisos de "reabrindo a
-            // etapa" a cada livro, sem nenhuma confirmação de sucesso no
-            // meio, davam essa impressão).
-            console.log(
-              `[Coleta Acomp] 📖 Livro '${cabecalhoAlvo.livro}' — ${linhasUc.length} UCs ` +
-                `(${livrosProcessados.size}/${totalLivrosInicial} da etapa '${etapa}').`,
-            );
-          } else {
-            console.warn(`[Coleta Acomp] ⚠️ Livro '${cabecalhoAlvo.livro}' abriu a OS mas 0 UCs extraídas.`);
-          }
-        } catch (erroOs) {
-          console.error(
-            `[Coleta Acomp] ⚠️ Falha ao abrir OS do livro '${cabecalhoAlvo.livro}' (etapa ${etapa}): ${erroOs.message}`,
-          );
-          if (!diagnosticoOsSalvo) {
-            diagnosticoOsSalvo = true;
-            await salvarDiagnostico(page, `os_${cabecalhoAlvo.livro}_falhou`);
-          }
-          // "All promises were rejected" (nem popup nem "DADOS DE EXECUÇÃO"
-          // apareceram a tempo) não significa que o clique não teve efeito —
-          // a navegação real pode só ter completado DEPOIS do timeout (rede
-          // lenta). Nesse caso nem popup nem usouMesmaPagina foram marcados,
-          // então o finally normal não fecharia nada, deixando a tela de
-          // detalhe aberta e a etapa presa tentando "reabrir" uma lista que
-          // não é mais a tela ativa — visto ao vivo: essa falha seguida de 3
-          // tentativas de reabertura fracassando, e por fim um timeout fatal
-          // no clique de recolher a etapa. Checa aqui, de forma ativa, se a
-          // tela de detalhe apareceu tarde e fecha antes de seguir.
-          if (!popup && !usouMesmaPagina) {
-            const apareceuTarde = await page
-              .getByText('DADOS DE EXECUÇÃO', { exact: false })
-              .first()
-              .isVisible()
-              .catch(() => false);
-            if (apareceuTarde) usouMesmaPagina = true;
-          }
-        } finally {
-          if (popup) {
-            await popup.close().catch(() => {});
-          } else if (usouMesmaPagina) {
-            await fecharTelaDetalheMesmaPagina(page);
-          }
-        }
-      }
-
-        console.log(
-          `[Coleta Acomp] ✅ Etapa '${etapa}': ${livrosComUc}/${livrosProcessados.size} livros com OS aberta ` +
-            `(${totalLivrosInicial} na lista original), ${totalUcs} UCs coletadas.`,
-        );
-
-        await etapaLink.click(); // recolhe a etapa atual antes de ir pra próxima
-        // Sem espera extra aqui — a próxima volta do while já espera a
-        // tabela da PRÓXIMA etapa ficar visível antes de prosseguir.
-      } catch (erroEtapa) {
-        console.error(
-          `[Coleta Acomp] ❌ Etapa '${etapa}' interrompida por erro irrecuperável: ${erroEtapa.message} — ` +
-            'seguindo para a próxima etapa.',
-        );
-        if (!diagnosticoEtapaSalvo) {
-          diagnosticoEtapaSalvo = true;
-          await salvarDiagnostico(page, `etapa_falhou_${etapa.replace(/[^\w-]/g, '_')}`);
-        }
-      }
-
-      etapasProcessadas.add(etapa);
-      etapaIndex++;
-    }
+    // Fecha só as abas extras — a principal fecha junto com o browser no
+    // finally.
+    await Promise.all(paginas.slice(1).map(p => p.close().catch(() => {})));
 
     console.log('[Coleta Acomp] ✅ Extração concluída.');
     return registros;

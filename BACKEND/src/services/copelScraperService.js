@@ -201,6 +201,12 @@ function numeroDaEtapa(texto) {
   return match ? match[1] : null;
 }
 
+// hh:mm:ss.mmm — só pra log de timing, comparar entre abas quem está "em
+// voo" (esperando resposta do servidor) ao mesmo tempo que quem.
+function horaAgora() {
+  return new Date().toISOString().slice(11, 23);
+}
+
 // Aplica os mesmos filtros (concessionária/empreiteira) e busca — comum
 // tanto à aba principal (depois do login) quanto às abas extras (que já
 // herdam a sessão via cookies do mesmo browser context, sem precisar logar
@@ -222,7 +228,7 @@ async function aplicarFiltroEBuscar(page) {
 // screenshots sem perder o sinal quando várias abas falham por motivos
 // diferentes ao mesmo tempo.
 async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estadoDiagnostico }) {
-  console.log(`[Coleta Acomp]${rotulo} ➡️ Processando etapa: ${etapa}`);
+  console.log(`[Coleta Acomp]${rotulo} ➡️ Processando etapa: ${etapa} (INÍCIO ${horaAgora()})`);
   await etapaLink.click();
   // Nada de tempo fixo: espera a tabela de livros DESTA etapa (não
   // qualquer #item — ver tabelaDaEtapa) ficar visível. Isso já é o
@@ -361,6 +367,17 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
       const combinada = Promise.any([esperaPopup, esperaMesmaPagina]);
       combinada.catch(() => {});
 
+      // Timing instrumentado (a pedido do usuário, que viu uma aba "parada
+      // esperando a vez" enquanto outra processava) — o clique + espera da
+      // resposta é a única ação de rede pesada por livro. Comparando os
+      // intervalos [INÍCIO, FIM] de abas diferentes no log dá pra ver se
+      // elas realmente ficam com requisição em voo ao mesmo tempo (paralelo
+      // de verdade) ou se sempre se revezam (sinal de que o servidor
+      // processa a mesma sessão HTTP de forma serializada, já que todas as
+      // abas compartilham o mesmo login — ver ADR 0020).
+      const inicioReq = Date.now();
+      console.log(`[Coleta Acomp]${rotulo} ⏱️ INÍCIO abrir OS livro '${cabecalhoAlvo.livro}' às ${horaAgora()}`);
+
       await linkOs.click();
       const resultado = await combinada;
 
@@ -378,6 +395,10 @@ async function processarEtapa({ page, etapaLink, etapa, registros, rotulo, estad
       // estabilizar antes de extrair (ver aguardarTabelaEstabilizar).
       await aguardarTabelaEstabilizar(paginaDetalhe);
       const linhasUc = await extrairLinhasDetalheOs(paginaDetalhe);
+      console.log(
+        `[Coleta Acomp]${rotulo} ⏱️ FIM abrir OS livro '${cabecalhoAlvo.livro}' às ${horaAgora()} ` +
+          `(${Date.now() - inicioReq}ms)`,
+      );
       for (const uc of linhasUc) {
         registros.push({ ...cabecalhoAlvo, ...uc });
       }

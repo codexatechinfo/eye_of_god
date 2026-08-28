@@ -135,3 +135,36 @@ observado) ficaria sendo devolvida pra fila pra sempre, travando a coleta num lo
 
 `npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
 próxima execução do usuário confirmar que as 8 abas abrem quando há etapas suficientes.
+
+## Adendo — abas pareciam se revezar em vez de rodar em paralelo de verdade
+
+Usuário reportou, já com as 8 abas abrindo corretamente: viu a etapa 24 abrir e ficar parada
+"um tempão" num livro sem continuar, "como se estivesse esperando a vez dele de voltar a
+execução" — sugerindo que as abas não processam de fato em paralelo.
+
+Hipótese mais provável: todas as 8 abas compartilham a MESMA sessão HTTP (mesmo `JSESSIONID`,
+por decisão deliberada — ver corpo desta ADR, "sessão compartilhada, não uma sessão por
+aba"). Aplicações Java/Struts como essa (padrão de URL `*Action.do`) costumam sincronizar o
+acesso à `HttpSession` do lado do servidor — mesmo que o cliente dispare requisições de várias
+abas ao mesmo tempo, o servidor pode processá-las uma de cada vez porque todas pertencem à
+mesma sessão. Se for esse o caso, o "paralelismo" seria real só do lado do cliente (8
+conexões abertas), mas o trabalho de verdade ainda seria serializado no servidor.
+
+Perguntado ao usuário se queria testar sessões separadas por aba (login independente,
+paralelismo real de servidor também) — risco: se o portal usa sessão única por *usuário* (não
+por cookie), 8 logins da mesma conta poderiam se derrubar entre si, do mesmo jeito que Coleta
+Acomp e Massivas se derrubavam antes da ADR 0019. Usuário preferiu não arriscar isso ainda:
+manter a sessão compartilhada e primeiro confirmar a causa com dados reais.
+
+Instrumentação adicionada: timestamp de INÍCIO/FIM (com duração) ao redor do clique que abre
+a OS de cada livro — a única ação de rede pesada e recorrente (uma por livro) — e timestamp de
+início ao abrir cada etapa. Com isso, o próximo log real permite comparar os intervalos
+`[INÍCIO, FIM]` de abas diferentes: se houver sobreposição real entre abas (duas ou mais com
+requisição em voo ao mesmo tempo), o paralelismo client-side está funcionando e o sintoma
+observado era só uma aba lenta num livro difícil (não uma serialização de verdade); se os
+intervalos nunca se sobrepõem entre abas diferentes, confirma a sincronização de sessão no
+servidor — e aí a decisão de tentar sessões separadas por aba (com o risco descrito acima)
+volta à mesa.
+
+`npm test` (12 testes) continua passando. Não validado ao vivo nesta sessão — fica pra
+próxima execução do usuário colar o log com os novos timestamps para eu analisar.

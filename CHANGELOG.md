@@ -62,6 +62,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   exclusão mútua (`copelSessaoLock.js`) serializa as duas coletas — nunca mais logam ao
   mesmo tempo. Ver [ADR 0019](docs/adr/0019-lock-sessao-copel-entre-jobs.md).
 
+### Alterado
+
+- Scraper de Acompanhamento: timestamps de início/fim (com duração) instrumentados ao redor
+  do clique que abre a OS de cada livro e ao abrir cada etapa — usuário reportou uma aba
+  parecendo "esperar a vez" de outra em vez de rodar em paralelo de verdade (hipótese: as 8
+  abas compartilham a mesma sessão HTTP, e o servidor Java/Struts pode estar processando
+  requisições da mesma sessão de forma serializada). Instrumentação permite confirmar, no
+  próximo log real, se há sobreposição de intervalos entre abas diferentes antes de decidir
+  se vale o risco de sessões separadas por aba. Ver Adendo da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+
 ### Corrigido
 
 - Scraper de Acompanhamento paralelizado (ADR 0020): rodando ao vivo, só abriu 2 abas em vez

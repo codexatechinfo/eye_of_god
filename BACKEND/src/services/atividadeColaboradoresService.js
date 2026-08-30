@@ -156,11 +156,63 @@ async function listarColaboradoresMassivaHoje(db, dataBr) {
       diasPrazoRegulatorio: null,
       primeiraVez: linha.hr_import,
       ultimaVez: linha.hr_import,
+      // Massiva só olha o lote mais recente (sem histórico de lotes
+      // anteriores pra comparar), então não dá pra saber se uma UC foi
+      // realizada de fato neste ciclo — fica sempre null aqui.
+      ultimaExecucao: null,
       historico: [{ horaImport: linha.hr_import, situacao: linha.situacao, digitados, naoDigitados }],
     });
   }
 
   return porColaborador;
+}
+
+// Estado de `digitados` de cada livro no ÚLTIMO lote ANTES do dia
+// consultado — usado como ponto de partida pra detectar UC realizada
+// justo no primeiro lote de hoje. A coleta roda 24h contínua (ADR 0020);
+// o "primeiro lote de hoje" de um livro não é necessariamente logo cedo,
+// e pode já vir depois de leituras feitas mais cedo no mesmo dia, antes do
+// scraper ter passado por ele. Sem esse baseline, comparar só dentro dos
+// lotes de hoje (anterior = null no primeiro) não detecta essas execuções
+// — usuário perguntou justamente se "sincronismo" refletia UC executada de
+// verdade; esse é o caso em que ficaria escondido sem essa consulta.
+// `id` (não `data_import`) decide "antes de hoje": monotonicamente
+// crescente com o horário real de inserção, não sofre do formato texto
+// DD/MM/YYYY.
+async function obterBaselineDigitadosPorLivro(db, hoje) {
+  const { rows } = await db.query(
+    `
+    WITH corte_do_dia AS (
+      -- "Antes do dia consultado" tem que ser por id, não por
+      -- data_import <> $1 — essa comparação pegaria dado de dias
+      -- SEGUINTES também (ex.: virou a data em tempo real desde que o
+      -- usuário abriu a tela, já existe coleta do dia seguinte na tabela).
+      -- id < primeiro id do dia consultado é a única forma correta de
+      -- dizer "estado no fim do dia anterior".
+      SELECT MIN(id) AS primeiro_id FROM contr_execucao_leitura WHERE data_import = $1
+    ), livros_do_dia AS (
+      SELECT DISTINCT livro FROM contr_execucao_leitura WHERE data_import = $1
+    ), ultimo_lote_anterior AS (
+      SELECT DISTINCT ON (c.livro) c.livro, c.data_import, c.hora_import
+      FROM contr_execucao_leitura c
+      JOIN livros_do_dia ld ON ld.livro = c.livro
+      CROSS JOIN corte_do_dia cd
+      WHERE c.id < cd.primeiro_id
+      ORDER BY c.livro, c.id DESC
+    ), baseline_dedup AS (
+      SELECT DISTINCT ON (c.livro, c.uc) c.livro, c.uc, c.codigo
+      FROM contr_execucao_leitura c
+      JOIN ultimo_lote_anterior u ON u.livro = c.livro AND u.data_import = c.data_import AND u.hora_import = c.hora_import
+      WHERE c.uc IS NOT NULL
+      ORDER BY c.livro, c.uc, c.id DESC
+    )
+    SELECT livro, SUM(CASE WHEN codigo IS NOT NULL THEN 1 ELSE 0 END)::int AS digitados
+    FROM baseline_dedup
+    GROUP BY livro
+    `,
+    [hoje],
+  );
+  return new Map(rows.map(linha => [linha.livro, linha.digitados]));
 }
 
 // dataIso ("YYYY-MM-DD", mesmo formato do <input type="date"> do
@@ -179,7 +231,7 @@ async function listarAtividadeHoje(db, dataIso) {
   // separado da coluna própria (populada no import — ver
   // parseSituacaoColaborador em copelImportService.js), não precisa mais
   // ser extraído de dentro de `situacao` via regex.
-  const [{ rows: linhas }, mapaPrazoRegulatorio] = await Promise.all([
+  const [{ rows: linhas }, mapaPrazoRegulatorio, baselinePorLivro] = await Promise.all([
     db.query(
       `
       WITH linhas_dedup AS (
@@ -215,6 +267,7 @@ async function listarAtividadeHoje(db, dataIso) {
       [hoje],
     ),
     obterMapaPrazoRegulatorio(db, hojeIsoConsultado),
+    obterBaselineDigitadosPorLivro(db, hoje),
   ]);
 
   const porColaborador = new Map();
@@ -265,6 +318,20 @@ async function listarAtividadeHoje(db, dataIso) {
     for (const [livro, lista] of entradasPorLivro) {
       const historico = [];
       let anterior = null;
+      // "Último sincronismo" tem que significar UC realizada de fato
+      // (digitados aumentando), não qualquer mudança no lote — usuário
+      // reportou o sintoma certo: uma troca de situação sozinha (ex.:
+      // "Atribuída" -> "Em Execução", assumiu o livro mas ainda não leu
+      // nenhuma UC) fazia o sincronismo avançar sem nenhuma leitura
+      // acontecer. `historico` continua registrando qualquer mudança (útil
+      // pra mostrar a evolução do status do livro), mas o horário do
+      // sincronismo agora vem só daqui.
+      let ultimaExecucaoLivro = null;
+      // Ponto de partida pra detectar UC realizada logo no PRIMEIRO lote de
+      // hoje — sem isso, `digitadosAnterior` começaria null e uma execução
+      // que já tivesse acontecido antes do primeiro scraping de hoje
+      // passaria despercebida (ver obterBaselineDigitadosPorLivro).
+      let digitadosAnterior = baselinePorLivro.get(livro) ?? null;
       for (const entrada of lista) {
         const inalterado =
           anterior &&
@@ -279,14 +346,17 @@ async function listarAtividadeHoje(db, dataIso) {
             naoDigitados: entrada.naoDigitados,
           });
         }
+        if (digitadosAnterior !== null && entrada.digitados > digitadosAnterior) {
+          ultimaExecucaoLivro = entrada.horaImport;
+        }
+        digitadosAnterior = entrada.digitados;
         anterior = entrada;
       }
 
       const primeira = lista[0];
       const ultima = lista[lista.length - 1];
-      const ultimaMudancaLivro = historico[historico.length - 1].horaImport;
-      if (!ultimaMudancaColaborador || ultimaMudancaLivro > ultimaMudancaColaborador) {
-        ultimaMudancaColaborador = ultimaMudancaLivro;
+      if (ultimaExecucaoLivro && (!ultimaMudancaColaborador || ultimaExecucaoLivro > ultimaMudancaColaborador)) {
+        ultimaMudancaColaborador = ultimaExecucaoLivro;
       }
 
       const tipoServico = classificarTipoServico(ultima.dataRecebimento, ultima.dataPrevistaLimite);
@@ -306,6 +376,13 @@ async function listarAtividadeHoje(db, dataIso) {
           : null,
         primeiraVez: primeira.horaImport,
         ultimaVez: ultima.horaImport,
+        // Último horário em que UMA UC de fato virou realizada hoje neste
+        // livro (não confundir com ultimaVez, que é só o último lote
+        // importado, independente de ter mudado algo) — null se nenhuma UC
+        // foi realizada hoje (livro só teve o `digitados` de dias
+        // anteriores, sem nada novo). Usado pro card "Último sincronismo"
+        // do painel de detalhe (aba Trilho).
+        ultimaExecucao: ultimaExecucaoLivro,
         historico,
       });
     }

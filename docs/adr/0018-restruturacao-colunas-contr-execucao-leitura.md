@@ -1073,6 +1073,66 @@ efeito direto do bug já corrigido, não um problema novo.
 
 `npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console.
 
+## Adendo 21 — "Último sincronismo" avançava sem UC realizada (mudança de situação sozinha bastava)
+
+Usuário questionou diretamente: "esse sincronismo deve ser de acordo com as UC executadas então
+se você me mostra sincronismo às 00h então teve leitura realizada nesse horário ou só trouxe o
+último registro de hora importado?" — pergunta que expôs um bug real no Adendo 20/17.
+
+### O bug
+
+`ultimaMudancaColaborador` (campo `ultimaMudancaHora`, exibido como "Último sincronismo") vinha
+do último item de `historico`, e `historico` registra qualquer mudança de `situacao`,
+`digitados` ou `naoDigitados` — não só `digitados` aumentando. Achado um caso real do dia
+29/08/2026: livro `024462` do colaborador Ronald Pereira Vernek mudou de situação
+("Atribuída" → "Em Execução") às 23:17:36 com `digitados` continuando em `0` nos dois momentos —
+zero UC realizada, e mesmo assim o sincronismo teria avançado pra 23:17:36.
+
+### Correção 1 — separar "mudou o lote" de "UC virou realizada"
+
+`historico` continua registrando qualquer mudança (situação inclusa — é informação real sobre a
+evolução do livro). Mas o horário do "Último sincronismo" agora vem de uma variável própria,
+`ultimaExecucaoLivro`, que só avança quando `digitados` do lote atual é MAIOR que o do lote
+anterior dentro do mesmo dia. Novo campo `ultimaExecucao` exposto por livro (`null` = nenhuma UC
+foi realizada naquele livro no dia consultado) — usado no card "Último sincronismo" do painel de
+detalhe (`livro-detalhe.html`, antes usava `ultimaVez`, o horário do último lote não importa se
+mudou algo). Card do colaborador (`ultimaMudancaHora`) passa a ser o maior `ultimaExecucaoLivro`
+entre os livros dele, não mais o maior "algo mudou".
+
+### Correção 2 — a lacuna do primeiro lote do dia
+
+Comparar só dentro dos lotes de hoje (`anterior = null` no primeiro) tem um furo: a coleta roda
+24h contínua (ADR 0020), então o primeiro lote de um livro num dia pode vir bem depois da
+meia-noite, e o leiturista pode já ter realizado UCs **antes** desse primeiro lote — invisível
+sem um ponto de comparação anterior a hoje. Nova função `obterBaselineDigitadosPorLivro(db,
+hoje)`: busca, por livro, o `digitados` deduplicado do último lote **estritamente anterior** ao
+dia consultado, usado como valor inicial de comparação pro primeiro lote de hoje.
+
+Achado e corrigido um bug na primeira versão desta query: usar `data_import <> $1` pra dizer
+"antes de hoje" está errado quando também existe dado de dias **seguintes** na tabela (o caso
+real: a data virou em tempo real durante a sessão, já havia coleta do dia seguinte na tabela
+no momento da consulta) — `<>` inclui o futuro, não só o passado. Corrigido usando `id` como
+corte: `MIN(id)` do dia consultado define o corte, e o baseline só considera `id < corte`
+(`id`, bigserial, é estritamente cronológico — não sofre da ambiguidade de comparar
+`data_import` como texto).
+
+Verificado com um caso real e independente: livro `002513` tinha `digitados=44` no fim de
+28/08/2026 e `digitados=119` já no PRIMEIRO lote de 29/08/2026 (19:43:41) — sem o baseline,
+essas 75 UCs realizadas ficariam invisíveis (`historico` só tinha 1 entrada, o próprio primeiro
+lote). Com o baseline, `ultimaExecucao` corretamente aponta `19:43:41`. Antes da correção do
+corte por `id`, o baseline (por engano) pegava um lote do dia SEGUINTE (30/08) e devolvia o
+mesmo valor de hoje (nenhuma diferença detectável) — zero colaboradores tinham execução real
+detectada no dia inteiro, claramente implausível pra 116 colaboradores ativos. Depois da
+correção: 15 de 116 colaboradores com execução real detectada em 29/08/2026 — plausível pro
+fim do dia de trabalho.
+
+Consulta adicional (`obterBaselineDigitadosPorLivro`) mede ~180-800ms sem índice de suporte
+(rodando como `app_user`, sem privilégio pra `CREATE INDEX` neste ambiente) — aceitável na
+frequência atual (a cada 60s de polling, ou uma vez por troca de data), mas
+`(livro, id DESC)` ajudaria se o volume crescer bastante.
+
+`npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

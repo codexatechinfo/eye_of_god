@@ -91,6 +91,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   Livros) e do painel de Leitura Urbana, que somavam linhas cruas sem deduplicar. Limpas 20.144
   linhas duplicadas já gravadas no banco. Ver Adendo 19 da
   [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+- "Último sincronismo" (card do colaborador e do painel de livro, aba Trilho) podia avançar sem
+  nenhuma UC realizada — uma mudança de situação sozinha (ex.: "Atribuída" → "Em Execução", sem
+  nenhuma leitura ainda) já contava como sincronismo. Agora só avança quando `digitados`
+  realmente aumenta. Corrigida também uma lacuna: UCs realizadas antes do primeiro lote de
+  coleta do dia (a coleta roda 24h contínua) ficavam invisíveis sem um ponto de comparação
+  anterior ao dia — nova consulta de baseline resolve isso. Ver Adendo 21 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 
 - Resumo da aba Massivas (`GET /massivas/resumo`) falhava com `column reference "id" is
   ambiguous` — `contarFonteContr()` junta `contr_execucao_leitura`, `cidades_localidades` e

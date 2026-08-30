@@ -64,6 +64,11 @@ export interface LivroAtividade {
   impedimentos?: number;
   primeiraVez: string;
   ultimaVez: string;
+  // Último horário em que uma UC realmente virou realizada hoje (digitados
+  // aumentou) — diferente de ultimaVez, que é só o último lote importado,
+  // mesmo sem nenhuma UC nova. null = nenhuma UC foi realizada hoje neste
+  // livro (ou é livro de massiva, sem essa granularidade).
+  ultimaExecucao: string | null;
   historico: HistoricoLivroItem[];
 }
 

@@ -8,9 +8,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 ### Adicionado
 
 - Nova tabela `coordenadas_ucs_mineradas` (20 colunas de UC/endereço/coordenadas, todas
-  `varchar(255)` — PostGIS não está instalado, mesmo padrão de texto já usado em
+  `varchar(255)` — PostGIS não estava instalado, mesmo padrão de texto já usado em
   `tab_ligacao_coordenadas`), com RLS multi-tenant idêntico ao das demais tabelas de negócio.
-  Sem código de aplicação ainda — só a tabela. Ver
+  Sem código de aplicação ainda — só a tabela. `id` já auto-incremento desde a criação; PostGIS
+  instalado no banco em seguida (extensão disponível, ainda não usada — `geom`/`geom_area`
+  continuam texto até o fluxo de import ser definido). Ver
   [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
 
 - Aba Trilho: o calendário de data (antes travado só em hoje) agora permite navegar pra dias de

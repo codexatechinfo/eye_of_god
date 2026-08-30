@@ -98,6 +98,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   coleta do dia (a coleta roda 24h contínua) ficavam invisíveis sem um ponto de comparação
   anterior ao dia — nova consulta de baseline resolve isso. Ver Adendo 21 da
   [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+- O fix do "Último sincronismo" (Adendo 21) tinha ficado incompleto: colaborador só-massiva
+  continuava com a semântica antiga (hora do último lote, não de execução real) — usuário
+  reportou o caso invertido (0 realizadas com sincronismo preenchido, 87% realizado com "--").
+  Estendida a mesma lógica pra massiva. No processo, corrigido também um problema de
+  performance real: a consulta nova, sem restringir os pares (leiturista, livro) antes de
+  ordenar, tentava ordenar as 732 mil linhas de `em_execucao_im` (sem índice de suporte) —
+  10,9s por chamada. Corrigido pra 2,8s restringindo a busca aos pares do dia. Ver Adendo 22 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 
 - Resumo da aba Massivas (`GET /massivas/resumo`) falhava com `column reference "id" is
   ambiguous` — `contarFonteContr()` junta `contr_execucao_leitura`, `cidades_localidades` e

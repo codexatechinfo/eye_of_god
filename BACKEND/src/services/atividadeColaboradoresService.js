@@ -16,6 +16,13 @@ function diferencaMinutos(horaAntiga, horaRecente) {
   return Math.max(0, Math.round(paraMinutosDoDia(horaRecente) - paraMinutosDoDia(horaAntiga)));
 }
 
+// null é "nunca sincronizou" — o outro lado vence sempre que ele existir.
+function maiorHorario(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
 // "DD/MM/YYYY" -> "YYYY-MM-DD", só pra poder comparar duas datas como string.
 function paraDataOrdenavel(dataStr) {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((dataStr || '').trim());
@@ -108,12 +115,74 @@ function calcularDiasPrazoRegulatorio(hoje, prazoCalendario, diasFinais) {
 // — então dedup igual lá: dentro da mesma categoria fica com a linha de
 // menor quantidade restante (mais avançada); entre categorias, "Em Execução"
 // vence "Atribuída".
+// digitados de cada par (leiturista, livro) no último lote ANTES do dia
+// consultado, em cada tabela — mesmo raciocínio de
+// obterBaselineDigitadosPorLivro (leitura/releitura), aplicado à massiva:
+// sem isso, "Último sincronismo" de quem só tem massiva vinha sempre do
+// último lote importado (`ultimaVez`), sem checar se alguma UC foi
+// realizada de fato — usuário reportou o print que expôs isso: colaborador
+// com 0 realizadas mostrando sincronismo, colaborador com quase tudo
+// realizado mostrando "--" (por já ter o fix da leitura, mas o exemplo
+// certo pra comparar era um caso de massiva sem esse fix ainda). "Em
+// Execução" é estado mais avançado que "Atribuída" — quando o par existe
+// nas duas, o de em_execucao_im vence (mesma prioridade já usada na query
+// principal desta função).
+// `pares`: só os (leiturista, livro) relevantes hoje (extraídos de
+// `linhas`, ver chamador) — essencial pra performance: em_execucao_im
+// chegou a ter 732 mil linhas sem nenhum índice em (leiturista, livro),
+// então um DISTINCT ON sem restringir os pares antes tentava ordenar a
+// tabela inteira (~5,7s medido ao vivo). Filtrar pelos pares de hoje ANTES
+// da ordenação (via JOIN) faz o Postgres descartar quase tudo antes de
+// precisar ordenar qualquer coisa.
+async function obterBaselineDigitadosMassiva(db, dataBr, pares) {
+  if (!pares.leituristas.length) return new Map();
+
+  const [{ rows: baseAtribuidas }, { rows: baseExecucao }] = await Promise.all([
+    db.query(
+      `
+      WITH corte AS (SELECT MIN(id) AS corte FROM atribuidas_im WHERE dt_import = $1),
+      pares AS (SELECT * FROM UNNEST($2::text[], $3::text[]) AS p(leiturista, livro))
+      SELECT DISTINCT ON (t.leiturista, t.livro) t.leiturista, t.livro, t.qtd_digitados_nao_digitados
+      FROM atribuidas_im t
+      JOIN pares p ON p.leiturista = t.leiturista AND p.livro = t.livro
+      CROSS JOIN corte c
+      WHERE t.id < c.corte
+      ORDER BY t.leiturista, t.livro, t.id DESC
+      `,
+      [dataBr, pares.leituristas, pares.livros],
+    ),
+    db.query(
+      `
+      WITH corte AS (SELECT MIN(id) AS corte FROM em_execucao_im WHERE dt_import = $1),
+      pares AS (SELECT * FROM UNNEST($2::text[], $3::text[]) AS p(leiturista, livro))
+      SELECT DISTINCT ON (t.leiturista, t.livro) t.leiturista, t.livro, t.qtd_digitados_nao_digitados
+      FROM em_execucao_im t
+      JOIN pares p ON p.leiturista = t.leiturista AND p.livro = t.livro
+      CROSS JOIN corte c
+      WHERE t.id < c.corte
+      ORDER BY t.leiturista, t.livro, t.id DESC
+      `,
+      [dataBr, pares.leituristas, pares.livros],
+    ),
+  ]);
+
+  const mapa = new Map();
+  for (const linha of baseAtribuidas) {
+    mapa.set(`${linha.leiturista}::${linha.livro}`, parseQtd(linha.qtd_digitados_nao_digitados).digitados);
+  }
+  for (const linha of baseExecucao) {
+    mapa.set(`${linha.leiturista}::${linha.livro}`, parseQtd(linha.qtd_digitados_nao_digitados).digitados);
+  }
+  return mapa;
+}
+
 async function listarColaboradoresMassivaHoje(db, dataBr) {
   const restante = `(CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$'
     THEN split_part(t.qtd_digitados_nao_digitados, '/', 1)::int + split_part(t.qtd_digitados_nao_digitados, '/', 2)::int
     ELSE 0 END)`;
 
-  const { rows: linhas } = await db.query(`
+  const { rows: linhas } = await db.query(
+    `
     WITH ultimo_atribuidas AS (
       SELECT dt_import, hr_import FROM atribuidas_im WHERE dt_import = $1 ORDER BY id DESC LIMIT 1
     ), ultimo_execucao AS (
@@ -136,7 +205,23 @@ async function listarColaboradoresMassivaHoje(db, dataBr) {
     SELECT DISTINCT ON (leiturista, livro) leiturista, livro, etapa, qtd_digitados_nao_digitados, hr_import, situacao
     FROM (SELECT * FROM atribuidas UNION ALL SELECT * FROM execucao) unidos
     ORDER BY leiturista, livro, prioridade DESC
-  `, [dataBr]);
+    `,
+    [dataBr],
+  );
+
+  // Só busca baseline pros pares que realmente aparecem hoje — ver
+  // comentário de obterBaselineDigitadosMassiva sobre por que isso importa
+  // pra performance.
+  const paresUnicos = new Map();
+  for (const linha of linhas) {
+    if (!linha.leiturista) continue;
+    paresUnicos.set(`${linha.leiturista}::${linha.livro}`, { leiturista: linha.leiturista, livro: linha.livro });
+  }
+  const pares = {
+    leituristas: [...paresUnicos.values()].map(p => p.leiturista),
+    livros: [...paresUnicos.values()].map(p => p.livro),
+  };
+  const baselineMassiva = await obterBaselineDigitadosMassiva(db, dataBr, pares);
 
   const porColaborador = new Map();
   for (const linha of linhas) {
@@ -144,6 +229,8 @@ async function listarColaboradoresMassivaHoje(db, dataBr) {
     if (!nome) continue;
     const { digitados, naoDigitados } = parseQtd(linha.qtd_digitados_nao_digitados);
     const etapaLimpa = (linha.etapa || '').match(/\d+/)?.[0] ?? linha.etapa;
+    const baseline = baselineMassiva.get(`${nome}::${linha.livro}`);
+    const ultimaExecucao = baseline !== undefined && digitados > baseline ? linha.hr_import : null;
 
     if (!porColaborador.has(nome)) porColaborador.set(nome, []);
     porColaborador.get(nome).push({
@@ -156,10 +243,11 @@ async function listarColaboradoresMassivaHoje(db, dataBr) {
       diasPrazoRegulatorio: null,
       primeiraVez: linha.hr_import,
       ultimaVez: linha.hr_import,
-      // Massiva só olha o lote mais recente (sem histórico de lotes
-      // anteriores pra comparar), então não dá pra saber se uma UC foi
-      // realizada de fato neste ciclo — fica sempre null aqui.
-      ultimaExecucao: null,
+      // Mesma regra da leitura/releitura: só conta como sincronismo se
+      // digitados realmente aumentou frente ao último lote ANTES do dia
+      // consultado (ver obterBaselineDigitadosMassiva) — null se nunca
+      // teve baseline (livro novo hoje) ou nada mudou.
+      ultimaExecucao,
       historico: [{ horaImport: linha.hr_import, situacao: linha.situacao, digitados, naoDigitados }],
     });
   }
@@ -438,12 +526,24 @@ async function listarAtividadeHoje(db, dataIso) {
     const pendentesMassiva = livrosMassiva.reduce((soma, l) => soma + l.naoDigitados, 0);
     const emExecucaoMassiva = livrosMassiva.filter(l => l.situacaoAtual === 'Em Execução').length;
 
+    // Maior horário de execução real dentre os livros de massiva deste
+    // colaborador — mesma regra de digitados aumentando (ver
+    // obterBaselineDigitadosMassiva), não mais "hora do último lote".
+    const ultimaExecucaoMassiva = livrosMassiva.reduce((maior, l) => maiorHorario(maior, l.ultimaExecucao), null);
+
     if (existente) {
       existente.livros.push(...livrosMassiva);
       existente.totalRealizadas += digitadosMassiva;
       existente.totalPendentes += pendentesMassiva;
       existente.totalLivros += livrosMassiva.length;
       existente.totalEmExecucao += emExecucaoMassiva;
+      // Colaborador pode ter tido a última execução real na leitura OU na
+      // massiva — recalcula com os dois lados já somados.
+      existente.ultimaMudancaHora = maiorHorario(existente.ultimaMudancaHora, ultimaExecucaoMassiva);
+      existente.minutosParado = diferencaMinutos(existente.ultimaMudancaHora, ultimaHoraGeral);
+      existente.parado = existente.totalRealizadas === 0;
+      existente.semSincronismo = existente.totalRealizadas > 0 && existente.minutosParado >= LIMITE_PARADO_MINUTOS;
+      existente.ativo = existente.totalRealizadas > 0 && existente.minutosParado < LIMITE_PARADO_MINUTOS;
     } else {
       // Mesma regra de "parado" já usada pra leitura/releitura (linha 259):
       // tem serviço hoje mas ainda não realizou nada. Estava fixo em
@@ -451,6 +551,7 @@ async function listarAtividadeHoje(db, dataIso) {
       // tinha 0 executadas — usuário reportou colaborador com REALIZADAS: 0
       // aparecendo como "ativo".
       const paradoMassiva = digitadosMassiva === 0;
+      const minutosParadoMassiva = diferencaMinutos(ultimaExecucaoMassiva, ultimaHoraGeral);
       colaboradores.push({
         colaborador: nome,
         totalRealizadas: digitadosMassiva,
@@ -460,11 +561,11 @@ async function listarAtividadeHoje(db, dataIso) {
         totalImpedimentos: 0,
         totalLivros: livrosMassiva.length,
         totalEmExecucao: emExecucaoMassiva,
-        ultimaMudancaHora: livrosMassiva[0].ultimaVez,
-        minutosParado: 0,
+        ultimaMudancaHora: ultimaExecucaoMassiva,
+        minutosParado: minutosParadoMassiva,
         parado: paradoMassiva,
-        ativo: !paradoMassiva,
-        semSincronismo: false,
+        ativo: !paradoMassiva && minutosParadoMassiva < LIMITE_PARADO_MINUTOS,
+        semSincronismo: !paradoMassiva && minutosParadoMassiva >= LIMITE_PARADO_MINUTOS,
         livros: livrosMassiva,
       });
     }

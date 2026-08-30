@@ -1133,6 +1133,54 @@ frequência atual (a cada 60s de polling, ou uma vez por troca de data), mas
 
 `npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console.
 
+## Adendo 22 — Adendo 21 ficou incompleto: massiva ainda usava a semântica antiga
+
+Usuário mandou print comparando dois colaboradores lado a lado: Alexia Canever Rodrigues
+(0 realizadas) mostrando "Último sincronismo: 01:32", e Amilton Stelli (237 realizadas, 87%)
+mostrando "Último sincronismo: --" — exatamente invertido do que faz sentido.
+
+### Causa
+
+O Adendo 21 corrigiu `ultimaMudancaHora` só pro caminho de leitura/releitura
+(`contr_execucao_leitura`). Colaboradores só-massiva (como a Alexia, cujo único livro tem
+`tipoServico: "massiva"`) continuavam vindo de `listarColaboradoresMassivaHoje`, que ainda
+usava `ultimaMudancaHora: livrosMassiva[0].ultimaVez` — a hora do último lote importado, sem
+nenhuma detecção de execução real. Confirmado direto no banco: Amilton (leitura,
+`ultimaMudancaHora: null`, correto — nada novo hoje) vs. Alexia (massiva,
+`ultimaMudancaHora: "01:32:44"`, ainda o bug antigo).
+
+### Correção
+
+Estendida a mesma lógica (baseline do último lote ANTES do dia consultado, `digitados`
+aumentando = execução real) pra massiva. Nova `obterBaselineDigitadosMassiva(db, dataBr,
+pares)`: busca, por tabela (`atribuidas_im`/`em_execucao_im`), o `qtd_digitados_nao_digitados`
+do último lote antes do dia — "Em Execução" vence "Atribuída" quando o par existe nas duas
+(mesma prioridade já usada na query principal). `listarColaboradoresMassivaHoje` passa a expor
+`ultimaExecucao` por livro de massiva, e `listarAtividadeHoje` usa isso — tanto pra colaborador
+só-massiva quanto pra quem tem os dois tipos (leitura E massiva: `ultimaMudancaHora` vira o
+maior entre os dois lados). `ativo`/`parado`/`semSincronismo` de colaborador só-massiva também
+passaram a usar a mesma fórmula de `minutosParado` da leitura (antes fixo em
+`ativo: !parado, semSincronismo: false` — outra inconsistência da mesma família, nunca
+detectava "trabalhou de manhã, sumiu à tarde" em quem só tem massiva).
+
+### Bug de performance descoberto no processo
+
+Passar a fazer `DISTINCT ON (leiturista, livro)` em `em_execucao_im` sem restringir os pares
+antes tentava ordenar a tabela inteira — **732.800 linhas**, sem nenhum índice em
+`(leiturista, livro)` (só `id` e `empresa_id`). Medido ao vivo: 5,7s só nessa consulta,
+10,9s no `listarAtividadeHoje` inteiro — inaceitável pra um endpoint com polling de 60s.
+Corrigido restringindo a busca do baseline só aos pares (leiturista, livro) que aparecem no
+dia consultado (extraídos de `linhas`, join via `UNNEST(...)` antes da ordenação) — o Postgres
+descarta a esmagadora maioria das linhas antes de precisar ordenar qualquer coisa. Resultado:
+10,9s → 2,8s. Ainda não é rápido (mesma limitação de falta de índice do Adendo 21 — sem
+privilégio de `CREATE INDEX` neste ambiente), mas aceitável na frequência de 60s.
+`(leiturista, livro, id DESC)` em `atribuidas_im`/`em_execucao_im` resolveria de vez, se algum
+dia alguém com acesso de dono rodar o DDL.
+
+Verificado direto no banco: Alexia (0 realizadas) e Amilton (237 realizadas, nada novo hoje)
+agora mostram `ultimaMudancaHora: null` os dois — consistentes entre si, resolvendo a inversão
+reportada. `npm test` (12 testes) continua passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

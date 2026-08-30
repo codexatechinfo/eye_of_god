@@ -270,6 +270,34 @@ const CONTR_NAO_REALIZADO_LINHA_SQL = 'CASE WHEN c.codigo IS NULL THEN 1 ELSE 0 
 const CONTR_REALIZADO_LIVRO_SQL = `(SUM(${CONTR_REALIZADO_LINHA_SQL}) OVER (PARTITION BY c.livro))::int`;
 const CONTR_NAO_REALIZADO_LIVRO_SQL = `(SUM(${CONTR_NAO_REALIZADO_LINHA_SQL}) OVER (PARTITION BY c.livro))::int`;
 
+// Deduplica contr_execucao_leitura por UC dentro do lote que gerou cada
+// linha (mesmo livro + data_import + hora_import) — bug real encontrado em
+// produção: o scraper podia gravar a MESMA UC mais de uma vez no mesmo lote
+// (uma exceção dentro do `finally` de abrirEExtrairOs descartava o retorno
+// de sucesso e fazia o worker reprocessar um livro que já tinha extraído
+// com êxito — corrigido em copelScraperService.js, ver ADR 0018 Adendo 18).
+// Sem deduplicar aqui, toda contagem que soma linhas cruas desta tabela
+// (CONTR_REALIZADO_LIVRO_SQL/CONTR_NAO_REALIZADO_LIVRO_SQL e o SUM() de
+// historicoContrLivro) conta UC duplicada mais de uma vez, inflando
+// Realizados/Não realizados/Leituras. `id` (bigserial, estritamente
+// cronológico) escolhe a cópia mais recente de cada UC dentro do lote —
+// pode haver diferença de `codigo` entre cópias, já que minutos podem se
+// passar entre a extração original e a retentativa que causou a duplicata.
+//
+// Recebe as duas condições de escopo que cada chamador já teria posto no
+// WHERE de qualquer forma (por livro+lote, ou só por livro pra
+// historicoContrLivro) — dedupilcar SÓ dentro desse escopo, não a tabela
+// inteira, mantém a operação barata (a tabela não tem índice que ajude uma
+// deduplicação global, mas cada lote tem só uma fração das linhas).
+function contrDedupSql(condicaoEscopo) {
+  return `(
+    SELECT DISTINCT ON (c2.livro, c2.data_import, c2.hora_import, c2.uc) c2.*
+    FROM contr_execucao_leitura c2
+    WHERE ${condicaoEscopo}
+    ORDER BY c2.livro, c2.data_import, c2.hora_import, c2.uc, c2.id DESC
+  )`;
+}
+
 async function contarTabela(db, chave, dataImport, horaImport, filtros) {
   const { nome, temLeiturista } = TABELAS_MASSIVA[chave];
   const { semResultado, condicoes, parametros } = construirCondicoes({ ...filtros, temLeiturista });
@@ -343,7 +371,7 @@ async function contarFonteContr(db, statusChave, tipoServico, dataImport, horaIm
       SELECT DISTINCT ON (c.livro) c.livro, ${digitados} AS digitados, ${naoDigitados} AS nao_digitados,
         ${STATUS_CONTR_SQL} AS status_calc,
         ${LEITURISTA_CONTR_SQL} AS leiturista_calc
-      FROM contr_execucao_leitura c
+      FROM ${contrDedupSql('c2.data_import = $1 AND c2.hora_import = $2')} c
       LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
       ${joinCalendarioContr()}
       WHERE c.data_import = $1 AND c.hora_import = $2
@@ -509,7 +537,7 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
           c.livro,
           (${digitados} + ${naoDigitados}) AS leituras,
           ${EFETIVO_PRAZO_REG_SQL} AS efetivo
-        FROM contr_execucao_leitura c
+        FROM ${contrDedupSql('c2.data_import = $1 AND c2.hora_import = $2')} c
         LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
         JOIN prazo_reg_livros preg
           ON preg.livro::int = c.livro::int
@@ -820,7 +848,7 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
         ${TIPO_SERVICO_CONTR_SQL} AS tipo_calc,
         ${EFETIVO_PRAZO_REG_SQL} AS dias_prazo_regulatorio,
         CASE WHEN c.data_recebimento IS NOT NULL THEN c.data_recebimento || COALESCE(' ' || c.hora_recebimento, '') ELSE NULL END AS data_recebimento
-      FROM contr_execucao_leitura c
+      FROM ${contrDedupSql('c2.data_import = $1 AND c2.hora_import = $2')} c
       LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
       ${joinCalendarioContr()}
       ${joinPrazoRegLivros()}
@@ -899,7 +927,7 @@ async function obterHistoricoLivro(db, livro) {
 async function consultarUcsBrutasDoLivro(db, livro) {
   const { rows } = await db.query(
     `
-    SELECT uc, codigo, equipamento, tipo_especificacao, faturamento, leitura_atual,
+    SELECT id, uc, codigo, equipamento, tipo_especificacao, faturamento, leitura_atual,
       situacao, colaborador, data_import, hora_import
     FROM contr_execucao_leitura
     WHERE livro = $1 AND uc IS NOT NULL
@@ -909,45 +937,54 @@ async function consultarUcsBrutasDoLivro(db, livro) {
   return rows;
 }
 
-// Estado ATUAL de cada UC do livro — pega, por UC, a linha do lote mais
-// recente (não importa se realizada ou não, só a mais nova). Serve pra
-// mostrar "como está o livro agora, UC por UC" (Monitoramento de Livros).
+// Estado ATUAL de cada UC do livro — pega, por UC, a linha mais recente
+// (não importa se realizada ou não, só a mais nova). Serve pra mostrar
+// "como está o livro agora, UC por UC" (Monitoramento de Livros).
+//
+// Desempate por `id` (bigserial, estritamente cronológico), não por
+// data_import/hora_import: o scraper às vezes grava a MESMA UC mais de uma
+// vez dentro do mesmo lote (mesmo hora_import — só tem granularidade de
+// segundo, incapaz de distinguir duplicatas do mesmo lote), às vezes com
+// `codigo` diferente entre as cópias. Usuário reportou o sintoma real: card
+// do colaborador (que soma linhas cruas do lote) e este painel (que já
+// deduplicava por UC, mas com desempate ambíguo pela hora) mostrando
+// totais de impedimentos diferentes pro mesmo livro único.
 async function listarUcsAtuaisDoLivro(db, livro) {
   const brutas = await consultarUcsBrutasDoLivro(db, livro);
   const porUc = new Map();
   for (const linha of brutas) {
-    const epoch = paraEpoch(linha.data_import, linha.hora_import);
     const atual = porUc.get(linha.uc);
-    if (!atual || epoch >= atual.epoch) {
-      porUc.set(linha.uc, { ...linha, epoch });
+    if (!atual || linha.id >= atual.id) {
+      porUc.set(linha.uc, linha);
     }
   }
   return [...porUc.values()]
     .sort((a, b) => a.uc.localeCompare(b.uc))
-    .map(({ epoch, ...resto }) => resto);
+    .map(({ id, ...resto }) => resto);
 }
 
-// Quando cada UC do livro virou realizada — por UC, pega o lote MAIS
-// ANTIGO em que `codigo` já aparece preenchido (a primeira vez que a
-// leitura daquela UC foi vista lançada), ordenado da mais antiga pra mais
-// recente. UC que nunca teve `codigo` preenchido em nenhum ciclo (ainda
-// não realizada) fica de fora — não tem "quando" pra uma coisa que não
-// aconteceu. Serve pra reconstruir a timeline "da primeira UC realizada
-// até a última execução" (aba Trilho, painel de livro específico).
+// Quando cada UC do livro virou realizada — por UC, pega a linha de MENOR
+// id em que `codigo` já aparece preenchido (a primeira vez que a leitura
+// daquela UC foi vista lançada), ordenado da mais antiga pra mais recente
+// (mesmo motivo de usar `id` em vez de hora_import — ver
+// listarUcsAtuaisDoLivro). UC que nunca teve `codigo` preenchido em nenhum
+// ciclo (ainda não realizada) fica de fora — não tem "quando" pra uma
+// coisa que não aconteceu. Serve pra reconstruir a timeline "da primeira
+// UC realizada até a última execução" (aba Trilho, painel de livro
+// específico).
 async function listarTimelineUcsRealizadasDoLivro(db, livro) {
   const brutas = await consultarUcsBrutasDoLivro(db, livro);
   const primeiraRealizacaoPorUc = new Map();
   for (const linha of brutas) {
     if (!linha.codigo) continue;
-    const epoch = paraEpoch(linha.data_import, linha.hora_import);
     const atual = primeiraRealizacaoPorUc.get(linha.uc);
-    if (!atual || epoch < atual.epoch) {
-      primeiraRealizacaoPorUc.set(linha.uc, { ...linha, epoch });
+    if (!atual || linha.id < atual.id) {
+      primeiraRealizacaoPorUc.set(linha.uc, linha);
     }
   }
   return [...primeiraRealizacaoPorUc.values()]
-    .sort((a, b) => a.epoch - b.epoch)
-    .map(({ epoch, ...resto }) => resto);
+    .sort((a, b) => a.id - b.id)
+    .map(({ id, ...resto }) => resto);
 }
 
 async function obterUcsDoLivro(db, livro) {
@@ -1020,7 +1057,7 @@ async function historicoContrLivro(db, livro) {
       SUM(${digitados})::int AS digitados,
       SUM(${naoDigitados})::int AS nao_digitados,
       STRING_AGG(DISTINCT ${LEITURISTA_CONTR_SQL}, ', ' ORDER BY ${LEITURISTA_CONTR_SQL}) AS leiturista
-    FROM contr_execucao_leitura c
+    FROM ${contrDedupSql('c2.livro = $1')} c
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
     ${joinCalendarioContr()}
     WHERE c.livro = $1
@@ -1042,4 +1079,4 @@ async function historicoContrLivro(db, livro) {
   }));
 }
 
-module.exports = { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro, obterUcsDoLivro };
+module.exports = { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro, obterUcsDoLivro, contrDedupSql };

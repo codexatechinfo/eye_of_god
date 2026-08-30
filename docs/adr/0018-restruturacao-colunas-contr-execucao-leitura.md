@@ -900,6 +900,106 @@ mesmo risco (não reportado pelo usuário até agora, mas mesma causa raiz).
 
 `npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console.
 
+## Adendo 19 — causa raiz real da divergência do Adendo 18: UC duplicada dentro do mesmo lote, em TODOS os livros
+
+O fix do Adendo 18 (parar de cachear `atuais` indefinidamente) reduziria a divergência a zero
+SE as duas fontes já concordassem quando ambas estão frescas — usuário reportou que **não**:
+mesmo logo depois do fix, o card do colaborador (41) e o painel do livro (40) continuavam
+diferentes pro mesmo livro único. Isso descartava cache como causa e apontava pra uma
+divergência real entre os dois métodos de agregação.
+
+### Investigação
+
+Comparando as duas fontes linha a linha pro livro `004489`: a "última batch de hoje" (usada
+pelo card do colaborador) tinha **348 linhas brutas**, mas só **273 UCs distintas** — 75 UCs
+apareciam 2 ou 3 vezes no MESMO lote (mesmo `data_import`+`hora_import`), às vezes com `codigo`
+diferente entre as cópias (ex.: UC `97187267` com `['000', '000', '099']`). Levantamento em toda
+a tabela: **os 360 livros** do lote do dia tinham duplicata — 11.909 linhas brutas contra 9.820
+UCs distintas (21% de inflação). Em toda a história da tabela: 133.057 linhas com UC, 18.415
+delas duplicatas a mais (14%).
+
+O card do colaborador (`SUM(...)` sobre linhas cruas, Adendo 17) contava cada cópia da UC
+duplicada separadamente; o painel do livro (`listarUcsAtuaisDoLivro`, Adendo 15) já deduplicava
+por UC, mas desempatava por `paraEpoch(data_import, hora_import)` — que só tem granularidade de
+**segundo**, incapaz de distinguir duplicatas do MESMO lote (mesmo segundo exato) de forma
+determinística. Duas contagens diferentes, cada uma com um problema diferente: uma não
+deduplicava nada, a outra deduplicava com desempate ambíguo.
+
+### Causa raiz real: exceção dentro de um `finally` descartava um retorno de sucesso
+
+Em `copelScraperService.js#abrirEExtrairOs`, o bloco `finally` fecha a tela de detalhe da OS:
+
+```js
+} finally {
+  if (popup) {
+    await popup.close().catch(() => {});
+  } else if (usouMesmaPagina) {
+    await fecharTelaDetalheMesmaPagina(page);   // SEM .catch() — diferente do popup acima
+  }
+}
+```
+
+`fecharTelaDetalheMesmaPagina` clica no botão "CANCELAR"; sob várias abas competindo pela mesma
+sessão (ver ADR 0020), esse clique podia falhar/dar timeout. Em JavaScript, uma exceção lançada
+dentro de um `finally` **descarta silenciosamente** o `return` (ou exceção) do `try`/`catch`
+associado — mesmo que o `try` já tivesse retornado `'ok'` com `linhasUc` já extraída e **já
+empurrada em `registros`** (`for (const uc of linhasUc) registros.push({ ...alvo, ...uc })`,
+executado ANTES do `finally`). O `worker()` então via essa chamada como `erro_inesperado` (não
+como sucesso) e devolvia o livro pra fila (`filaLivros.push(alvo)`) pra retentativa — que, se bem
+sucedida, extraía as MESMAS UCs de novo, duplicando-as em `registros`. Explica também o `codigo`
+diferente entre cópias: minutos podem se passar entre a tentativa original e a retentativa (o
+livro reentra no FIM da fila compartilhada), tempo suficiente pra um leiturista real lançar uma
+leitura nesse meio-tempo.
+
+### Correções
+
+1. **`copelScraperService.js`**: `fecharTelaDetalheMesmaPagina(page)` no `finally` agora tem
+   `.catch()` — uma falha ao fechar a tela nunca mais derruba um `return 'ok'` já decidido.
+   Como recuperação, se o fechamento falhar, a aba renavega pra `URL_ACOMPANHAMENTO` e refaz
+   filtro+busca (mesmo padrão de `recuperarAba`) — evita que essa aba fique presa na tela de
+   detalhe pro próximo livro da fila.
+2. **Desempate por `id` em vez de `data_import`+`hora_import`** — tanto na correção pontual do
+   Adendo 18 quanto agora nas queries principais: `id` (bigserial, estritamente cronológico) tem
+   resolução maior que a hora (só segundos) e desempata duplicatas do MESMO lote de forma
+   determinística. Aplicado em `massivasService.js#listarUcsAtuaisDoLivro`/
+   `listarTimelineUcsRealizadasDoLivro` (trocando `paraEpoch(...)` por `id`).
+3. **Deduplicação nas queries principais do dashboard** — `contarFonteContr`, `obterFaixasDias`,
+   `detalheContr`, `historicoContrLivro` (`massivasService.js`) e `calcularLeituraUrbana`
+   (`leituraUrbanaService.js`) somavam linhas cruas de `contr_execucao_leitura` sem deduplicar
+   por UC — mesmo bug do card do colaborador, só que afetando Realizados/Não realizados/
+   Progresso/Leituras da tabela principal de Monitoramento de Livros e do painel de Leitura
+   Urbana, pra TODO livro, não só o do print do usuário. Nova função `contrDedupSql(condicaoEscopo)`
+   (exportada de `massivasService.js`, reaproveitada em `leituraUrbanaService.js`): recebe a
+   condição de escopo que o chamador já aplicaria de qualquer forma (por lote específico, ou por
+   livro inteiro pra `historicoContrLivro`) e devolve uma subquery `DISTINCT ON (livro,
+   data_import, hora_import, uc) ... ORDER BY ..., id DESC` — dedup **restrito ao escopo já
+   filtrado** (não a tabela inteira), barato o bastante pra não precisar de índice novo (~30
+   linhas por livro por lote). Trocado `FROM contr_execucao_leitura c` por
+   `FROM ${contrDedupSql(...)} c` nos 5 pontos, sem tocar em `SELECT`/`JOIN`/`WHERE`/parâmetros
+   existentes — o filtro redundante que sobra no `WHERE` externo (`c.data_import = $1 AND
+   c.hora_import = $2`, já coberto pela subquery) foi deixado como está, inofensivo.
+4. **Limpeza dos dados já duplicados**: `DELETE` (com verificação prévia e `COMMIT` só se os
+   números batessem) mantendo, por `(livro, data_import, hora_import, uc)`, só a linha de maior
+   `id`. Removidas **20.144 linhas** (tabela cresceu durante a investigação por causa da coleta
+   rodando em paralelo — a duplicidade a mais reflete ciclos adicionais coletados nesse meio-
+   tempo, ainda com o scraper antigo/sem o fix rodando até o momento do restart). Confirmado
+   zero grupos duplicados após o `COMMIT`.
+
+### Verificação
+
+- Funções corrigidas testadas diretamente contra o banco real (fora da camada HTTP,
+  `obterResumo`/`obterDetalhe`/`obterHistoricoLivro`/`calcularLeituraUrbana`): todas rodam sem
+  erro de SQL. `detalheContr` pro livro `004489` retornou `digitados: 237, nao_digitados: 36` —
+  batendo exatamente com a contagem deduplicada calculada manualmente antes da correção (237+36
+  = 273 UCs distintas, não mais as 348 linhas brutas infladas).
+- O processo de coleta já estava rodando com o fix do scraper carregado (nodemon reiniciou
+  sozinho ao detectar a mudança no arquivo, confirmado comparando o horário de início do
+  processo com o horário do `git`/edição do arquivo). Verificado direto no banco: **zero**
+  grupos duplicados entre os ~30.000 registros inseridos pelos ciclos de coleta rodados DEPOIS
+  da limpeza — confirma que a correção do scraper está funcionando de verdade em produção, não
+  só em teoria.
+- `npm test` (12 testes de isolamento de tenant) continua passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

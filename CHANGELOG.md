@@ -71,6 +71,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   "Histórico do livro" de Massivas); painel da aba Trilho agora também atualiza sozinho a cada
   60s enquanto estiver aberto. Ver Adendo 18 da
   [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+- **Causa raiz real do Adendo 18**: uma exceção dentro de um `finally` (fechar a tela de detalhe
+  da OS podia falhar sob várias abas competindo pela mesma sessão) descartava silenciosamente um
+  `return` de sucesso já decidido em `copelScraperService.js`, fazendo o worker reprocessar um
+  livro que já tinha extraído com êxito — duplicando UCs no mesmo lote (visto em produção: os
+  360 livros do dia tinham 21% de linhas duplicadas). Corrigido o `finally` para nunca deixar
+  esse tipo de falha derrubar uma extração já bem-sucedida. Estendida a deduplicação (por UC,
+  desempatando por `id` em vez de `data_import`/`hora_import` — que só tem granularidade de
+  segundo) pras queries principais de Realizados/Não realizados/Progresso (Monitoramento de
+  Livros) e do painel de Leitura Urbana, que somavam linhas cruas sem deduplicar. Limpas 20.144
+  linhas duplicadas já gravadas no banco. Ver Adendo 19 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 
 - Resumo da aba Massivas (`GET /massivas/resumo`) falhava com `column reference "id" is
   ambiguous` — `contarFonteContr()` junta `contr_execucao_leitura`, `cidades_localidades` e

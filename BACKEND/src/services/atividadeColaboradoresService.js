@@ -156,15 +156,33 @@ async function listarAtividadeHoje(db) {
   const [{ rows: linhas }, mapaPrazoRegulatorio] = await Promise.all([
     db.query(
       `
+      WITH linhas_dedup AS (
+        -- O scraper às vezes grava a mesma UC mais de uma vez dentro do
+        -- MESMO lote (mesmo hora_import, até com codigo diferente entre as
+        -- cópias) — usuário reportou um caso real: livro com 348 linhas
+        -- brutas mas só 273 UCs distintas naquele lote. Sem este DISTINCT ON,
+        -- o SUM(...) abaixo conta a UC duplicada mais de uma vez, inflando
+        -- digitados/nao_digitados/impedimentos em relação ao painel de
+        -- detalhe do livro (que já deduplica por UC — ver
+        -- listarUcsAtuaisDoLivro em massivasService.js). id (bigserial,
+        -- estritamente cronológico) desempata de forma determinística —
+        -- hora_import só tem granularidade de segundo e não distingue
+        -- duplicatas do mesmo lote.
+        SELECT DISTINCT ON (livro, hora_import, uc)
+          id, livro, etapa, situacao, colaborador, hora_import,
+          data_recebimento, data_prevista_limite, codigo
+        FROM contr_execucao_leitura
+        WHERE data_import = $1
+          AND situacao IS NOT NULL
+          AND situacao <> 'Pendente'
+        ORDER BY livro, hora_import, uc, id DESC
+      )
       SELECT livro, etapa, situacao, colaborador, hora_import,
         data_recebimento, data_prevista_limite,
         SUM(CASE WHEN codigo IS NOT NULL THEN 1 ELSE 0 END)::int AS digitados,
         SUM(CASE WHEN codigo IS NULL THEN 1 ELSE 0 END)::int AS nao_digitados,
         SUM(CASE WHEN codigo IS NOT NULL AND codigo NOT IN ('000', '099') THEN 1 ELSE 0 END)::int AS impedimentos
-      FROM contr_execucao_leitura
-      WHERE data_import = $1
-        AND situacao IS NOT NULL
-        AND situacao <> 'Pendente'
+      FROM linhas_dedup
       GROUP BY livro, etapa, situacao, colaborador, hora_import, data_recebimento, data_prevista_limite
       ORDER BY hora_import ASC, MIN(id) ASC
       `,

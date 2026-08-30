@@ -1,3 +1,5 @@
+const { contrDedupSql } = require('./massivasService');
+
 const FILTRO_LEITURA = `
   c.data_recebimento IS NOT NULL
   AND c.data_prevista_limite IS NOT NULL
@@ -50,7 +52,7 @@ async function calcularLeituraUrbana(db) {
       -- situacao, que não tem mais o parêntese com o nome; o regex nunca
       -- casava e essa contagem ficava presa em no máximo 1.
       COUNT(DISTINCT CASE WHEN c.situacao = 'Em Execução' THEN c.colaborador END)::int AS leituristas_ativos
-    FROM contr_execucao_leitura c
+    FROM ${contrDedupSql('c2.data_import = $1 AND c2.hora_import = $2')} c
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
     WHERE c.data_import = $1 AND c.hora_import = $2
       AND ${FILTRO_LEITURA}

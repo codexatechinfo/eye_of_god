@@ -363,7 +363,24 @@ async function abrirEExtrairOs({ page, alvo, registros, rotulo, estadoDiagnostic
     if (popup) {
       await popup.close().catch(() => {});
     } else if (usouMesmaPagina) {
-      await fecharTelaDetalheMesmaPagina(page);
+      // Precisa ser à prova de erro: uma exceção aqui dentro do `finally`
+      // descarta silenciosamente o `return 'ok'` do `try` acima — mesmo com
+      // `linhasUc` já extraída e empurrada em `registros` com sucesso. O
+      // worker então trata essa extração (que JÁ funcionou) como falha e
+      // devolve o livro pra fila; na retentativa bem-sucedida, as MESMAS UCs
+      // são extraídas de novo, duplicando linhas (com `codigo` podendo
+      // divergir entre as cópias, já que minutos se passam entre uma
+      // tentativa e outra). Causa raiz real de um bug em produção: todo
+      // livro coletado saía com ~20% de UCs duplicadas. Ver ADR 0018 Adendo 18.
+      await fecharTelaDetalheMesmaPagina(page).catch(async erroFechar => {
+        logWarn(
+          `[Coleta Acomp]${rotulo} ⚠️ Falha ao fechar tela de detalhe do livro '${alvo.livro}': ` +
+            `${erroFechar.message} — UCs já extraídas com sucesso, seguindo mesmo assim. ` +
+            'Renavegando pra lista pra não deixar esta aba presa na tela de detalhe.',
+        );
+        await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(() => {});
+        await aplicarFiltroEBuscar(page).catch(() => {});
+      });
     }
   }
 }

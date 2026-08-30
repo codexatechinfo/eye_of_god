@@ -7,6 +7,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Nova tabela `coordenadas_ucs_mineradas` (20 colunas de UC/endereço/coordenadas, todas
+  `varchar(255)` — PostGIS não está instalado, mesmo padrão de texto já usado em
+  `tab_ligacao_coordenadas`), com RLS multi-tenant idêntico ao das demais tabelas de negócio.
+  Sem código de aplicação ainda — só a tabela. Ver
+  [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
+
 - Aba Trilho: o calendário de data (antes travado só em hoje) agora permite navegar pra dias de
   execução passados — Realizados/Não realizados/Impedimentos/lista de livros/cards do
   colaborador atualizam pra refletir o dia selecionado. Timeline UC-a-UC do painel de livro

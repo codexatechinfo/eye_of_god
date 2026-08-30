@@ -37,6 +37,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   custo adicional (o `href` já era lido pra extrair o osId). Ver adendos "validado ao vivo... a
   correção" e "URL de destino também extraída por linha" da
   [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+- Monitoramento de Livros (leitura/releitura) adaptado para `contr_execucao_leitura` com 1
+  linha por UC: coluna "Executados/Pendentes" renomeada para "Realizados/Não realizados"
+  (`codigo IS NOT NULL` = realizada), agregação por `livro` via window function, cards
+  "Agentes em campo" e "Progresso de atividades" voltaram a refletir colaboradores de
+  leitura/releitura. Modal "Histórico do livro" passou a listar também as UCs individuais do
+  livro, e o painel de livro da aba Trilho passou a mostrar uma timeline UC-a-UC (primeira
+  realizada até a última execução) via novo endpoint `GET /massivas/livro-ucs`. "Último
+  sincronismo" do colaborador ficou sempre visível na lista lateral da aba Trilho (antes só no
+  card expandido). Ver Adendo 15 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 
 ### Corrigido
 
@@ -44,6 +54,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   ambiguous` — `contarFonteContr()` junta `contr_execucao_leitura`, `cidades_localidades` e
   `calendario_leitura` (todas com coluna `id`) e o `ORDER BY` não qualificava por alias.
   Corrigido para `ORDER BY c.livro, c.id ASC`. Ver Adendo 14 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+- Progresso do Monitoramento de Livros mostrava percentuais impossíveis (ex.: "169/12"
+  exibindo "1%"). Causa: `SUM(...) OVER (...)` do Postgres devolve `bigint`, que o driver `pg`
+  entrega como string em JS; sem `::int`, `digitados + nao_digitados` no frontend virava
+  concatenação de string, não soma. Corrigido envolvendo as duas constantes de agregação em
+  `(...)::int`. Ver Adendo 15 da
   [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 - Scraper de Acompanhamento: a coleta terminava "com sucesso" cedo demais, sem processar
   todas as etapas — a lista de etapas não é paginada, mas carrega no DOM aos poucos

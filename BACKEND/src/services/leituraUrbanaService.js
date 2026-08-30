@@ -34,17 +34,22 @@ async function calcularLeituraUrbana(db) {
       COALESCE(cl.regional, 'SEM BASE') AS base,
       MIN(to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')) AS prazo_min,
       MAX(to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')) AS prazo_max,
-      COUNT(*)::int AS livros,
-      -- qtd_digitados_nao_digitados saiu do schema (contr_execucao_leitura
-      -- agora só guarda etapa/localidade/livro/empreiteira/datas/situacao +
-      -- uc/colaborador/codigo/equipamento/tipo_especificacao/faturamento/
-      -- leitura_atual, ainda sem scraping); zerado até a nova lógica de
-      -- progresso ser definida com as colunas da aba nova do portal.
-      0::int AS digitados,
-      0::int AS nao_digitados,
-      COUNT(DISTINCT CASE WHEN c.situacao LIKE 'Em Execução%'
-          THEN regexp_replace(c.situacao, '^Em Execução \\([^-]*-(.*)\\)$', '\\1')
-          END)::int AS leituristas_ativos
+      -- Um livro agora tem várias linhas (uma por UC/medidor, ver ADR 0018
+      -- Adendo 2) — COUNT(*) contaria UCs, não livros.
+      COUNT(DISTINCT c.livro)::int AS livros,
+      -- Realizados/não realizados por UC: coluna codigo preenchida =
+      -- realizada (o import já converte string vazia em NULL — ver
+      -- copelImportService.js). Já dentro de um GROUP BY de verdade
+      -- (linha abaixo), então SUM() agrega direto, sem precisar de window
+      -- function (comparar com CONTR_REALIZADO_LIVRO_SQL em
+      -- massivasService.js, usada só onde não há GROUP BY real).
+      SUM(CASE WHEN c.codigo IS NOT NULL THEN 1 ELSE 0 END)::int AS digitados,
+      SUM(CASE WHEN c.codigo IS NULL THEN 1 ELSE 0 END)::int AS nao_digitados,
+      -- colaborador já vem separado da coluna própria (populada no
+      -- import) — antes tentava re-extrair o nome via regex de dentro de
+      -- situacao, que não tem mais o parêntese com o nome; o regex nunca
+      -- casava e essa contagem ficava presa em no máximo 1.
+      COUNT(DISTINCT CASE WHEN c.situacao = 'Em Execução' THEN c.colaborador END)::int AS leituristas_ativos
     FROM contr_execucao_leitura c
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
     WHERE c.data_import = $1 AND c.hora_import = $2

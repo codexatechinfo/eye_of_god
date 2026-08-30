@@ -8,10 +8,8 @@ const TABELAS_MASSIVA = {
 const CONTAGEM_ZERO = { livros: 0, leituras: 0 };
 const ROTULO_STATUS = { pendentes: 'Pendente', atribuidas: 'Atribuída', emExecucao: 'Em Execução' };
 
-// ── status/leiturista de leitura/releitura vêm da coluna situacao de
-// contr_execucao_leitura, não de qual tabela a linha está — mesmo formato
-// "Em Execução (X - NOME)" / "Atribuída (X - NOME)" já usado em
-// atividadeColaboradoresService.js, só que calculado em SQL aqui.
+// ── status de leitura/releitura vem da coluna situacao de
+// contr_execucao_leitura, não de qual tabela a linha está.
 const STATUS_CONTR_SQL = `
   CASE
     WHEN c.situacao ~ '^Em Execução' THEN 'Em Execução'
@@ -19,13 +17,13 @@ const STATUS_CONTR_SQL = `
     ELSE 'Pendente'
   END
 `;
-const LEITURISTA_CONTR_SQL = `
-  CASE
-    WHEN c.situacao ~ '^(Em Execução|Atribuída)'
-    THEN trim(regexp_replace(c.situacao, '^(?:Em Execução|Atribuída)\\s*\\([^-]*-(.*)\\)$', '\\1'))
-    ELSE NULL
-  END
-`;
+// Colaborador vem direto da coluna própria (populada no import — ver
+// parseSituacaoColaborador em copelImportService.js). Antes disso existir,
+// esta constante tentava re-extrair o nome via regex de dentro de
+// `situacao` (formato antigo "Em Execução (X-NOME)") — mas `situacao` já
+// vem limpo do banco desde então, então o regex nunca mais casava e
+// `leiturista_calc` saía igual a `c.situacao`, não o nome do colaborador.
+const LEITURISTA_CONTR_SQL = 'c.colaborador';
 
 // ── leitura vs releitura: só a data manda, independente da situação ──
 // recebido antes do prazo é leitura; recebido no prazo ou depois é releitura
@@ -235,15 +233,42 @@ function condicaoQuantidadeNao(coluna) {
   return `CASE WHEN ${coluna} ~ '^[0-9]+/[0-9]+$' THEN split_part(${coluna}, '/', 2)::int ELSE 0 END`;
 }
 
-// qtd_digitados_nao_digitados saiu de contr_execucao_leitura (ver
-// copelImportService.js) — todo digitados/nao_digitados calculado a partir
-// dela fica zerado até a nova lógica de progresso ser definida com as
-// colunas da aba nova do portal (uc/leitura_atual/etc). Fonte massiva
-// (t.qtd_digitados_nao_digitados, pendentes_im/atribuidas_im/em_execucao_im)
-// não foi tocada — continua usando condicaoQuantidade/condicaoQuantidadeNao
-// normalmente.
-const CONTR_DIGITADOS_SQL = '0';
-const CONTR_NAO_DIGITADOS_SQL = '0';
+// Progresso da fonte leitura/releitura: uma UC (uma linha de
+// contr_execucao_leitura) é "realizada" quando a coluna `codigo` está
+// preenchida (o import já converte string vazia em NULL — ver
+// copelImportService.js), "não realizada" quando está NULL.
+//
+// Duas versões de cada — CRUA (por linha/UC) e agregada POR LIVRO (via
+// window function `SUM(...) OVER (PARTITION BY c.livro)`) — porque um
+// livro agora tem várias linhas (uma por UC, ver ADR 0018 Adendo 2) e as
+// duas formas de consultar essa tabela precisam de uma ou de outra:
+// queries com `GROUP BY` de verdade (historicoContrLivro) usam a crua
+// dentro do próprio SUM; queries com `DISTINCT ON (c.livro)` (que
+// escolhem UMA linha pra representar o livro, mas ainda assim precisam do
+// total de TODAS as UCs dele) usam a agregada. Nunca reaproveitar uma no
+// lugar da outra: a crua sozinha numa DISTINCT ON reintroduz o mesmo bug
+// que isso corrige (conta só a UC escolhida, não o livro inteiro); a
+// agregada dentro de um SUM (agregado sobre agregado) é erro de sintaxe.
+//
+// Essa agregação só fica correta enquanto nenhum filtro do WHERE dessas
+// queries discriminar por UC (hoje todos — tipoServico, prazo, faixaDias,
+// regional, livro, etapa — vêm de campos de cabeçalho, idênticos em toda
+// UC do mesmo livro): um filtro por UC no futuro faria a window function
+// refletir só o subconjunto filtrado, não o livro inteiro.
+//
+// Fonte massiva (t.qtd_digitados_nao_digitados, pendentes_im/atribuidas_im/
+// em_execucao_im) não foi tocada — continua usando
+// condicaoQuantidade/condicaoQuantidadeNao normalmente.
+const CONTR_REALIZADO_LINHA_SQL = 'CASE WHEN c.codigo IS NOT NULL THEN 1 ELSE 0 END';
+const CONTR_NAO_REALIZADO_LINHA_SQL = 'CASE WHEN c.codigo IS NULL THEN 1 ELSE 0 END';
+// `SUM(...) OVER(...)` devolve bigint no Postgres — sem o cast, o driver
+// `pg` manda esse valor pro Node como STRING (pra não perder precisão em
+// bigint grande), e "169" + "12" vira concatenação ("16912"), não soma
+// (169+12=181). Resultado visto ao vivo: progresso de livros com muitas
+// UCs saindo grosseiramente errado (169/12 mostrando 1% em vez de ~93%).
+// `::int` aqui garante que o valor chega no JS já como number.
+const CONTR_REALIZADO_LIVRO_SQL = `(SUM(${CONTR_REALIZADO_LINHA_SQL}) OVER (PARTITION BY c.livro))::int`;
+const CONTR_NAO_REALIZADO_LIVRO_SQL = `(SUM(${CONTR_NAO_REALIZADO_LINHA_SQL}) OVER (PARTITION BY c.livro))::int`;
 
 async function contarTabela(db, chave, dataImport, horaImport, filtros) {
   const { nome, temLeiturista } = TABELAS_MASSIVA[chave];
@@ -306,11 +331,11 @@ async function contarFonteContr(db, statusChave, tipoServico, dataImport, horaIm
   const condicaoPrazoInterna = condicaoSqlPrazoContr(filtros.condicaoPrazo);
   if (condicaoPrazoInterna) condicoesExtras.push(condicaoPrazoInterna);
 
-  // qtd_digitados_nao_digitados saiu de contr_execucao_leitura (ver
-  // copelImportService.js) — zerado até a nova lógica de progresso ser
-  // definida com as colunas da aba nova do portal.
-  const digitados = CONTR_DIGITADOS_SQL;
-  const naoDigitados = CONTR_NAO_DIGITADOS_SQL;
+  // Realizados/não realizados agregados por LIVRO (todas as UCs dele),
+  // não só da UC que o DISTINCT ON abaixo escolhe pra representar o livro
+  // — ver comentário de CONTR_REALIZADO_LIVRO_SQL.
+  const digitados = CONTR_REALIZADO_LIVRO_SQL;
+  const naoDigitados = CONTR_NAO_REALIZADO_LIVRO_SQL;
 
   const sql = `
     SELECT COUNT(*)::int AS livros, COALESCE(SUM(digitados) + SUM(nao_digitados), 0)::int AS leituras
@@ -460,10 +485,10 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
     condicoesExtras.push(`cl.regional = $${parametros.length + 2}`);
   }
 
-  // qtd_digitados_nao_digitados saiu de contr_execucao_leitura — zerado até
-  // a nova lógica de progresso ser definida (ver CONTR_DIGITADOS_SQL).
-  const digitados = CONTR_DIGITADOS_SQL;
-  const naoDigitados = CONTR_NAO_DIGITADOS_SQL;
+  // Realizados/não realizados agregados por LIVRO — ver comentário de
+  // CONTR_REALIZADO_LIVRO_SQL.
+  const digitados = CONTR_REALIZADO_LIVRO_SQL;
+  const naoDigitados = CONTR_NAO_REALIZADO_LIVRO_SQL;
 
   // livros = 1 linha por livro (contagem direta); leituras = soma de
   // digitados+não digitados do próprio livro — mesma dupla {livros,
@@ -491,7 +516,7 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
           AND preg.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
         WHERE c.data_import = $1 AND c.hora_import = $2
           ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
-        ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
+        ORDER BY c.livro, c.id ASC
       ) x
     ) classificado
     WHERE faixa IS NOT NULL
@@ -763,10 +788,10 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
   if (condicaoTipo) condicoesExtras.push(condicaoTipo);
 
   const status = filtros.status && filtros.status !== 'todos' ? ROTULO_STATUS[filtros.status] : null;
-  // qtd_digitados_nao_digitados saiu de contr_execucao_leitura — zerado até
-  // a nova lógica de progresso ser definida (ver CONTR_DIGITADOS_SQL).
-  const digitados = CONTR_DIGITADOS_SQL;
-  const naoDigitados = CONTR_NAO_DIGITADOS_SQL;
+  // Realizados/não realizados agregados por LIVRO — ver comentário de
+  // CONTR_REALIZADO_LIVRO_SQL.
+  const digitados = CONTR_REALIZADO_LIVRO_SQL;
+  const naoDigitados = CONTR_NAO_REALIZADO_LIVRO_SQL;
 
   const condicaoPrazoExterna = condicaoSqlPrazoContr(filtros.prazo);
   if (condicaoPrazoExterna) condicoesExtras.push(condicaoPrazoExterna);
@@ -801,7 +826,7 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
       ${joinPrazoRegLivros()}
       WHERE c.data_import = $1 AND c.hora_import = $2
         ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
-      ORDER BY c.livro, (${digitados} + ${naoDigitados}) ASC
+      ORDER BY c.livro, c.id ASC
     ) escolhido
     WHERE 1 = 1
       ${status ? `AND status_calc = '${status}'` : ''}
@@ -863,6 +888,76 @@ async function obterHistoricoLivro(db, livro) {
   return { livro, eventos };
 }
 
+// Todas as linhas de UC de um livro, sem nenhuma agregação — ao contrário
+// de historicoContrLivro (que soma tudo por lote via GROUP BY e perde a
+// identidade de cada UC), aqui cada linha é uma UC específica num ciclo de
+// coleta específico. Um livro coletado em vários ciclos pode ter a mesma
+// UC aparecendo mais de uma vez (codigo NULL num ciclo, preenchido no
+// seguinte, quando o leiturista finalmente lança a leitura) — é essa
+// repetição que permite reconstruir tanto "estado atual de cada UC" quanto
+// "quando cada UC virou realizada" a partir da mesma consulta.
+async function consultarUcsBrutasDoLivro(db, livro) {
+  const { rows } = await db.query(
+    `
+    SELECT uc, codigo, equipamento, tipo_especificacao, faturamento, leitura_atual,
+      situacao, colaborador, data_import, hora_import
+    FROM contr_execucao_leitura
+    WHERE livro = $1 AND uc IS NOT NULL
+    `,
+    [livro],
+  );
+  return rows;
+}
+
+// Estado ATUAL de cada UC do livro — pega, por UC, a linha do lote mais
+// recente (não importa se realizada ou não, só a mais nova). Serve pra
+// mostrar "como está o livro agora, UC por UC" (Monitoramento de Livros).
+async function listarUcsAtuaisDoLivro(db, livro) {
+  const brutas = await consultarUcsBrutasDoLivro(db, livro);
+  const porUc = new Map();
+  for (const linha of brutas) {
+    const epoch = paraEpoch(linha.data_import, linha.hora_import);
+    const atual = porUc.get(linha.uc);
+    if (!atual || epoch >= atual.epoch) {
+      porUc.set(linha.uc, { ...linha, epoch });
+    }
+  }
+  return [...porUc.values()]
+    .sort((a, b) => a.uc.localeCompare(b.uc))
+    .map(({ epoch, ...resto }) => resto);
+}
+
+// Quando cada UC do livro virou realizada — por UC, pega o lote MAIS
+// ANTIGO em que `codigo` já aparece preenchido (a primeira vez que a
+// leitura daquela UC foi vista lançada), ordenado da mais antiga pra mais
+// recente. UC que nunca teve `codigo` preenchido em nenhum ciclo (ainda
+// não realizada) fica de fora — não tem "quando" pra uma coisa que não
+// aconteceu. Serve pra reconstruir a timeline "da primeira UC realizada
+// até a última execução" (aba Trilho, painel de livro específico).
+async function listarTimelineUcsRealizadasDoLivro(db, livro) {
+  const brutas = await consultarUcsBrutasDoLivro(db, livro);
+  const primeiraRealizacaoPorUc = new Map();
+  for (const linha of brutas) {
+    if (!linha.codigo) continue;
+    const epoch = paraEpoch(linha.data_import, linha.hora_import);
+    const atual = primeiraRealizacaoPorUc.get(linha.uc);
+    if (!atual || epoch < atual.epoch) {
+      primeiraRealizacaoPorUc.set(linha.uc, { ...linha, epoch });
+    }
+  }
+  return [...primeiraRealizacaoPorUc.values()]
+    .sort((a, b) => a.epoch - b.epoch)
+    .map(({ epoch, ...resto }) => resto);
+}
+
+async function obterUcsDoLivro(db, livro) {
+  const [atuais, timeline] = await Promise.all([
+    listarUcsAtuaisDoLivro(db, livro),
+    listarTimelineUcsRealizadasDoLivro(db, livro),
+  ]);
+  return { livro, atuais, timeline };
+}
+
 // Um livro pode ter mais de uma linha no mesmo lote (ex.: dois leituristas
 // trabalhando nele ao mesmo tempo em em_execucao_im). Agrupa por lote antes
 // de comparar, senão a alternância entre as linhas gera falsas trocas de
@@ -910,10 +1005,12 @@ async function historicoMassivaLivro(db, livro) {
 }
 
 async function historicoContrLivro(db, livro) {
-  // qtd_digitados_nao_digitados saiu de contr_execucao_leitura — zerado até
-  // a nova lógica de progresso ser definida (ver CONTR_DIGITADOS_SQL).
-  const digitados = CONTR_DIGITADOS_SQL;
-  const naoDigitados = CONTR_NAO_DIGITADOS_SQL;
+  // Versão CRUA (por linha/UC), não a agregada por livro — esta query já
+  // tem GROUP BY de verdade, o SUM() abaixo já agrega sozinho. Usar a
+  // versão com window function aqui seria agregado-sobre-agregado (erro de
+  // sintaxe) — ver comentário de CONTR_REALIZADO_LIVRO_SQL.
+  const digitados = CONTR_REALIZADO_LINHA_SQL;
+  const naoDigitados = CONTR_NAO_REALIZADO_LINHA_SQL;
 
   const sql = `
     SELECT ${STATUS_CONTR_SQL} AS status,
@@ -945,4 +1042,4 @@ async function historicoContrLivro(db, livro) {
   }));
 }
 
-module.exports = { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro };
+module.exports = { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro, obterUcsDoLivro };

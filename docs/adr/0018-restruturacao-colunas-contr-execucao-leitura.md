@@ -672,6 +672,106 @@ ordenavam por uma expressão calculada, não por `id` puro, então não sofriam 
 Corrigido qualificando: `ORDER BY c.livro, c.id ASC`. Validado direto no banco local com os
 mesmos LEFT JOINs da query real. `npm test` (12 testes) continua passando.
 
+## Adendo 15 — Monitoramento de Livros adaptado para "1 linha por UC": Realizados/Não realizados, cards de agentes, e 4 pedidos de UC-por-UC
+
+Com o scraper já reestruturado (Adendo 2 em diante) e a fila por livro (ADR 0020) validada ao
+vivo, `contr_execucao_leitura` passou definitivamente a ter N linhas por livro (uma por UC), e
+o código de leitura dessas telas — que tinha ficado com `digitados`/`nao_digitados` zerados de
+propósito (ver "O que fica temporariamente zerado/incompleto" acima) — foi atualizado com as 6
+regras de negócio que o usuário definiu.
+
+### As 6 regras
+
+1. Mesma lógica de agregação de antes, agora agrupando por `livro` (uma UC deixou de ser "a
+   linha", o livro voltou a ser a unidade).
+2. `situacao` guarda só o status; `colaborador` (coluna separada, já existente desde o Adendo 2)
+   é o executor — vazio quando não há.
+3. Prazo regulatório mantém a mesma lógica, só reagrupando por `livro`.
+4. "Executados/Pendentes" → "Realizados/Não realizados": `codigo IS NOT NULL` = realizada,
+   `codigo IS NULL` = não realizada.
+5. "Progresso" usa a mesma fórmula, com os termos novos: `realizados / (realizados +
+   não_realizados) * 100`.
+6. `colaborador` alimenta tanto os cards "Agentes em campo" quanto os totais de
+   realizadas/não-realizadas do progresso.
+
+### Implementação
+
+- **`massivasService.js`**: `LEITURISTA_CONTR_SQL` trocado de um `regexp_replace` (tentava
+  extrair nome de dentro de `situacao`, que não existe mais ali) para referência direta a
+  `c.colaborador`. As antigas `CONTR_DIGITADOS_SQL`/`CONTR_NAO_DIGITADOS_SQL` (`'0'` fixo)
+  viraram 4 constantes: duas "cruas" por linha/UC (`CONTR_REALIZADO_LINHA_SQL`/
+  `CONTR_NAO_REALIZADO_LINHA_SQL`, `CASE WHEN c.codigo IS NOT NULL/IS NULL THEN 1 ELSE 0 END`)
+  e duas agregadas por livro via window function (`CONTR_REALIZADO_LIVRO_SQL`/
+  `CONTR_NAO_REALIZADO_LIVRO_SQL`, `SUM(...) OVER (PARTITION BY c.livro)`) — pares separados
+  porque `contarFonteContr`/`obterFaixasDias`/`detalheContr` usam `SELECT DISTINCT ON
+  (c.livro)` (precisam da versão-janela, que enxerga todas as UCs do livro mesmo colapsando
+  pra 1 linha), enquanto `historicoContrLivro` já tem um `GROUP BY` real (precisa da versão
+  crua, senão aninha agregação dentro de window function — erro de sintaxe do Postgres).
+- **`atividadeColaboradoresService.js`** (`listarAtividadeHoje`, alimenta os cards "Agentes em
+  campo"/"Progresso de atividades"): removido `SITUACAO_REGEX` (a extração de nome que ele
+  fazia não tem mais sentido — `colaborador` já vem limpo); query reescrita com `GROUP BY
+  livro, etapa, situacao, colaborador, ...` e `SUM(CASE WHEN codigo IS NOT NULL/IS NULL ...)`
+  reais; linha sem `colaborador` é ignorada (livro "Pendente", sem executor).
+- **`leituraUrbanaService.js`** (`calcularLeituraUrbana`, roda a cada ciclo de coleta): 3
+  correções — `COUNT(*)` (contava UCs) → `COUNT(DISTINCT c.livro)`; `digitados`/`nao_digitados`
+  fixos em `0` → `SUM(CASE WHEN c.codigo IS NOT NULL/IS NULL ...)`; `leituristas_ativos` (regex
+  quebrado, sempre ≤1) → `COUNT(DISTINCT CASE WHEN c.situacao = 'Em Execução' THEN c.colaborador
+  END)`.
+- **`massivas-view.html`**: rótulo da coluna condicional por `escopo` — "Realizados/Não
+  realizados" em `leiturarelitura`, "Executados/Pendentes" em `massiva` (mesmo padrão já usado
+  nas colunas "Tipo"/"Prazo regulatório").
+
+### Bug real encontrado e corrigido: `bigint` como string quebrava o percentual
+
+Usuário reportou (print) progresso "169/12" mostrando "1%" — matematicamente impossível.
+Causa: `SUM(...)` do Postgres em coluna inteira devolve `bigint`; o driver `pg` retorna
+`bigint` como **string** em JS (evita perda de precisão), a menos que seja explicitamente
+convertido. `CONTR_REALIZADO_LIVRO_SQL`/`CONTR_NAO_REALIZADO_LIVRO_SQL` não tinham `::int`, e
+`massivas-view.ts` fazia `linha.digitados + linha.nao_digitados` — `+` em duas strings é
+concatenação, não soma (`"169"+"12"` = `"16912"`, não `181`), daí `169/16912 ≈ 1%`. Corrigido
+envolvendo as duas constantes num `(...)::int` externo. Validado direto no banco:
+`typeof realizados === 'number'` e percentuais plausíveis (80,1%, 98,8%, 52,5%, 36,4%, 87,4%)
+para livros reais. Usuário confirmou: "progresso bateu".
+
+### 4 pedidos adicionais (verificação por 4 prints da tela real)
+
+1. **"Último sincronismo" sempre visível** — `lista-colaboradores.html`: antes só aparecia no
+   card expandido do colaborador; agora tem uma linha própria sempre visível logo abaixo do
+   nome, na lista lateral da aba Trilho (mesmo campo, `atividadeDe(...).ultimaMudancaHora`).
+2. **UCs do livro no modal "Histórico do livro"** (Monitoramento de Livros) — o modal mostrava
+   só a timeline de eventos agregados por lote; agora também lista, numa tabela abaixo da
+   timeline, cada UC do livro com código/situação/colaborador/último import.
+3. **Bug do progresso** — já coberto acima (fix do `::int`).
+4. **Timeline UC-a-UC no painel de livro da aba Trilho** — a seção "Histórico" do painel
+   (`livro-detalhe.html`, aberto ao clicar num livro do colaborador na lista lateral) mostrava
+   eventos por lote (mudança de situação/colaborador); trocada por uma timeline UC-a-UC — pra
+   cada UC do livro, a data/hora em que ela apareceu com `codigo` preenchido pela primeira vez,
+   ordenada da mais antiga pra mais recente (primeira realizada → última execução).
+
+Pedidos 2 e 4 compartilham a mesma fonte de dado nova, `GET /massivas/livro-ucs?livro=X`
+(`obterUcsDoLivro`, `massivasService.js`) — não havia, até então, nenhuma consulta que
+devolvesse UC individual (tudo já vinha agregado por livro). A função lê todas as linhas cruas
+do livro (`consultarUcsBrutasDoLivro`) e deriva dois recortes em memória (não em SQL, porque
+cada recorte precisa de uma regra de "qual linha vence" diferente por UC):
+
+- `atuais` (pedido 2): para cada UC, a linha do lote **mais recente** (`data_import`+
+  `hora_import` mais alto) — "como está o livro agora, UC por UC".
+- `timeline` (pedido 4): para cada UC que já teve `codigo` preenchido em algum lote, a
+  **primeira** ocorrência disso (lote mais antigo com `codigo` não nulo) — "quando cada UC
+  virou realizada", ordenado cronologicamente. UC nunca realizada fica de fora (não tem
+  "quando" para algo que não aconteceu).
+
+Endpoint novo: `GET /massivas/livro-ucs?livro=X` → `{ sucesso, livro, atuais, timeline }`
+(`massivasController.js`/`massivasRoutes.js`). Frontend: `MassivasService.ucsLivro` (consumido
+pelo modal de Monitoramento de Livros) e `ColaboradoresService.timelineLivro` (consumido pelo
+painel da aba Trilho) — dois signals separados, mesma origem HTTP, cada um cacheado por livro
+no seu próprio service.
+
+Verificado por teste direto contra dado real (livro `004489`): 272 UCs em `atuais`, 237 em
+`timeline`. `npm test` (12 testes de isolamento de tenant) continua passando — mudança não
+mexe em RLS/tenant. Frontend recarregado via HMR ao longo de toda a edição sem erro de
+compilação/console.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).
@@ -683,6 +783,7 @@ mesmos LEFT JOINs da query real. `npm test` (12 testes) continua passando.
   coleta automática já tinha repopulado a tabela com o schema novo nesse meio-tempo (808
   pendentes, 1253 linhas de detalhe), confirmando que `copelImportService.js` grava
   corretamente com as colunas atuais.
-- **Pendente**: scraping das 7 colunas novas (aguardando o usuário indicar a aba/fluxo do
-  portal) e a lógica de progresso que vai substituir `qtd_digitados_nao_digitados` —
-  provavelmente usando `leitura_atual` de alguma forma, mas isso ainda não foi definido.
+- Progresso, Realizados/Não realizados e cards de agentes em campo (Adendo 15) já refletem o
+  schema novo corretamente, incluindo o fix do bug `bigint`-como-string. UC individual
+  (estado atual e timeline de realização) disponível via `/massivas/livro-ucs`, consumida nos
+  4 pedidos de verificação do usuário.

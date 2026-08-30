@@ -96,6 +96,29 @@ export interface HistoricoLivroMassivas {
   eventos: HistoricoLivroEvento[];
 }
 
+// Uma linha de UC como vem de GET /massivas/livro-ucs — mesmo shape usado
+// tanto em "atuais" (estado atual de cada UC) quanto em "timeline" (quando
+// cada UC virou realizada). Ver massivasService.js#obterUcsDoLivro.
+export interface UcLivro {
+  uc: string;
+  codigo: string | null;
+  equipamento: string | null;
+  tipo_especificacao: string | null;
+  faturamento: string | null;
+  leitura_atual: string | null;
+  situacao: string | null;
+  colaborador: string | null;
+  data_import: string | null;
+  hora_import: string | null;
+}
+
+export interface UcsLivroMassivas {
+  sucesso: boolean;
+  livro: string;
+  atuais: UcLivro[];
+  timeline: UcLivro[];
+}
+
 // Sem providedIn: 'root' de propósito — cada <app-massivas-view> (aba
 // Massivas e aba Monitoramento de Livros) precisa da sua própria instância
 // com filtro próprio, não uma só compartilhada entre as duas abas. Ver
@@ -144,6 +167,11 @@ export class MassivasService implements OnDestroy {
   carregandoHistorico = signal(false);
   erroHistorico = signal<string | null>(null);
   private cacheHistorico = new Map<string, HistoricoLivroEvento[]>();
+
+  ucsLivro = signal<UcLivro[]>([]);
+  carregandoUcsLivro = signal(false);
+  erroUcsLivro = signal<string | null>(null);
+  private cacheUcsLivro = new Map<string, UcLivro[]>();
 
   private debounceId?: ReturnType<typeof setTimeout>;
   private intervaloId?: ReturnType<typeof setInterval>;
@@ -274,23 +302,52 @@ export class MassivasService implements OnDestroy {
     if (cache) {
       this.historicoLivro.set(cache);
       this.carregandoHistorico.set(false);
+    } else {
+      this.carregandoHistorico.set(true);
+      this.historicoLivro.set([]);
+
+      this.http
+        .get<HistoricoLivroMassivas>(`${this.apiUrl}/massivas/historico-livro`, { params: new HttpParams().set('livro', livro) })
+        .subscribe({
+          next: resposta => {
+            this.cacheHistorico.set(livro, resposta.eventos);
+            this.historicoLivro.set(resposta.eventos);
+            this.carregandoHistorico.set(false);
+          },
+          error: () => {
+            this.erroHistorico.set('Não foi possível carregar o histórico do livro.');
+            this.carregandoHistorico.set(false);
+          },
+        });
+    }
+
+    this.buscarUcsLivro(livro);
+  }
+
+  private buscarUcsLivro(livro: string): void {
+    this.erroUcsLivro.set(null);
+
+    const cache = this.cacheUcsLivro.get(livro);
+    if (cache) {
+      this.ucsLivro.set(cache);
+      this.carregandoUcsLivro.set(false);
       return;
     }
 
-    this.carregandoHistorico.set(true);
-    this.historicoLivro.set([]);
+    this.carregandoUcsLivro.set(true);
+    this.ucsLivro.set([]);
 
     this.http
-      .get<HistoricoLivroMassivas>(`${this.apiUrl}/massivas/historico-livro`, { params: new HttpParams().set('livro', livro) })
+      .get<UcsLivroMassivas>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
       .subscribe({
         next: resposta => {
-          this.cacheHistorico.set(livro, resposta.eventos);
-          this.historicoLivro.set(resposta.eventos);
-          this.carregandoHistorico.set(false);
+          this.cacheUcsLivro.set(livro, resposta.atuais);
+          this.ucsLivro.set(resposta.atuais);
+          this.carregandoUcsLivro.set(false);
         },
         error: () => {
-          this.erroHistorico.set('Não foi possível carregar o histórico do livro.');
-          this.carregandoHistorico.set(false);
+          this.erroUcsLivro.set('Não foi possível carregar as UCs do livro.');
+          this.carregandoUcsLivro.set(false);
         },
       });
   }

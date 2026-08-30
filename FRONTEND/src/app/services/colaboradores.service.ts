@@ -186,6 +186,29 @@ export interface LivroSelecionado {
   livro: LivroAtividade;
 }
 
+// Uma UC realizada, no ponto em que virou realizada — mesmo shape de
+// GET /massivas/livro-ucs (campo "timeline"). Ver
+// massivasService.js#listarTimelineUcsRealizadasDoLivro.
+export interface TimelineUcItem {
+  uc: string;
+  codigo: string | null;
+  equipamento: string | null;
+  tipo_especificacao: string | null;
+  faturamento: string | null;
+  leitura_atual: string | null;
+  situacao: string | null;
+  colaborador: string | null;
+  data_import: string | null;
+  hora_import: string | null;
+}
+
+interface UcsLivroResponse {
+  sucesso: boolean;
+  livro: string;
+  atuais: TimelineUcItem[];
+  timeline: TimelineUcItem[];
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -212,6 +235,11 @@ export class ColaboradoresService {
   colaboradorSelecionado = signal<string | null>(null);
   filtroCategoria = signal<CategoriaAtividade | ''>('');
   livroSelecionado = signal<LivroSelecionado | null>(null);
+
+  timelineLivro = signal<TimelineUcItem[]>([]);
+  carregandoTimelineLivro = signal(false);
+  erroTimelineLivro = signal<string | null>(null);
+  private cacheTimelineLivro = new Map<string, TimelineUcItem[]>();
 
   contagemPorRegional = computed(() => {
     const contagem = new Map<string, number>();
@@ -326,9 +354,38 @@ export class ColaboradoresService {
 
   abrirLivro(colaboradorNome: string, livro: LivroAtividade): void {
     this.livroSelecionado.set({ colaboradorNome, livro });
+    this.buscarTimelineLivro(livro.livro);
   }
 
   fecharLivro(): void {
     this.livroSelecionado.set(null);
+  }
+
+  private buscarTimelineLivro(livro: string): void {
+    this.erroTimelineLivro.set(null);
+
+    const cache = this.cacheTimelineLivro.get(livro);
+    if (cache) {
+      this.timelineLivro.set(cache);
+      this.carregandoTimelineLivro.set(false);
+      return;
+    }
+
+    this.carregandoTimelineLivro.set(true);
+    this.timelineLivro.set([]);
+
+    this.http
+      .get<UcsLivroResponse>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
+      .subscribe({
+        next: resposta => {
+          this.cacheTimelineLivro.set(livro, resposta.timeline);
+          this.timelineLivro.set(resposta.timeline);
+          this.carregandoTimelineLivro.set(false);
+        },
+        error: () => {
+          this.erroTimelineLivro.set('Não foi possível carregar a timeline do livro.');
+          this.carregandoTimelineLivro.set(false);
+        },
+      });
   }
 }

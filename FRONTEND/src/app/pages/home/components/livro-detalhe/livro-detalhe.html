@@ -133,12 +133,29 @@
       </div>
     </div>
 
-    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Histórico</div>
-    <div class="space-y-0.5">
-      <div *ngFor="let item of sel.livro.historico" class="flex items-center justify-between gap-2 text-[11px] text-slate-600 py-1 border-b border-slate-50 last:border-0">
-        <span class="text-slate-400 shrink-0 tabular-nums">{{ item.horaImport }}</span>
-        <span class="truncate flex-1 px-1.5">{{ item.situacao }}</span>
-        <span class="text-slate-500 shrink-0 tabular-nums">{{ item.digitados }}/{{ item.naoDigitados }}</span>
+    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+      Histórico de execução (UC por UC — da primeira à última realizada)
+    </div>
+    <div class="text-center text-slate-400 text-[11px] py-4" *ngIf="colaboradoresService.carregandoTimelineLivro()">
+      Carregando timeline...
+    </div>
+    <div class="text-center text-red-500 text-[11px] py-4" *ngIf="colaboradoresService.erroTimelineLivro() && !colaboradoresService.carregandoTimelineLivro()">
+      {{ colaboradoresService.erroTimelineLivro() }}
+    </div>
+    <div
+      class="text-center text-slate-400 text-[11px] py-4"
+      *ngIf="!colaboradoresService.carregandoTimelineLivro() && !colaboradoresService.erroTimelineLivro() && !colaboradoresService.timelineLivro().length"
+    >
+      Nenhuma UC realizada ainda para este livro.
+    </div>
+    <div class="space-y-0.5" *ngIf="!colaboradoresService.carregandoTimelineLivro() && colaboradoresService.timelineLivro().length">
+      <div
+        *ngFor="let item of colaboradoresService.timelineLivro()"
+        class="flex items-center justify-between gap-2 text-[11px] text-slate-600 py-1 border-b border-slate-50 last:border-0"
+      >
+        <span class="text-slate-400 shrink-0 tabular-nums">{{ item.data_import }} {{ item.hora_import }}</span>
+        <span class="truncate flex-1 px-1.5">UC {{ item.uc }}</span>
+        <span class="text-emerald-600 font-semibold shrink-0 tabular-nums">{{ item.codigo }}</span>
       </div>
     </div>
   </div>

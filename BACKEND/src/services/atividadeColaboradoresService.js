@@ -1,4 +1,3 @@
-const SITUACAO_REGEX = /^(Em Execução|Atribuída)\s*\(([^)-]*)-(.*)\)$/;
 const QTD_REGEX = /^(\d+)\/(\d+)$/;
 const LIMITE_PARADO_MINUTOS = 20;
 
@@ -146,16 +145,27 @@ async function listarColaboradoresMassivaHoje(db) {
 async function listarAtividadeHoje(db) {
   const hoje = new Date().toLocaleDateString('pt-BR');
 
+  // Agregado por (livro, hora_import) — um livro agora tem várias linhas
+  // (uma por UC/medidor, ver ADR 0018 Adendo 2), todas compartilhando o
+  // mesmo cabeçalho (etapa/situacao/colaborador/datas) dentro do mesmo
+  // ciclo de coleta; sem esse GROUP BY a query devolveria N linhas quase
+  // idênticas por livro em vez de uma por snapshot. `colaborador` já vem
+  // separado da coluna própria (populada no import — ver
+  // parseSituacaoColaborador em copelImportService.js), não precisa mais
+  // ser extraído de dentro de `situacao` via regex.
   const [{ rows: linhas }, mapaPrazoRegulatorio] = await Promise.all([
     db.query(
       `
-      SELECT livro, etapa, situacao, hora_import,
-        data_recebimento, data_prevista_limite
+      SELECT livro, etapa, situacao, colaborador, hora_import,
+        data_recebimento, data_prevista_limite,
+        SUM(CASE WHEN codigo IS NOT NULL THEN 1 ELSE 0 END)::int AS digitados,
+        SUM(CASE WHEN codigo IS NULL THEN 1 ELSE 0 END)::int AS nao_digitados
       FROM contr_execucao_leitura
       WHERE data_import = $1
         AND situacao IS NOT NULL
         AND situacao <> 'Pendente'
-      ORDER BY hora_import ASC, id ASC
+      GROUP BY livro, etapa, situacao, colaborador, hora_import, data_recebimento, data_prevista_limite
+      ORDER BY hora_import ASC, MIN(id) ASC
       `,
       [hoje],
     ),
@@ -166,15 +176,11 @@ async function listarAtividadeHoje(db) {
   let ultimaHoraGeral = null;
 
   for (const linha of linhas) {
-    const match = SITUACAO_REGEX.exec((linha.situacao || '').trim());
-    if (!match) continue;
+    const nome = (linha.colaborador || '').trim();
+    if (!nome) continue;
 
-    const nome = match[3].trim();
-    // qtd_digitados_nao_digitados saiu de contr_execucao_leitura (ver
-    // copelImportService.js) — zerado até a nova lógica de progresso ser
-    // definida com as colunas da aba nova do portal (uc/leitura_atual/etc).
-    const digitados = 0;
-    const naoDigitados = 0;
+    const digitados = linha.digitados;
+    const naoDigitados = linha.nao_digitados;
     // etapa vem às vezes como "ETAPA 09 - (66)" (contagem que varia a cada
     // ciclo) e às vezes já limpa ("09"); fica só com o número.
     const etapaLimpa = (linha.etapa || '').match(/\d+/)?.[0] ?? linha.etapa;
@@ -182,7 +188,7 @@ async function listarAtividadeHoje(db) {
       horaImport: linha.hora_import,
       livro: linha.livro,
       etapa: etapaLimpa,
-      situacao: match[1],
+      situacao: linha.situacao,
       digitados,
       naoDigitados,
       dataRecebimento: linha.data_recebimento,

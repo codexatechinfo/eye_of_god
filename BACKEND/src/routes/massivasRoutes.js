@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { resumo, opcoesFiltro, detalhe, historicoLivro } = require('../controllers/massivasController');
+const { resumo, opcoesFiltro, detalhe, historicoLivro, ucsLivro } = require('../controllers/massivasController');
 
 router.get('/resumo', resumo);
 router.get('/opcoes-filtro', opcoesFiltro);
 router.get('/detalhe', detalhe);
 router.get('/historico-livro', historicoLivro);
+router.get('/livro-ucs', ucsLivro);
 
 module.exports = router;

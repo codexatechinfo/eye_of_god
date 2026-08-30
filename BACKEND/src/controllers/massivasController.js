@@ -1,4 +1,4 @@
-const { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro } = require('../services/massivasService');
+const { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro, obterUcsDoLivro } = require('../services/massivasService');
 
 async function resumo(req, res) {
   try {
@@ -47,4 +47,18 @@ async function historicoLivro(req, res) {
   }
 }
 
-module.exports = { resumo, opcoesFiltro, detalhe, historicoLivro };
+async function ucsLivro(req, res) {
+  try {
+    const { livro } = req.query;
+    if (!livro) {
+      return res.status(400).json({ sucesso: false, erro: 'Parâmetro "livro" é obrigatório.' });
+    }
+    const dados = await obterUcsDoLivro(req.db, livro);
+    res.json({ sucesso: true, ...dados });
+  } catch (erro) {
+    console.error('❌ Erro ao obter UCs do livro:', erro);
+    res.status(500).json({ sucesso: false, erro: erro.message });
+  }
+}
+
+module.exports = { resumo, opcoesFiltro, detalhe, historicoLivro, ucsLivro };

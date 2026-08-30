@@ -88,6 +88,14 @@
             <path d="M12 15v3" />
           </svg>
         </span>
+        <!-- Último sincronismo sempre visível abaixo do nome (não só no card
+             expandido) — mesmo campo já usado lá (a.ultimaMudancaHora). -->
+        <span
+          *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as atividadeSync"
+          class="block text-[9.5px] text-slate-400 tabular-nums mt-0.5"
+        >
+          Últ. sincronismo: {{ atividadeSync.ultimaMudancaHora ? atividadeSync.ultimaMudancaHora.slice(0, 5) : '--' }}
+        </span>
         <!-- Barra de % de execução do dia — mesma métrica que agora ordena
              a lista (mais críticos = menor % primeiro). Só aparece quando
              há atividade registrada hoje (sem serviço não tem o que medir). -->

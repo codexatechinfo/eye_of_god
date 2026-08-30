@@ -327,7 +327,7 @@
               Prazo regulatório{{ indicadorOrdenacao('diasPrazoRegulatorio') }}
             </th>
             <th class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('quantidade')">
-              Executados/Pendentes{{ indicadorOrdenacao('quantidade') }}
+              {{ escopo === 'leiturarelitura' ? 'Realizados/Não realizados' : 'Executados/Pendentes' }}{{ indicadorOrdenacao('quantidade') }}
             </th>
             <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('percentual')">
               Progresso{{ indicadorOrdenacao('percentual') }}
@@ -552,6 +552,45 @@
             </div>
           </li>
         </ol>
+
+        <div class="mt-5 pt-4 border-t border-slate-100">
+          <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">UCs do livro</h4>
+          <div class="text-center text-slate-400 text-sm py-6" *ngIf="massivasService.carregandoUcsLivro()">Carregando UCs...</div>
+          <div class="text-center text-red-500 text-sm py-6" *ngIf="massivasService.erroUcsLivro() && !massivasService.carregandoUcsLivro()">
+            {{ massivasService.erroUcsLivro() }}
+          </div>
+          <div
+            class="text-center text-slate-400 text-sm py-6"
+            *ngIf="!massivasService.carregandoUcsLivro() && !massivasService.erroUcsLivro() && !massivasService.ucsLivro().length"
+          >
+            Nenhuma UC encontrada para este livro.
+          </div>
+
+          <div class="overflow-x-auto" *ngIf="!massivasService.carregandoUcsLivro() && massivasService.ucsLivro().length">
+            <table class="w-full text-[11px]">
+              <thead>
+                <tr class="text-left text-slate-400 uppercase tracking-wide text-[9.5px]">
+                  <th class="py-1 pr-2">UC</th>
+                  <th class="py-1 pr-2">Código</th>
+                  <th class="py-1 pr-2">Situação</th>
+                  <th class="py-1 pr-2">Colaborador</th>
+                  <th class="py-1 pr-2">Último import</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-t border-slate-50" *ngFor="let uc of massivasService.ucsLivro()">
+                  <td class="py-1 pr-2 font-semibold text-slate-700 tabular-nums">{{ uc.uc }}</td>
+                  <td class="py-1 pr-2 tabular-nums" [class.text-emerald-600]="uc.codigo" [class.text-red-500]="!uc.codigo">
+                    {{ uc.codigo || 'Não realizada' }}
+                  </td>
+                  <td class="py-1 pr-2 text-slate-600">{{ uc.situacao || '—' }}</td>
+                  <td class="py-1 pr-2 text-slate-600">{{ uc.colaborador || '—' }}</td>
+                  <td class="py-1 pr-2 text-slate-400 tabular-nums">{{ uc.data_import }} {{ uc.hora_import }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>

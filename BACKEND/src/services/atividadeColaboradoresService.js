@@ -714,4 +714,32 @@ async function obterSuspensoesHoje(db, dataConsultaIso) {
   return porColaborador;
 }
 
-module.exports = { listarAtividadeHoje };
+// Última UC que cada colaborador realizou, em QUALQUER dia (não só hoje) —
+// usado pra posicionar o ícone dele no mapa (aba Trilho) mesmo sem
+// atividade hoje. `data_import`/`hora_import` vêm junto pra dar pro
+// frontend mostrar "última leitura em DD/MM" — sem isso, um colaborador
+// cuja última UC com coordenada é de meses atrás apareceria no mapa
+// exatamente igual a alguém ativo agora.
+//
+// O JOIN com coordenadas_ucs_mineradas (ADR 0021) fica DENTRO do
+// DISTINCT ON de propósito (não é um LEFT JOIN nem um filtro aplicado
+// depois): isso faz o ORDER BY ... LIMIT 1 implícito do DISTINCT ON
+// escolher, pra cada colaborador, a linha de maior id dentre as que TÊM
+// coordenada — ou seja, já pula automaticamente pra UC anterior com
+// coordenada se a mais recente não tiver match (só ~4% das UCs não têm).
+// Colaborador só fica de fora se NENHUMA UC que ele já realizou tiver
+// coordenada — bem raro. Se reescrever isso um dia, manter o JOIN dentro
+// do DISTINCT ON, não mover pra depois (perde esse fallback automático).
+async function obterUltimaUcRealizadaPorColaborador(db) {
+  const { rows } = await db.query(`
+    SELECT DISTINCT ON (c.colaborador)
+      c.colaborador, c.uc, c.data_import, c.hora_import, m.latitude, m.longitude
+    FROM contr_execucao_leitura c
+    JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = c.uc
+    WHERE c.colaborador IS NOT NULL AND c.codigo IS NOT NULL
+    ORDER BY c.colaborador, c.id DESC
+  `);
+  return rows;
+}
+
+module.exports = { listarAtividadeHoje, obterUltimaUcRealizadaPorColaborador };

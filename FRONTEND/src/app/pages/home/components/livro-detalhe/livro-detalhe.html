@@ -136,7 +136,7 @@
     </div>
 
     <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
-      Histórico de execução (UC por UC — da primeira à última realizada)
+      UCs do livro (ordem de rota)
     </div>
     <div class="text-center text-slate-400 text-[11px] py-4" *ngIf="colaboradoresService.carregandoTimelineLivro()">
       Carregando timeline...
@@ -146,36 +146,50 @@
     </div>
     <div
       class="text-center text-slate-400 text-[11px] py-4"
-      *ngIf="!colaboradoresService.carregandoTimelineLivro() && !colaboradoresService.erroTimelineLivro() && !colaboradoresService.timelineLivro().length"
+      *ngIf="!colaboradoresService.carregandoTimelineLivro() && !colaboradoresService.erroTimelineLivro() && !ucsOrdenadas().length"
     >
-      Nenhuma UC realizada ainda para este livro.
+      Nenhuma UC encontrada para este livro.
     </div>
     <ol
       class="relative border-l-2 border-slate-100 ml-2"
-      *ngIf="!colaboradoresService.carregandoTimelineLivro() && (colaboradoresService.timelineLivro().length || naoRealizadas().length)"
+      *ngIf="!colaboradoresService.carregandoTimelineLivro() && ucsOrdenadas().length"
     >
-      <li class="mb-3 ml-4" *ngFor="let item of colaboradoresService.timelineLivro()">
+      <li class="mb-3 ml-4" *ngFor="let item of ucsOrdenadas()">
         <div
           class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
-          [ngClass]="ehImpedimento(item.codigo) ? 'bg-amber-500' : 'bg-emerald-400'"
+          [ngClass]="{
+            'bg-emerald-400': corDoPonto(item) === 'verde',
+            'bg-slate-300': corDoPonto(item) === 'cinza',
+            'bg-amber-500': corDoPonto(item) === 'laranja',
+            'bg-red-500': corDoPonto(item) === 'vermelho'
+          }"
         ></div>
         <div class="flex items-center justify-between gap-2 text-[11px]">
-          <span class="truncate flex-1 px-1.5 font-semibold tabular-nums" [ngClass]="ehImpedimento(item.codigo) ? 'text-amber-700' : 'text-slate-600'">
+          <span
+            class="truncate flex-1 px-1.5 font-semibold tabular-nums"
+            [ngClass]="{
+              'text-slate-600': corDoPonto(item) === 'verde',
+              'text-slate-400': corDoPonto(item) === 'cinza',
+              'text-amber-700': corDoPonto(item) === 'laranja',
+              'text-red-700': corDoPonto(item) === 'vermelho'
+            }"
+          >
             {{ item.uc }}
-            <span *ngIf="ehImpedimento(item.codigo)" class="ml-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 align-middle">
+            <span
+              *ngIf="corDoPonto(item) === 'laranja' || corDoPonto(item) === 'vermelho'"
+              class="ml-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full align-middle"
+              [ngClass]="corDoPonto(item) === 'vermelho' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+            >
               Código {{ item.codigo }}
             </span>
           </span>
-          <span class="text-slate-400 shrink-0 tabular-nums">{{ item.data_import }} {{ item.hora_import }}</span>
+          <span class="text-slate-400 shrink-0 tabular-nums" *ngIf="item.codigo">{{ item.data_import }} {{ item.hora_import }}</span>
+          <span class="text-slate-300 shrink-0" *ngIf="!item.codigo">Ainda não realizada</span>
         </div>
-      </li>
-      <!-- UCs ainda sem codigo — sem "quando" (nunca aconteceu), aparecem
-           depois das realizadas com ponto cinza, pra listar o livro inteiro. -->
-      <li class="mb-3 ml-4" *ngFor="let item of naoRealizadas()">
-        <div class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1 bg-slate-300"></div>
-        <div class="flex items-center justify-between gap-2 text-[11px]">
-          <span class="truncate flex-1 px-1.5 font-semibold tabular-nums text-slate-400">{{ item.uc }}</span>
-          <span class="text-slate-300 shrink-0">Ainda não realizada</span>
+        <div *ngIf="item.nom_municipio" class="text-[9.5px] text-slate-400 truncate pl-1.5">
+          {{ item.nom_municipio }}<span *ngIf="item.localidade"> · {{ item.localidade }}</span>
+          <span *ngIf="item.endereco"> · {{ item.endereco }}</span>
+          <span *ngIf="item.classe_principal"> · {{ item.classe_principal }}</span>
         </div>
       </li>
     </ol>

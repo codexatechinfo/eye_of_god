@@ -987,11 +987,69 @@ async function listarTimelineUcsRealizadasDoLivro(db, livro) {
     .map(({ id, ...resto }) => resto);
 }
 
+// Anexa endereço/coordenada de cada UC (vindos de coordenadas_ucs_mineradas,
+// ADR 0021) às linhas já montadas por listarUcsAtuaisDoLivro/
+// listarTimelineUcsRealizadasDoLivro — usado tanto pra mostrar o endereço
+// embaixo de cada UC na timeline (aba Trilho) quanto pra desenhar a rota no
+// mapa (sequencia + lat/long).
+//
+// Cruza só por unidade_consumidora, sem também filtrar por
+// coordenadas_ucs_mineradas.livro: verificado ao vivo que esse `livro`
+// diverge do livro operacional em ~99,5% dos casos só por formatação (zeros
+// à esquerda, "002435" vs "2435") — a coordenada/endereço de uma UC não muda
+// por causa de reatribuição de livro, então filtrar por livro só reduziria
+// cobertura sem ganho real. Confirmado também que não há UC duplicada em
+// coordenadas_ucs_mineradas (GROUP BY unidade_consumidora HAVING COUNT(*) >
+// 1 = 0 linhas), então o Map abaixo nunca precisa desempatar.
+async function buscarMapaCoordenadas(db, ucs) {
+  if (!ucs.length) return new Map();
+  const { rows } = await db.query(
+    `
+    SELECT unidade_consumidora, latitude, longitude, nom_municipio, localidade,
+      endereco, classe_principal, sequencia
+    FROM coordenadas_ucs_mineradas
+    WHERE unidade_consumidora = ANY($1::text[])
+    `,
+    [ucs],
+  );
+  return new Map(rows.map(r => [r.unidade_consumidora, r]));
+}
+
+function comCoordenadas(linha, mapaCoordenadas) {
+  const coord = mapaCoordenadas.get(linha.uc);
+  return {
+    ...linha,
+    latitude: coord?.latitude ?? null,
+    longitude: coord?.longitude ?? null,
+    nom_municipio: coord?.nom_municipio ?? null,
+    localidade: coord?.localidade ?? null,
+    endereco: coord?.endereco ?? null,
+    classe_principal: coord?.classe_principal ?? null,
+    sequencia: coord?.sequencia ?? null,
+  };
+}
+
 async function obterUcsDoLivro(db, livro) {
-  const [atuais, timeline] = await Promise.all([
+  const [atuaisBrutas, timelineBruta] = await Promise.all([
     listarUcsAtuaisDoLivro(db, livro),
     listarTimelineUcsRealizadasDoLivro(db, livro),
   ]);
+
+  // Uma única consulta de coordenadas cobrindo os UCs das duas listas juntas
+  // (timeline é subconjunto de atuais na prática, mas junta os dois sets por
+  // segurança) — mas a APLICAÇÃO do mapa de coordenadas em cada linha é
+  // feita separadamente por lista (comCoordenadas), nunca misturando as
+  // duas listas num Map só por `uc`: `atuais` e `timeline` podem ter
+  // `codigo`/`data_import`/`hora_import` DIFERENTES pra mesma UC (atuais =
+  // linha mais recente, timeline = primeira realização) — juntar as duas
+  // num único Map por uc faria uma lista sobrescrever o codigo/data da
+  // outra, um bug real encontrado e corrigido antes de subir isso.
+  const ucs = [...new Set([...atuaisBrutas, ...timelineBruta].map(l => l.uc))];
+  const mapaCoordenadas = await buscarMapaCoordenadas(db, ucs);
+
+  const atuais = atuaisBrutas.map(l => comCoordenadas(l, mapaCoordenadas));
+  const timeline = timelineBruta.map(l => comCoordenadas(l, mapaCoordenadas));
+
   return { livro, atuais, timeline };
 }
 

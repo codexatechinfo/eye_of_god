@@ -211,6 +211,15 @@ export interface TimelineUcItem {
   colaborador: string | null;
   data_import: string | null;
   hora_import: string | null;
+  // Endereço/coordenada da UC (coordenadas_ucs_mineradas, ADR 0021) — null
+  // quando a UC não tem correspondência lá (~4% dos casos).
+  latitude: string | null;
+  longitude: string | null;
+  nom_municipio: string | null;
+  localidade: string | null;
+  endereco: string | null;
+  classe_principal: string | null;
+  sequencia: string | null;
 }
 
 interface UcsLivroResponse {
@@ -218,6 +227,24 @@ interface UcsLivroResponse {
   livro: string;
   atuais: TimelineUcItem[];
   timeline: TimelineUcItem[];
+}
+
+// Última UC que o colaborador realizou, em qualquer dia — usada pra
+// posicionar o ícone dele no mapa (aba Trilho). data_import/hora_import
+// dizem de QUANDO é essa posição (pode ser antiga, se ele não tiver
+// realizado nada recentemente).
+export interface LocalizacaoColaborador {
+  colaborador: string;
+  uc: string;
+  data_import: string;
+  hora_import: string;
+  latitude: string;
+  longitude: string;
+}
+
+interface LocalizacoesResponse {
+  sucesso: boolean;
+  localizacoes: LocalizacaoColaborador[];
 }
 
 // "000" = leitura normal, "099" = sem leitura (não é problema de campo);
@@ -265,6 +292,10 @@ export class ColaboradoresService {
 
   impedimentosLivro = computed(() => this.atuaisLivro().filter(uc => ehCodigoDeImpedimento(uc.codigo)).length);
 
+  // Posição de cada colaborador no mapa (última UC realizada, qualquer dia)
+  // — buscada uma vez só (não muda a cada minuto como atividadeHoje).
+  localizacoes = signal<LocalizacaoColaborador[]>([]);
+
   contagemPorRegional = computed(() => {
     const contagem = new Map<string, number>();
     for (const colaborador of this.colaboradores()) {
@@ -309,6 +340,7 @@ export class ColaboradoresService {
     this.carregarOpcoesFiltro();
     this.buscar();
     this.carregarAtividadeHoje();
+    this.carregarLocalizacoes();
     // Só repete sozinho enquanto a data selecionada for hoje — consultar
     // um dia passado não tem "chegando dado novo" pra esperar, e ficar
     // refazendo a mesma busca a cada 60s seria trabalho à toa.
@@ -387,6 +419,13 @@ export class ColaboradoresService {
       error: () => {
         this.carregandoAtividade.set(false);
       },
+    });
+  }
+
+  carregarLocalizacoes(): void {
+    this.http.get<LocalizacoesResponse>(`${this.apiUrl}/colaboradores/localizacoes`).subscribe({
+      next: resposta => this.localizacoes.set(resposta.localizacoes),
+      error: () => {},
     });
   }
 

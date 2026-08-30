@@ -309,3 +309,98 @@ Testado via HTTP real: exemplo de uma tabela só (`?tabela=coordenadas_ucs_miner
 `.xlsx` com 1 aba só; tabela inválida devolve `400` com a mensagem esperada; chamar sem o
 parâmetro (endpoint ainda aceita, mantido por compatibilidade) continua devolvendo as 13 abas
 de antes. `npm test` (12 testes) continua passando.
+
+## Adendo 5 — a tabela finalmente ganha código de aplicação: colaboradores no mapa, rota do livro e endereço na timeline
+
+Usuário pediu, em quatro partes: 1) clicar num círculo regional do mapa (aba Trilho) mostra um
+ícone por colaborador (moto se motoqueiro/monitor, pessoa a pé se pedestre) na posição da UC que
+ele realizou por último; 2) clicar no ícone abre o livro "Em Execução" desse colaborador, com a
+timeline colorida (verde=realizada, cinza=pendente, âmbar=impedimento, vermelho=código de
+impedimento repetido de OUTRA UC do mesmo livro); 3) cada UC da timeline passa a mostrar
+embaixo o endereço (`nom_municipio`/`localidade`/`endereco`/`classe_principal`), cruzado por
+`unidade_consumidora`; 4) tanto a rota no mapa quanto a lista lateral seguem a ordem de
+`sequencia`. Esta é a primeira vez que a tabela (criada e populada nos Adendos 1–2, habilitada
+pra import nos Adendos 3–4) é efetivamente lida por uma feature do produto.
+
+### Backend
+
+`massivasService.js#obterUcsDoLivro`: novo helper `buscarMapaCoordenadas(db, ucs)` — uma
+consulta `WHERE unidade_consumidora = ANY($1::text[])` pros UCs de `atuais`+`timeline` juntos
+(deduplicados num `Set` antes), montando um `Map<uc, coordRow>`. `comCoordenadas(linha, mapa)`
+aplica só os campos de endereço em cima de UMA linha por vez (nunca um merge de array
+compartilhado — ver "erro encontrado" abaixo). Cruzamento só por `unidade_consumidora`, sem
+também filtrar por `livro`: verificado ao vivo que `coordenadas_ucs_mineradas.livro` diverge do
+`livro` operacional em ~99,5% dos casos só por formatação (zeros à esquerda, `'002435'` vs
+`'2435'`) e que não existe UC duplicada na tabela (`GROUP BY unidade_consumidora HAVING
+COUNT(*) > 1` = 0 linhas) — o endereço da UC não muda por reatribuição de livro, e o `Map` não
+corre risco de pegar linha errada entre duplicatas.
+
+Novo `atividadeColaboradoresService.js#obterUltimaUcRealizadaPorColaborador`: `DISTINCT ON
+(colaborador) ... ORDER BY colaborador, id DESC` com o `JOIN` em `coordenadas_ucs_mineradas`
+**dentro** do escopo do `DISTINCT ON` (não um `LEFT JOIN` aplicado depois) — isso faz o Postgres
+pular automaticamente pra UC anterior com coordenada quando a mais recente não tem match (só
+~4% das UCs não têm), sem precisar de lógica extra. `data_import`/`hora_import` devolvidos junto
+pra o frontend poder indicar quando essa posição é antiga. Exposto em `GET
+/colaboradores/localizacoes` (`colaboradoresController.js`/`colaboradoresRoutes.js`).
+
+### Frontend
+
+`colaboradores.service.ts`: `TimelineUcItem` ganhou os 7 campos de endereço/coordenada; novo
+signal `localizacoes` (buscado uma vez, sem polling — "última UC realizada" não muda a cada
+minuto como `atividadeHoje`).
+
+`livro-detalhe.ts`/`.html`: os dois blocos separados (timeline cronológica + "não realizadas")
+viraram um único `ucsOrdenadas` (`computed()`, ordenado por `Number(sequencia)`, UC sem
+sequência vai pro fim). Cor do ponto por `corDoPonto(item)`: usa `timelineLivro()` só pra montar
+`Map<codigo, uc>` de "quem mostrou esse código de impedimento primeiro, cronologicamente" — mas
+classifica em cima do código ATUAL de cada UC (de `atuaisLivro()`), nunca comparando o código
+antigo de uma UC com ela mesma (evita ficar preso a um estado velho quando a mesma UC é relida
+depois com outro código). Novo bloco de endereço abaixo de cada UC (só quando `nom_municipio`
+existe — cobre "localidade quando houver").
+
+`mapa-bases.ts`: clique no círculo grava num signal **próprio do componente**,
+`regionalMapa` — deliberadamente não reaproveita `filtroRegional` (da sidebar): os nomes das
+bases (`BASES_REGIONAIS`) têm acento (`"CAMPO MOURÃO"`) e o filtro da sidebar não, e se também
+disparasse `buscar()` reduziria `colaboradores()` a uma regional só, zerando (via
+`contagemPorRegional`, `computed()` sobre essa mesma lista) todos os OUTROS círculos do mapa.
+Ícone por colaborador via `L.divIcon` (SVG inline, mesmo padrão `stroke=currentColor` do resto
+do app; moto azul `#2563eb`, pedestre laranja `#ea580c`; `iconAnchor: [14, 14]` explícito —
+sem ele o Leaflet ancora tipo "pino", não centralizado). Clique no marcador procura o livro
+`situacaoAtual === 'Em Execução'` do colaborador e chama `abrirLivro()` (método já existente,
+reaproveitado sem alteração). Rota do livro: `L.Polyline` de instância única, atualizada via
+`setLatLngs()` (nunca recriada) porque `atuaisLivro`/`timelineLivro` são atualizados a cada 60s
+com o painel aberto — recriar a cada ciclo causaria flicker; `fitBounds()` só na primeira vez
+que a rota de um livro específico é desenhada (`livroComBoundsAplicado`), pra não brigar com
+zoom/pan que o usuário já ajustou manualmente nos refreshes seguintes.
+
+### Erro encontrado e corrigido antes de testar
+
+Primeira versão de `obterUcsDoLivro` mesclava `atuais`+`timeline` num array só, buscava
+coordenadas uma vez, e reconstruía os dois arrays de saída a partir de um `Map` único indexado
+por UC — como uma UC presente nos dois arrays tem `codigo`/`data_import`/`hora_import`
+DIFERENTES em cada um (é a mesma UC, capturada em dois momentos), o que fosse processado por
+último no merge sobrescreveria silenciosamente o dado do outro array. Corrigido separando busca
+de coordenada (`buscarMapaCoordenadas`, só array de coordenadas) de aplicação (`comCoordenadas`,
+mescla campos de endereço EM CIMA de uma linha específica, preservando o resto dela) — aplicado
+separadamente pra `atuais` e pra `timeline`. Verificado ao vivo (transação com `ROLLBACK`) que
+UCs presentes nas duas listas mantêm valores distintos e corretos em cada uma.
+
+### Performance
+
+`obterUltimaUcRealizadaPorColaborador` mediu 4978ms sem índice algum. Índice em
+`contr_execucao_leitura(colaborador, id DESC) WHERE colaborador IS NOT NULL` sozinho quase não
+ajudou (5782ms) — o gargalo real era `coordenadas_ucs_mineradas` (4,12 milhões de linhas) não
+ter NENHUM índice em `unidade_consumidora` (só PK em `id` e os 2 GIST de geometria dos Adendos
+1–2), forçando o JOIN a escanear a tabela inteira. Criado
+`UNIQUE INDEX CONCURRENTLY idx_coordenadas_ucs_mineradas_unidade_consumidora` (via `docker exec
+supabase-db psql` como `postgres`, mesmo caminho do Adendo 2) — query caiu pra 755ms. Isso
+também acelerou `obterUcsDoLivro` (~150ms), que faz o mesmo tipo de JOIN.
+
+### Verificação
+
+Cada função testada isoladamente contra o Postgres real (`node -e`, transação com `ROLLBACK`
+quando fazia sentido). `npm test` (12 testes de isolamento RLS) continua passando. Frontend
+verificado sem erro de console via Browser pane (`read_console_messages`) após cada arquivo
+editado — sem login disponível nesta sessão (credencial nunca é inserida), não houve
+verificação visual da interface; fica para o usuário confirmar visualmente os 4 pontos do
+pedido.

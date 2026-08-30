@@ -1,6 +1,10 @@
-import { Component, ElementRef, HostListener } from '@angular/core';
+import { Component, ElementRef, HostListener, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ColaboradoresService, ehCodigoDeImpedimento } from '../../../../services/colaboradores.service';
+import {
+  ColaboradoresService,
+  ehCodigoDeImpedimento,
+  TimelineUcItem,
+} from '../../../../services/colaboradores.service';
 
 @Component({
   selector: 'app-livro-detalhe',
@@ -34,11 +38,36 @@ export class LivroDetalhe {
     return ehCodigoDeImpedimento(codigo);
   }
 
-  // UCs do livro que ainda não têm codigo preenchido — não entram em
-  // timelineLivro (que só tem "quando foi realizada", não existe pra quem
-  // nunca foi). Aparecem depois da timeline, com ponto cinza (pedido do
-  // usuário), pra a lista mostrar o livro inteiro, não só o que já rodou.
-  naoRealizadas() {
-    return this.colaboradoresService.atuaisLivro().filter(uc => !uc.codigo);
+  // Lista única do livro inteiro (realizadas e não), ordenada por sequencia
+  // (ordem de rota) — substitui os dois blocos separados que existiam antes
+  // (timeline cronológica + "não realizadas" à parte).
+  ucsOrdenadas = computed(() => {
+    return [...this.colaboradoresService.atuaisLivro()].sort((a, b) => {
+      const sa = Number(a.sequencia);
+      const sb = Number(b.sequencia);
+      const va = Number.isFinite(sa) ? sa : Infinity;
+      const vb = Number.isFinite(sb) ? sb : Infinity;
+      return va - vb || a.uc.localeCompare(b.uc);
+    });
+  });
+
+  // Qual UC foi a primeira, cronologicamente, a mostrar cada código de
+  // impedimento no livro — usado só pra decidir "vermelho" (código repetido
+  // em UC diferente), nunca pra decidir a cor de uma UC contra ela mesma.
+  private primeiraUcPorCodigo = computed(() => {
+    const mapa = new Map<string, string>();
+    for (const item of this.colaboradoresService.timelineLivro()) {
+      if (item.codigo && this.ehImpedimento(item.codigo) && !mapa.has(item.codigo)) {
+        mapa.set(item.codigo, item.uc);
+      }
+    }
+    return mapa;
+  });
+
+  corDoPonto(item: TimelineUcItem): 'verde' | 'cinza' | 'laranja' | 'vermelho' {
+    if (!item.codigo) return 'cinza';
+    if (!this.ehImpedimento(item.codigo)) return 'verde';
+    const primeiraUc = this.primeiraUcPorCodigo().get(item.codigo);
+    return primeiraUc && primeiraUc !== item.uc ? 'vermelho' : 'laranja';
   }
 }

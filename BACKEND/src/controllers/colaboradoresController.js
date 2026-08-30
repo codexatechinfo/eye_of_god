@@ -1,5 +1,5 @@
 const { listarAtivos, listarOpcoesFiltro } = require('../services/colaboradoresService');
-const { listarAtividadeHoje } = require('../services/atividadeColaboradoresService');
+const { listarAtividadeHoje, obterUltimaUcRealizadaPorColaborador } = require('../services/atividadeColaboradoresService');
 
 async function ativos(req, res) {
   try {
@@ -33,4 +33,14 @@ async function atividadeHoje(req, res) {
   }
 }
 
-module.exports = { ativos, opcoesFiltro, atividadeHoje };
+async function localizacoes(req, res) {
+  try {
+    const dados = await obterUltimaUcRealizadaPorColaborador(req.db);
+    res.json({ sucesso: true, localizacoes: dados });
+  } catch (erro) {
+    console.error('❌ Erro ao obter localizações dos colaboradores:', erro);
+    res.status(500).json({ sucesso: false, erro: erro.message });
+  }
+}
+
+module.exports = { ativos, opcoesFiltro, atividadeHoje, localizacoes };

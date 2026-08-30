@@ -7,6 +7,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Aba Trilho: clicar num círculo regional do mapa agora mostra um ícone por colaborador (moto
+  para motoqueiro/monitor, pessoa a pé para pedestre) na posição da última UC que ele realizou
+  (qualquer dia). Clicar no ícone abre o livro "Em Execução" desse colaborador e desenha no mapa
+  a rota das UCs na ordem de `sequencia`. A timeline do painel do livro deixou de separar
+  "realizadas"/"não realizadas" em dois blocos e passou a ser uma lista única ordenada por
+  `sequencia` (ordem de rota, não mais cronológica), com 4 cores: verde (realizada), cinza
+  (pendente), âmbar (impedimento), vermelho (código de impedimento repetido de outra UC do mesmo
+  livro) — e cada UC agora mostra o endereço (município, localidade, endereço, classe de
+  consumo) abaixo dela, vindo de `coordenadas_ucs_mineradas`. Novo endpoint `GET
+  /colaboradores/localizacoes`. Ver Adendo 5 da [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
+
 - Aba Importação: `coordenadas_ucs_mineradas` agora aceita import via planilha (upsert por
   `unidade_consumidora` — UC repetida substitui a linha, UC nova só adiciona), incluindo
   `geom`/`geom_area` (aceita o mesmo formato hexadecimal WKB que a tabela já usa). Novo botão

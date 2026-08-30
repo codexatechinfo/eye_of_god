@@ -53,6 +53,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   `000`/`099` (leitura normal / sem leitura). Mapa de bases regionais (`app-mapa-bases`, aba
   Trilho) ganhou seletor de camadas — Ruas, Satélite, Satélite c/ rótulos e Topográfico. Ver
   Adendo 16 da [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+- Card "Impedimentos" do colaborador (lista lateral da aba Trilho, antes placeholder "--")
+  passou a somar impedimentos de todos os livros dele no dia, não só de um livro específico —
+  novo `totalImpedimentos` em `GET /colaboradores/atividade-hoje`. Timeline UC-a-UC do painel
+  de livro agora destaca em âmbar as UCs com impedimento (com o código ao lado) e mostra só o
+  número da UC, em formato de linha do tempo com pontos (mesmo padrão visual do modal
+  "Histórico do livro" de Massivas). Ver Adendo 17 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 
 ### Corrigido
 

@@ -159,7 +159,8 @@ async function listarAtividadeHoje(db) {
       SELECT livro, etapa, situacao, colaborador, hora_import,
         data_recebimento, data_prevista_limite,
         SUM(CASE WHEN codigo IS NOT NULL THEN 1 ELSE 0 END)::int AS digitados,
-        SUM(CASE WHEN codigo IS NULL THEN 1 ELSE 0 END)::int AS nao_digitados
+        SUM(CASE WHEN codigo IS NULL THEN 1 ELSE 0 END)::int AS nao_digitados,
+        SUM(CASE WHEN codigo IS NOT NULL AND codigo NOT IN ('000', '099') THEN 1 ELSE 0 END)::int AS impedimentos
       FROM contr_execucao_leitura
       WHERE data_import = $1
         AND situacao IS NOT NULL
@@ -181,6 +182,7 @@ async function listarAtividadeHoje(db) {
 
     const digitados = linha.digitados;
     const naoDigitados = linha.nao_digitados;
+    const impedimentos = linha.impedimentos;
     // etapa vem às vezes como "ETAPA 09 - (66)" (contagem que varia a cada
     // ciclo) e às vezes já limpa ("09"); fica só com o número.
     const etapaLimpa = (linha.etapa || '').match(/\d+/)?.[0] ?? linha.etapa;
@@ -191,6 +193,7 @@ async function listarAtividadeHoje(db) {
       situacao: linha.situacao,
       digitados,
       naoDigitados,
+      impedimentos,
       dataRecebimento: linha.data_recebimento,
       dataPrevistaLimite: linha.data_prevista_limite,
     };
@@ -252,6 +255,7 @@ async function listarAtividadeHoje(db) {
         situacaoAtual: ultima.situacao,
         digitados: ultima.digitados,
         naoDigitados: ultima.naoDigitados,
+        impedimentos: ultima.impedimentos,
         tipoServico,
         diasPrazoRegulatorio: prazoRegulatorio
           ? calcularDiasPrazoRegulatorio(hoje, prazoRegulatorio.prazoCalendario, prazoRegulatorio.diasFinais)
@@ -272,6 +276,10 @@ async function listarAtividadeHoje(db) {
     const totalEmExecucao = livrosEmExecucao.length;
     const totalRealizadas = livros.reduce((soma, livro) => soma + livro.digitados, 0);
     const totalPendentes = livros.reduce((soma, livro) => soma + livro.naoDigitados, 0);
+    // Soma de todos os livros do colaborador (não só o livro aberto no
+    // painel de detalhe) — pedido explícito do usuário pro card
+    // "Impedimentos" do card expandido do colaborador.
+    const totalImpedimentos = livros.reduce((soma, livro) => soma + (livro.impedimentos || 0), 0);
     const minutosParado = diferencaMinutos(ultimaMudancaColaborador, ultimaHoraGeral);
 
     // Quatro categorias mutuamente exclusivas (a quinta, "sem serviço", é
@@ -287,6 +295,7 @@ async function listarAtividadeHoje(db) {
       colaborador: nome,
       totalRealizadas,
       totalPendentes,
+      totalImpedimentos,
       totalLivros: livros.length,
       totalEmExecucao,
       ultimaMudancaHora: ultimaMudancaColaborador,
@@ -325,6 +334,9 @@ async function listarAtividadeHoje(db) {
         colaborador: nome,
         totalRealizadas: digitadosMassiva,
         totalPendentes: pendentesMassiva,
+        // Massiva não tem coluna "codigo" (fonte é atribuidas_im/em_execucao_im,
+        // não contr_execucao_leitura) — impedimento só existe pra leitura/releitura.
+        totalImpedimentos: 0,
         totalLivros: livrosMassiva.length,
         totalEmExecucao: emExecucaoMassiva,
         ultimaMudancaHora: livrosMassiva[0].ultimaVez,

@@ -59,6 +59,9 @@ export interface LivroAtividade {
   // 0012 Adendo 4). null = livro sem correspondência na planilha (não
   // avaliado) ou de massiva (nunca teve essa correspondência).
   diasPrazoRegulatorio: number | null;
+  // UCs com codigo != 000/099 (impedimento real de campo). undefined em
+  // livro de massiva (não tem coluna codigo).
+  impedimentos?: number;
   primeiraVez: string;
   ultimaVez: string;
   historico: HistoricoLivroItem[];
@@ -68,6 +71,9 @@ export interface AtividadeColaborador {
   colaborador: string;
   totalRealizadas: number;
   totalPendentes: number;
+  // Soma de impedimentos (codigo != 000/099) de todos os livros do
+  // colaborador hoje — 0 pra quem só tem massiva.
+  totalImpedimentos: number;
   totalLivros: number;
   totalEmExecucao: number;
   ultimaMudancaHora: string;
@@ -212,7 +218,7 @@ interface UcsLivroResponse {
 // "000" = leitura normal, "099" = sem leitura (não é problema de campo);
 // qualquer outro código preenchido é um impedimento real (portão trancado,
 // cão solto, etc.) — pedido explícito do usuário pro card "Impedimentos".
-function ehCodigoDeImpedimento(codigo: string | null): boolean {
+export function ehCodigoDeImpedimento(codigo: string | null): boolean {
   return !!codigo && codigo !== '000' && codigo !== '099';
 }
 

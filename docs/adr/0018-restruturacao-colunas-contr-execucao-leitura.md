@@ -811,6 +811,53 @@ separado sobre o mapa:
 Sem mudança de backend. Frontend recarregado via HMR sem erro de console/compilação durante
 toda a edição. `npm test` (12 testes de isolamento de tenant) continua passando.
 
+## Adendo 17 — card "Impedimentos" do colaborador (total geral) + timeline visual com destaque de impedimento
+
+Usuário viu o card "Impedimentos" do Adendo 16 (por livro, no painel da aba Trilho) e pediu 3
+ajustes, agora envolvendo também o card expandido do colaborador (`lista-colaboradores.html`):
+
+1. **Card "Impedimentos" do colaborador (antes placeholder "--") passa a somar todos os livros
+   dele, não só um livro específico.** Diferente do card do Adendo 16 (escopo: um livro), este
+   fica na lista lateral da aba Trilho, no card expandido de cada colaborador, ao lado de
+   "Leituras"/"Realizadas"/"A realizar"/"Livros"/"Livros em execução" — todos esses já eram
+   totais agregados de **todos os livros do colaborador no dia**, e "Impedimentos" devia seguir
+   o mesmo padrão.
+
+   Implementado em `atividadeColaboradoresService.js#listarAtividadeHoje`: a query agregada por
+   snapshot de livro (já teria `digitados`/`nao_digitados`) ganhou uma terceira coluna,
+   `SUM(CASE WHEN codigo IS NOT NULL AND codigo NOT IN ('000','099') THEN 1 ELSE 0 END)::int AS
+   impedimentos` — mesma regra do Adendo 16. Cada `livro` da lista de um colaborador carrega seu
+   `impedimentos` (valor do snapshot mais recente daquele livro, mesmo padrão de
+   `digitados`/`naoDigitados`), e um novo `totalImpedimentos = livros.reduce(...)` soma todos.
+   Colaborador só-massiva (sem `contr_execucao_leitura`, ver `listarColaboradoresMassivaHoje`)
+   recebe `totalImpedimentos: 0` — massiva não tem coluna `codigo`, esse conceito não existe lá.
+
+2. **UCs com impedimento devem ficar em evidência na timeline, com o código ao lado.** A
+   timeline do Adendo 16 (painel de livro, aba Trilho) tratava toda UC igual (mesma cor, sem
+   mostrar o código). Agora cada item usa `ehCodigoDeImpedimento()` (exportada de
+   `colaboradores.service.ts`, reaproveitada — mesma regra do card, um único lugar de verdade)
+   pra decidir o estilo: UC normal continua discreta (ponto verde, texto cinza); UC com
+   impedimento vira ponto e texto âmbar, com um badge extra mostrando `Código {codigo}` ao lado
+   do número — só aparece pras UCs que realmente têm impedimento, não polui as demais.
+
+3. **Formato da timeline: só o número da UC (sem o prefixo "UC"), com pontos de linha do
+   tempo.** Trocado o `<div class="space-y-0.5">` (linhas simples separadas por borda) por um
+   `<ol class="relative border-l-2 ...">`/`<li>` com um ponto (`div.absolute.rounded-full`) por
+   item — mesmo padrão visual já usado no modal "Histórico do livro" de Massivas
+   (`massivas-view.html`, já existente antes desta sessão), reaproveitado aqui por consistência
+   visual entre as duas telas.
+
+Verificado diretamente no banco (sem passar pela API, que estava desligada a pedido do usuário
+— ver seção de operação): a query de impedimentos roda sem erro e devolve números plausíveis.
+Achado que vale registrar: o código `'094'` é o segundo mais frequente na tabela inteira (5.375
+ocorrências, atrás só de `'000'` com 8.101) — bem mais comum que qualquer outro código não-
+`000`/`099`. Como não é `000` nem `099`, conta como impedimento pela regra definida pelo
+usuário; não foi feita nenhuma exceção pra ele porque o pedido foi explícito e sem menção a
+`'094'` como caso especial — sinalizado ao usuário pra confirmar se é isso mesmo que ele quer.
+
+`npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console
+durante toda a edição.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

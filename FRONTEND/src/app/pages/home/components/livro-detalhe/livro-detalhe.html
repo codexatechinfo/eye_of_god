@@ -150,14 +150,22 @@
     >
       Nenhuma UC realizada ainda para este livro.
     </div>
-    <div class="space-y-0.5" *ngIf="!colaboradoresService.carregandoTimelineLivro() && colaboradoresService.timelineLivro().length">
-      <div
-        *ngFor="let item of colaboradoresService.timelineLivro()"
-        class="flex items-center justify-between gap-2 text-[11px] text-slate-600 py-1 border-b border-slate-50 last:border-0"
-      >
-        <span class="truncate flex-1 px-1.5">UC {{ item.uc }}</span>
-        <span class="text-slate-500 shrink-0 tabular-nums">{{ item.data_import }} {{ item.hora_import }}</span>
-      </div>
-    </div>
+    <ol class="relative border-l-2 border-slate-100 ml-2" *ngIf="!colaboradoresService.carregandoTimelineLivro() && colaboradoresService.timelineLivro().length">
+      <li class="mb-3 ml-4" *ngFor="let item of colaboradoresService.timelineLivro()">
+        <div
+          class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
+          [ngClass]="ehImpedimento(item.codigo) ? 'bg-amber-500' : 'bg-emerald-400'"
+        ></div>
+        <div class="flex items-center justify-between gap-2 text-[11px]">
+          <span class="truncate flex-1 px-1.5 font-semibold tabular-nums" [ngClass]="ehImpedimento(item.codigo) ? 'text-amber-700' : 'text-slate-600'">
+            {{ item.uc }}
+            <span *ngIf="ehImpedimento(item.codigo)" class="ml-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 align-middle">
+              Código {{ item.codigo }}
+            </span>
+          </span>
+          <span class="text-slate-400 shrink-0 tabular-nums">{{ item.data_import }} {{ item.hora_import }}</span>
+        </div>
+      </li>
+    </ol>
   </div>
 </div>

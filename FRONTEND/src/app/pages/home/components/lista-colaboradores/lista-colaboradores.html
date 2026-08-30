@@ -227,9 +227,11 @@
             </div>
           </div>
 
-          <!-- Total de impedimentos (sem dado disponível) -->
-          <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
-            <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-400 flex items-center justify-center shrink-0">
+          <!-- Total de impedimentos: soma de todos os livros do colaborador
+               hoje (não só um livro específico) — ver totalImpedimentos em
+               atividadeColaboradoresService.js. -->
+          <div class="flex items-center gap-1.5 rounded-lg border border-amber-100 bg-gradient-to-br from-amber-100/20 to-amber-50 px-2 py-1.5">
+            <div class="w-6 h-6 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 3 2 20h20L12 3z" />
                 <line x1="12" y1="9" x2="12" y2="14" />
@@ -237,8 +239,8 @@
               </svg>
             </div>
             <div class="min-w-0 leading-tight">
-              <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide truncate">Impedimentos</div>
-              <div class="text-xs font-bold text-slate-400">--</div>
+              <div class="text-[8.5px] font-semibold text-amber-500 uppercase tracking-wide truncate">Impedimentos</div>
+              <div class="text-xs font-bold text-amber-700 tabular-nums">{{ a.totalImpedimentos }}</div>
             </div>
           </div>
 

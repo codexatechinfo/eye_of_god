@@ -127,3 +127,78 @@ instalar a extensão, não pra migrar as colunas. Com a tabela ainda vazia, migr
 origem) fica barato a qualquer momento — é só um `ALTER COLUMN ... TYPE geometry USING
 ST_GeomFromText(...)` sem risco de perda de dado real, mas isso é uma decisão de modelagem
 (formato de entrada do CSV, SRID) que fica pra quando o usuário indicar o fluxo de import.
+
+## Adendo 2 — importação de 4,1 milhões de registros: `geom`/`geom_area` viraram `geometry` de verdade
+
+Usuário indicou o arquivo real de import
+(`C:\Users\joaow\Desktop\WESLEY\PESSOAL\projeto A2L\coordenadas_ligacoes_copel_fimm.csv`,
+2,79 GB, 4.120.347 linhas de dado) e pediu pra importar na tabela.
+
+### `varchar(255)` não era só subótimo — não cabia o dado real
+
+As amostras de `geom_area` (WKB hexadecimal de um polígono, ~13 pontos por anel) passam de
+400 caracteres — mais que o limite de `varchar(255)`. Import direto teria falhado com "value
+too long for type character varying(255)". Como o dado já é EWKB hexadecimal de verdade
+(prefixo `0101000020E6100000...` = Point SRID 4326; `0103000020E6100000...` = Polygon SRID
+4326 — confirmado por amostragem no início, meio e fim do arquivo: 100% consistente, sem
+variação de tipo), a correção certa não era só alargar a coluna — era migrar pro tipo
+`geometry` de verdade, exatamente o que o Adendo 1 já tinha preparado o terreno pra fazer (essa
+é a razão de o usuário ter pedido pra instalar o PostGIS no pedido anterior).
+
+```sql
+ALTER TABLE public.coordenadas_ucs_mineradas
+  ALTER COLUMN geom TYPE geometry(Point, 4326) USING ST_GeomFromEWKB(decode(geom, 'hex')),
+  ALTER COLUMN geom_area TYPE geometry(Polygon, 4326) USING ST_GeomFromEWKB(decode(geom_area, 'hex'));
+
+CREATE INDEX idx_coordenadas_ucs_mineradas_geom ON public.coordenadas_ucs_mineradas USING GIST (geom);
+CREATE INDEX idx_coordenadas_ucs_mineradas_geom_area ON public.coordenadas_ucs_mineradas USING GIST (geom_area);
+```
+
+Tabela ainda vazia nesse ponto — `USING` incluído por correção (documenta a conversão real,
+caso a tabela algum dia precise ser recriada a partir de um dump em texto), mas não processou
+linha nenhuma de fato.
+
+### `empresa_id`: default temporário, removido depois do import
+
+O CSV não tem coluna de tenant — só existe uma empresa cadastrada
+(`00000000-0000-0000-0000-000000000001`, "Operação principal (Copel/FIMM)", nome batendo com o
+próprio nome do arquivo). `ALTER COLUMN empresa_id SET DEFAULT '00000...001'` antes do import
+(pra a coluna ser preenchida sem precisar listá-la no `COPY`), removido com `DROP DEFAULT`
+logo depois — evita que uma inserção futura sem `empresa_id` explícito caia silenciosamente
+nessa empresa por engano.
+
+### Caminho de execução: `\copy` do lado do host WSL, não `docker exec`
+
+RLS está com `FORCE ROW LEVEL SECURITY` (Adendo 1) — mesmo como `postgres` (dono da tabela),
+um `COPY` broto teria sido bloqueado pela policy sem `app.nivel = 'ROOT'` setado na sessão.
+`SET app.nivel = 'ROOT';` antes do `\copy` resolve isso.
+
+O arquivo está no disco Windows (`C:\Users\...`), fora do container. `\copy` (comando de
+cliente do `psql`, diferente do `COPY` de servidor) lê o arquivo do lado de quem roda o
+`psql` — rodar via `docker exec supabase-db psql` faria o `\copy` procurar o arquivo **dentro**
+do container, onde ele não existe. Resolvido conectando direto do **host WSL** (que já
+monta `C:\` em `/mnt/c/...`) pra porta exposta do container (`localhost:55432`, mapeamento já
+existente `5432/tcp -> 0.0.0.0:55432`) — evita duplicar um arquivo de 2,79 GB pra dentro do
+container via `docker cp`. `psql` não vinha instalado no WSL; instalado via
+`apt-get install postgresql-client` (como root, sem senha — mesmo mecanismo do `/infra`).
+
+### Resultado
+
+`COPY 4120347` em **8min49s**. Verificado depois:
+
+- `COUNT(*) = 4.120.347`, todos com `empresa_id` = a única empresa (correto).
+- `geom`/`geom_area` sem nenhum `NULL` (toda linha tinha as duas geometrias).
+- `ST_X(geom)`/`ST_Y(geom)` batendo exatamente com as colunas `longitude`/`latitude` de texto —
+  confirma orientação correta (X=longitude, Y=latitude, sem troca) e que a conversão preservou
+  o dado fielmente.
+- RLS testado como `app_user` de verdade (não `ROOT`, não dono da tabela): sem contexto de
+  tenant → 0 linhas; com `empresa_id` certo → 4.120.347; com `empresa_id` de outra empresa → 0.
+  Fail-closed confirmado no dado real, não só na tabela vazia do Adendo 1.
+- Tamanho em disco: 2.370 MB (`pg_total_relation_size`, tabela + índices, incluindo os dois
+  GIST).
+
+Índices GIST criados **antes** do import (não depois) — o load já manteve os índices durante
+a carga, em vez de precisar reconstruir 4M+ entradas de uma vez no fim. Pra um volume desse
+tamanho, criar depois costuma ser mais rápido (evita manutenção de índice por linha durante o
+load), mas não chegou a ser um problema aqui (~9min pro total). Vale considerar a ordem
+inversa (`COPY` primeiro, índice depois) se um import futuro for significativamente maior.

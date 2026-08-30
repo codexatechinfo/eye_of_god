@@ -63,6 +63,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Painel de livro da aba Trilho podia mostrar total de impedimentos diferente do card do
+  colaborador mesmo quando ele só tinha 1 livro. Causa: o painel buscava as UCs do livro uma
+  única vez e cacheava pra sempre, enquanto o card do colaborador recalcula a cada 60s — como a
+  coleta roda 24h contínua, o painel ficava com dado congelado do momento em que foi aberto.
+  Removido o cache indefinido (mesmo bug também existia, sem sintoma reportado ainda, no modal
+  "Histórico do livro" de Massivas); painel da aba Trilho agora também atualiza sozinho a cada
+  60s enquanto estiver aberto. Ver Adendo 18 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+
 - Resumo da aba Massivas (`GET /massivas/resumo`) falhava com `column reference "id" is
   ambiguous` — `contarFonteContr()` junta `contr_execucao_leitura`, `cidades_localidades` e
   `calendario_leitura` (todas com coluna `id`) e o `ORDER BY` não qualificava por alias.

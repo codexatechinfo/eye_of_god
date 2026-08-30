@@ -858,6 +858,48 @@ usuário; não foi feita nenhuma exceção pra ele porque o pedido foi explícit
 `npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console
 durante toda a edição.
 
+## Adendo 18 — bug real: painel do livro ficava com "atuais"/impedimentos congelados (cache indefinido)
+
+Usuário reportou, com print, uma inconsistência que não podia estar certa: colaborador com
+**apenas 1 livro** mostrava "Impedimentos: 41" no card da lista lateral (Trilho) mas
+"Impedimentos: 40" no painel de detalhe daquele mesmo livro — com 1 livro só, os dois números
+são a mesma soma e têm que bater sempre.
+
+### Causa raiz
+
+`ColaboradoresService.buscarTimelineLivro()` (Adendo 15) buscava `atuais`/`timeline` de
+`/massivas/livro-ucs` **uma única vez**, ao abrir o painel, e guardava num `Map` (`cacheUcsLivro`)
+pra sempre — reaproveitando o mesmo padrão de cache já usado para "histórico" (`cacheHistorico`
+em `MassivasService`), que faz sentido para dado histórico (eventos passados não mudam), mas é
+**errado para `atuais`**: por definição é o estado **atual** de cada UC (Adendo 15), e a coleta
+roda em loop contínuo 24h (ver ADR 0020). O card do colaborador, por outro lado, recalcula
+`totalImpedimentos` a cada 60s (`carregarAtividadeHoje`, já existente). Resultado: se uma UC
+mudasse de código entre o momento em que o painel foi aberto e agora, o card (recém-atualizado)
+e o painel (preso no cache da primeira busca) divergiam — exatamente o sintoma reportado. Nada
+de errado com a lógica de contagem em si (as duas usam a mesma regra `ehCodigoDeImpedimento`);
+era puramente uma questão de um lado atualizar sozinho e o outro nunca atualizar.
+
+O mesmo padrão de cache indefinido existia, idêntico, em `MassivasService.buscarUcsLivro()`
+(pedido 2 do Adendo 15 — modal "Histórico do livro" da tela Monitoramento de Livros), com o
+mesmo risco (não reportado pelo usuário até agora, mas mesma causa raiz).
+
+### Correção
+
+- `ColaboradoresService`: removido `cacheUcsLivro`. `buscarUcsLivro(livro, mostrarCarregando)`
+  agora sempre busca fresco; `mostrarCarregando: true` só na abertura manual (reseta as listas e
+  mostra "Carregando..."), `false` nas atualizações automáticas em segundo plano (não apaga a
+  lista nem pisca loading a cada refresh — mesmo cuidado do `resetarPagina` em
+  `MassivasService.buscarTudo`). `abrirLivro()` agora arma um `setInterval` de 60s (mesma
+  constante `INTERVALO_ATIVIDADE_MS` já usada pro polling de atividade) que só roda enquanto o
+  painel está aberto; `fecharLivro()` limpa o intervalo. Reabrir um livro diferente (sem fechar
+  antes) também limpa o intervalo anterior antes de armar o novo.
+- `MassivasService`: removido `cacheUcsLivro` da mesma forma (`buscarUcsLivro` sempre busca
+  fresco). Sem polling automático aqui — é um modal (fechado/reaberto pelo usuário a cada
+  consulta), diferente do painel fixo da aba Trilho; reabrir o modal já busca de novo
+  naturalmente.
+
+`npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

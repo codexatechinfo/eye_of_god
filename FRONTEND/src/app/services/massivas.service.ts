@@ -171,7 +171,10 @@ export class MassivasService implements OnDestroy {
   ucsLivro = signal<UcLivro[]>([]);
   carregandoUcsLivro = signal(false);
   erroUcsLivro = signal<string | null>(null);
-  private cacheUcsLivro = new Map<string, UcLivro[]>();
+  // Sem cache indefinido de propósito: é o estado ATUAL de cada UC, e a
+  // coleta roda 24h contínua — cachear pra sempre deixaria o modal
+  // congelado no valor de quando foi aberto (mesmo bug encontrado e
+  // corrigido em ColaboradoresService.buscarUcsLivro).
 
   private debounceId?: ReturnType<typeof setTimeout>;
   private intervaloId?: ReturnType<typeof setInterval>;
@@ -326,14 +329,6 @@ export class MassivasService implements OnDestroy {
 
   private buscarUcsLivro(livro: string): void {
     this.erroUcsLivro.set(null);
-
-    const cache = this.cacheUcsLivro.get(livro);
-    if (cache) {
-      this.ucsLivro.set(cache);
-      this.carregandoUcsLivro.set(false);
-      return;
-    }
-
     this.carregandoUcsLivro.set(true);
     this.ucsLivro.set([]);
 
@@ -341,7 +336,6 @@ export class MassivasService implements OnDestroy {
       .get<UcsLivroMassivas>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
       .subscribe({
         next: resposta => {
-          this.cacheUcsLivro.set(livro, resposta.atuais);
           this.ucsLivro.set(resposta.atuais);
           this.carregandoUcsLivro.set(false);
         },

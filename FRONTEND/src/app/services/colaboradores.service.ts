@@ -253,7 +253,10 @@ export class ColaboradoresService {
   atuaisLivro = signal<TimelineUcItem[]>([]);
   carregandoTimelineLivro = signal(false);
   erroTimelineLivro = signal<string | null>(null);
-  private cacheUcsLivro = new Map<string, { atuais: TimelineUcItem[]; timeline: TimelineUcItem[] }>();
+  // Sem cache indefinido de propósito: "atuais"/"impedimentos" são estado
+  // ATUAL (não histórico), e a coleta roda 24h contínua — cachear pra sempre
+  // deixaria o painel congelado no valor de quando foi aberto. Ver abrirLivro.
+  private intervaloUcsLivroId?: ReturnType<typeof setInterval>;
 
   impedimentosLivro = computed(() => this.atuaisLivro().filter(uc => ehCodigoDeImpedimento(uc.codigo)).length);
 
@@ -370,33 +373,41 @@ export class ColaboradoresService {
 
   abrirLivro(colaboradorNome: string, livro: LivroAtividade): void {
     this.livroSelecionado.set({ colaboradorNome, livro });
-    this.buscarTimelineLivro(livro.livro);
+    this.buscarUcsLivro(livro.livro, true);
+
+    // Coleta roda 24h contínua — sem isso, "atuais"/"impedimentos" ficavam
+    // congelados no valor de quando o painel foi aberto, enquanto o card do
+    // colaborador (que soma o mesmo dado) já tinha atualizado no poll de
+    // atividade-hoje. Usuário reportou exatamente essa divergência (livro
+    // com 1 UC só, card do colaborador e painel do livro mostrando totais
+    // de impedimentos diferentes).
+    if (this.intervaloUcsLivroId) clearInterval(this.intervaloUcsLivroId);
+    this.intervaloUcsLivroId = setInterval(() => this.buscarUcsLivro(livro.livro, false), this.INTERVALO_ATIVIDADE_MS);
   }
 
   fecharLivro(): void {
     this.livroSelecionado.set(null);
+    if (this.intervaloUcsLivroId) {
+      clearInterval(this.intervaloUcsLivroId);
+      this.intervaloUcsLivroId = undefined;
+    }
   }
 
-  private buscarTimelineLivro(livro: string): void {
+  // mostrarCarregando: false nas atualizações automáticas em segundo plano
+  // (evita apagar a lista e piscar "Carregando..." a cada 60s com o painel
+  // já aberto — mesmo cuidado do resetarPagina em MassivasService.buscarTudo).
+  private buscarUcsLivro(livro: string, mostrarCarregando: boolean): void {
     this.erroTimelineLivro.set(null);
-
-    const cache = this.cacheUcsLivro.get(livro);
-    if (cache) {
-      this.timelineLivro.set(cache.timeline);
-      this.atuaisLivro.set(cache.atuais);
-      this.carregandoTimelineLivro.set(false);
-      return;
+    if (mostrarCarregando) {
+      this.carregandoTimelineLivro.set(true);
+      this.timelineLivro.set([]);
+      this.atuaisLivro.set([]);
     }
-
-    this.carregandoTimelineLivro.set(true);
-    this.timelineLivro.set([]);
-    this.atuaisLivro.set([]);
 
     this.http
       .get<UcsLivroResponse>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
       .subscribe({
         next: resposta => {
-          this.cacheUcsLivro.set(livro, { atuais: resposta.atuais, timeline: resposta.timeline });
           this.timelineLivro.set(resposta.timeline);
           this.atuaisLivro.set(resposta.atuais);
           this.carregandoTimelineLivro.set(false);

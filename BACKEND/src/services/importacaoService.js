@@ -136,4 +136,43 @@ async function importarArquivo(db, tabela, empresaId, buffer) {
   return { linhasProcessadas: linhasInseridas, modo: config.modo, tabela, compartilhada: !config.temEmpresa };
 }
 
-module.exports = { importarArquivo, CONFIG_IMPORTACAO };
+// Gera um .xlsx com uma aba por tabela importável (mesmo conjunto de
+// CONFIG_IMPORTACAO usado no import), cada aba com o cabeçalho — as mesmas
+// colunas aceitas no import, na mesma ordem — e até 1 linha real de exemplo,
+// pra servir de referência de formato pra quem for preparar uma planilha.
+// Usa a sessão/RLS de quem chamou, sem filtro explícito de empresa: não-ROOT
+// só enxerga linha da própria empresa porque a RLS já filtra sozinha; ROOT
+// pode ver qualquer linha — mesmo comportamento de leitura já usado no resto
+// do app, não é um caminho novo de acesso.
+async function gerarExemploTodasTabelas(db) {
+  const workbook = new ExcelJS.Workbook();
+
+  for (const [tabela, config] of Object.entries(CONFIG_IMPORTACAO)) {
+    const planilha = workbook.addWorksheet(tabela);
+    planilha.addRow(config.colunas);
+
+    const colunasSql = config.colunas.map(c => `"${c}"`).join(', ');
+    // req.db é uma transação real por requisição (abrirContextoTenant) — um
+    // erro de SQL "envenena" a transação inteira até SAVEPOINT/ROLLBACK
+    // TO/COMMIT (comportamento padrão do Postgres). Sem o SAVEPOINT aqui, a
+    // primeira tabela com config desatualizada (ex. contr_execucao_leitura,
+    // que ainda referencia colunas removidas pela ADR 0018) derrubaria TODAS
+    // as tabelas seguintes do mesmo loop com "current transaction is
+    // aborted" — confirmado ao vivo antes desse fix.
+    await db.query('SAVEPOINT antes_exemplo');
+    try {
+      const { rows } = await db.query(`SELECT ${colunasSql} FROM ${tabela} LIMIT 1`);
+      if (rows[0]) {
+        planilha.addRow(config.colunas.map(c => rows[0][c] ?? ''));
+      }
+      await db.query('RELEASE SAVEPOINT antes_exemplo');
+    } catch (erro) {
+      await db.query('ROLLBACK TO SAVEPOINT antes_exemplo');
+      planilha.addRow([`(config de import desatualizada: ${erro.message})`]);
+    }
+  }
+
+  return workbook.xlsx.writeBuffer();
+}
+
+module.exports = { importarArquivo, gerarExemploTodasTabelas, CONFIG_IMPORTACAO };

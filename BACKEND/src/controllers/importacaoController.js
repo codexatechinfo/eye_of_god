@@ -1,4 +1,4 @@
-const { importarArquivo, CONFIG_IMPORTACAO } = require('../services/importacaoService');
+const { importarArquivo, gerarExemploTodasTabelas, CONFIG_IMPORTACAO } = require('../services/importacaoService');
 const { registrarAuditoria } = require('../services/auditoriaService');
 
 async function tabelasDisponiveis(req, res) {
@@ -56,4 +56,16 @@ async function importar(req, res) {
   }
 }
 
-module.exports = { tabelasDisponiveis, importar };
+async function exemplo(req, res) {
+  try {
+    const buffer = await gerarExemploTodasTabelas(req.db);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="exemplo_importacao.xlsx"');
+    res.send(Buffer.from(buffer));
+  } catch (erro) {
+    console.error('❌ Erro ao gerar exemplo de importação:', erro);
+    res.status(500).json({ sucesso: false, erro: erro.message });
+  }
+}
+
+module.exports = { tabelasDisponiveis, importar, exemplo };

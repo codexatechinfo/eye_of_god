@@ -202,3 +202,87 @@ a carga, em vez de precisar reconstruir 4M+ entradas de uma vez no fim. Pra um v
 tamanho, criar depois costuma ser mais rápido (evita manutenção de índice por linha durante o
 load), mas não chegou a ser um problema aqui (~9min pro total). Vale considerar a ordem
 inversa (`COPY` primeiro, índice depois) se um import futuro for significativamente maior.
+
+## Adendo 3 — habilitada na aba Importação (upsert por UC) + export de exemplo de todas as tabelas
+
+Usuário pediu duas coisas: 1) a tabela passar a aceitar import pela UI (upsert por UC — linha
+repetida substitui, nova só adiciona); 2) um botão que baixe, de uma vez, um exemplo (cabeçalho
++ 1 linha real) de **todas** as tabelas importáveis, pra servir de referência de formato.
+
+### 1. Nova entrada em `importacaoConfig.js`
+
+```js
+coordenadas_ucs_mineradas: {
+  modo: 'upsert',
+  temEmpresa: true,
+  chave: ['unidade_consumidora'],
+  colunas: [
+    'unidade_consumidora', 'regiao', 'cod_local', 'nom_municipio', 'localidade',
+    'endereco', 'tipo_logradouro', 'logradouro', 'numero_imovel', 'zona',
+    'classe_principal', 'etapa', 'livro', 'sequencia', 'situacao_uc', 'latitude',
+    'longitude', 'coord_confirmada', 'geom', 'geom_area',
+  ],
+},
+```
+
+Nenhuma mudança no motor de import (`importacaoService.js`) — o mecanismo genérico de
+DELETE-por-chave-via-`unnest`+INSERT (já usado por todas as outras tabelas `upsert`) funciona
+sem alteração pra essa tabela também. Ponto que exigiu verificação antes de incluir `geom`/
+`geom_area` na lista: essas colunas são `geometry` de verdade (Adendo 2), não texto — testado
+ao vivo que um bind parametrizado de texto puro (exatamente o que `montarInsert` já faz pra
+qualquer coluna) é aceito sem erro pelo Postgres, porque `geometry_in()` do PostGIS já
+reconhece hexadecimal WKB como formato de entrada válido. Confirmado com um teste de ponta a
+ponta (dentro de transação com `ROLLBACK`, sem tocar o dado real): UC já existente teve a linha
+inteira substituída (incluindo `geom`→`NULL`, já que a planilha de teste não trouxe essa
+coluna — mesmo comportamento de qualquer outro upsert deste projeto, substituição é de linha
+inteira, não campo a campo) e UC nova foi inserida corretamente.
+
+**Aviso de comportamento**: como é substituição de linha inteira, reimportar uma planilha que
+tenha só um subconjunto de colunas (ex.: só coordenadas atualizadas, sem `geom`/`geom_area`)
+apaga a geometria da UC substituída. Se o fluxo real for atualizações parciais de coordenada,
+vale ou sempre incluir `geom`/`geom_area` na planilha, ou pedir uma mudança de comportamento
+(upsert parcial por campo) antes de usar isso em produção.
+
+### 2. Export de exemplo — `GET /importacao/exemplo`
+
+Nova função `gerarExemploTodasTabelas(db)` em `importacaoService.js`: para cada entrada de
+`CONFIG_IMPORTACAO`, monta uma aba no `.xlsx` com o cabeçalho (mesmas `colunas` aceitas no
+import) e tenta buscar `SELECT <colunas> FROM <tabela> LIMIT 1` pra usar como linha de
+exemplo — sem filtro explícito de empresa (a sessão/RLS de quem chamou já filtra sozinha; ROOT
+vê qualquer linha, mesmo comportamento de leitura já usado no resto do app). Novo endpoint
+`GET /importacao/exemplo` (mesmo nível mínimo `ADMINISTRADOR` da rota de import, herdado do
+`router.use` já existente), controller `exemplo()` que devolve o `.xlsx` como anexo
+(`Content-Disposition: attachment`). Frontend: `ImportacaoService.baixarExemplo()` (`GET` com
+`responseType: 'blob'`, dispara o download via link temporário) e um botão na
+`importacao-view` acima do formulário de import.
+
+**Dois bugs achados e corrigidos durante a implementação, nenhum deles pedido — os dois
+bloqueavam a funcionalidade nova:**
+
+1. **`contr_execucao_leitura` no `importacaoConfig.js` está desatualizado** — ainda lista
+   colunas removidas na restruturação da ADR 0018 (`tipo_oss`, `qtd_digitados_nao_digitados`
+   etc., que não existem mais na tabela real). Já tinha sido identificado e propositalmente
+   deixado de fora do escopo numa sessão anterior (ver ADR 0018, seção "Fora de escopo") — o
+   import dessa tabela pela UI já estava quebrado antes desta mudança, silenciosamente (ninguém
+   tentou usar). Não corrigido aqui (fora do pedido), mas agora **visível**: a aba de exemplo
+   mostra `"(config de import desatualizada: column "tipo_oss" does not exist)"` na aba dessa
+   tabela em vez de travar tudo.
+2. **Uma tabela com erro de SQL "envenenava" a transação inteira da requisição** — `req.db` é
+   uma transação real por requisição (`abrirContextoTenant`/`fecharContextoTenant`, commit ou
+   rollback só no fim). Sem tratamento, o erro de `contr_execucao_leitura` (achado #1) fazia
+   TODAS as tabelas processadas depois dela no mesmo loop falhar com `current transaction is
+   aborted, commands ignored until end of transaction block` — confirmado ao vivo antes do
+   fix. Corrigido com `SAVEPOINT`/`ROLLBACK TO SAVEPOINT` por tabela: uma falha isolada não
+   contamina as demais, a transação segue saudável pro resto da requisição (verificado com uma
+   query de sanidade depois do loop inteiro).
+
+### Verificação
+
+- Testado via HTTP real (token JWT `ROOT` de curta duração, gerado só pra teste, descartado
+  depois): `GET /importacao` lista `coordenadas_ucs_mineradas` com a config correta;
+  `GET /importacao/exemplo` devolve `.xlsx` (17KB, todas as 13 tabelas, headers corretos —
+  `Content-Type`/`Content-Disposition` de anexo).
+- Import upsert testado de ponta a ponta dentro de transação com `ROLLBACK` (sem gravar no
+  dado real de 4,1 milhões de linhas): substituição de UC existente e inserção de UC nova, os
+  dois corretos.
+- `npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console.

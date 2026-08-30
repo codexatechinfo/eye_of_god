@@ -128,6 +128,24 @@ const CONFIG_IMPORTACAO = {
     chave: ['UC'],
     colunas: ['UC', 'latitude', 'longitude'],
   },
+  // Ver ADR 0021 — chave por UC: linha com unidade_consumidora já existente
+  // substitui a linha (coordenada/endereço atualizados); UC nova é só
+  // inserida. geom/geom_area são geometry(Point,4326)/geometry(Polygon,4326)
+  // de verdade (não texto) — testado que o driver aceita o valor de texto
+  // hexadecimal (WKB) vindo da planilha direto num bind parametrizado sem
+  // tratamento especial, porque geometry_in() do PostGIS já reconhece esse
+  // formato como entrada válida.
+  coordenadas_ucs_mineradas: {
+    modo: 'upsert',
+    temEmpresa: true,
+    chave: ['unidade_consumidora'],
+    colunas: [
+      'unidade_consumidora', 'regiao', 'cod_local', 'nom_municipio', 'localidade',
+      'endereco', 'tipo_logradouro', 'logradouro', 'numero_imovel', 'zona',
+      'classe_principal', 'etapa', 'livro', 'sequencia', 'situacao_uc', 'latitude',
+      'longitude', 'coord_confirmada', 'geom', 'geom_area',
+    ],
+  },
 };
 
 module.exports = { CONFIG_IMPORTACAO };

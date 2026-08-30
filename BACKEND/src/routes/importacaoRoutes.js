@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const router = express.Router();
-const { tabelasDisponiveis, importar } = require('../controllers/importacaoController');
+const { tabelasDisponiveis, importar, exemplo } = require('../controllers/importacaoController');
 const { exigirNivelMinimo } = require('../middlewares/authMiddleware');
 
 const TIPOS_ACEITOS = new Set([
@@ -22,6 +22,7 @@ const upload = multer({
 router.use(exigirNivelMinimo('ADMINISTRADOR'));
 
 router.get('/', tabelasDisponiveis);
+router.get('/exemplo', exemplo);
 router.post('/:tabela', upload.single('arquivo'), importar);
 
 // multer (tamanho/tipo de arquivo) rejeita antes do controller — sem isso

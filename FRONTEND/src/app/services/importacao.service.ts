@@ -24,6 +24,8 @@ export class ImportacaoService {
 
   tabelas = signal<TabelaImportavel[]>([]);
   carregandoTabelas = signal(false);
+  baixandoExemplo = signal(false);
+  erroExemplo = signal<string | null>(null);
 
   constructor(private http: HttpClient) {}
 
@@ -45,5 +47,27 @@ export class ImportacaoService {
       ? `${this.apiUrl}/importacao/${tabela}?empresaId=${encodeURIComponent(empresaId)}`
       : `${this.apiUrl}/importacao/${tabela}`;
     return this.http.post<ResultadoImportacao>(url, formData);
+  }
+
+  // Baixa um .xlsx com uma aba por tabela importável, cabeçalho + até 1
+  // linha real de exemplo — referência de formato pra preparar planilhas.
+  baixarExemplo(): void {
+    this.baixandoExemplo.set(true);
+    this.erroExemplo.set(null);
+    this.http.get(`${this.apiUrl}/importacao/exemplo`, { responseType: 'blob' }).subscribe({
+      next: blob => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'exemplo_importacao.xlsx';
+        link.click();
+        window.URL.revokeObjectURL(url);
+        this.baixandoExemplo.set(false);
+      },
+      error: () => {
+        this.erroExemplo.set('Não foi possível baixar o exemplo.');
+        this.baixandoExemplo.set(false);
+      },
+    });
   }
 }

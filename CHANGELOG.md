@@ -5,6 +5,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Adicionado
+
+- Aba Trilho: o calendário de data (antes travado só em hoje) agora permite navegar pra dias de
+  execução passados — Realizados/Não realizados/Impedimentos/lista de livros/cards do
+  colaborador atualizam pra refletir o dia selecionado. Timeline UC-a-UC do painel de livro
+  passou a mostrar também as UCs ainda não realizadas, com ponto cinza e "Ainda não realizada"
+  no lugar da data. Ver Adendo 20 da
+  [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+
 ### Alterado
 
 - Scraper de Acompanhamento (`copelScraperService.js`): fila de trabalho compartilhada entre

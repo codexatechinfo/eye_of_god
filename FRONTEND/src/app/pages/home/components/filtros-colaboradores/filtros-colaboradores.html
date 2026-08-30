@@ -32,10 +32,9 @@
   <input
     type="date"
     [ngModel]="colaboradoresService.filtroData()"
-    (ngModelChange)="colaboradoresService.filtroData.set($event)"
-    [min]="hoje"
+    (ngModelChange)="colaboradoresService.onFiltroDataChange($event)"
     [max]="hoje"
-    title="Por enquanto só é possível consultar o dia de hoje"
+    title="Consultar a atividade de um dia passado"
     class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
   />
 

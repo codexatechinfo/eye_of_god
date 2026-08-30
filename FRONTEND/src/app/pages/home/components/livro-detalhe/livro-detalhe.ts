@@ -33,4 +33,12 @@ export class LivroDetalhe {
   ehImpedimento(codigo: string | null): boolean {
     return ehCodigoDeImpedimento(codigo);
   }
+
+  // UCs do livro que ainda não têm codigo preenchido — não entram em
+  // timelineLivro (que só tem "quando foi realizada", não existe pra quem
+  // nunca foi). Aparecem depois da timeline, com ponto cinza (pedido do
+  // usuário), pra a lista mostrar o livro inteiro, não só o que já rodou.
+  naoRealizadas() {
+    return this.colaboradoresService.atuaisLivro().filter(uc => !uc.codigo);
+  }
 }

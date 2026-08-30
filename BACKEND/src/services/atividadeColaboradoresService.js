@@ -22,6 +22,19 @@ function paraDataOrdenavel(dataStr) {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 
+function hojeIso() {
+  const agora = new Date();
+  return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+}
+
+// "YYYY-MM-DD" (formato do <input type="date"> do frontend) -> "DD/MM/YYYY"
+// (formato de contr_execucao_leitura.data_import). Sem validação de
+// intervalo aqui — uma data sem dado simplesmente devolve listas vazias.
+function isoParaDataBr(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso || '').trim());
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : null;
+}
+
 // Mesma regra de massivasService.js (condicaoTipoServico/TIPO_SERVICO_CONTR_SQL,
 // ADR 0012 Adendo 8): sem data_recebimento ainda, não dá pra saber se vai
 // virar leitura ou releitura; recebido antes do prazo é leitura, recebido no
@@ -52,12 +65,18 @@ function classificarTipoServico(dataRecebimento, dataPrevistaLimite) {
 // (listarAtividadeHoje) precisa checar tipoServico === 'leitura' e etapa
 // urbana antes de usar o valor — ver massivasService.js pro mesmo filtro em
 // SQL.
-async function obterMapaPrazoRegulatorio(db) {
-  const { rows } = await db.query(`
+// dataConsultaIso ("YYYY-MM-DD"): mês de referência do prazo regulatório é
+// o da data CONSULTADA, não necessariamente o mês corrente — importa ao
+// navegar pra uma data passada de um mês diferente do atual.
+async function obterMapaPrazoRegulatorio(db, dataConsultaIso) {
+  const { rows } = await db.query(
+    `
     SELECT livro, dias_finais, prazo_calendario
     FROM prazo_reg_livros
-    WHERE mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
-  `);
+    WHERE mes_ref = to_char(date_trunc('month', $1::date), 'YYYY-MM-DD')
+    `,
+    [dataConsultaIso || hojeIso()],
+  );
   const mapa = new Map();
   for (const linha of rows) {
     const chave = Number(linha.livro);
@@ -80,23 +99,25 @@ function calcularDiasPrazoRegulatorio(hoje, prazoCalendario, diasFinais) {
 
 // Só atribuidas_im/em_execucao_im têm leiturista (pendentes_im não tem
 // ninguém atribuído ainda, então não entra aqui — ver TABELAS_MASSIVA em
-// massivasService.js). Pega sempre o batch mais recente de cada tabela.
+// massivasService.js). Pega o batch mais recente de cada tabela DENTRO da
+// data pedida (não o mais recente de sempre) — pra consulta de data
+// passada refletir a massiva daquele dia, não a de hoje.
 //
 // Cada tabela pode ter mais de uma linha por (leiturista, livro) — o mesmo
 // padrão de sub-lote visto em massivasService.contarFonteMassiva/detalheMassiva
 // — então dedup igual lá: dentro da mesma categoria fica com a linha de
 // menor quantidade restante (mais avançada); entre categorias, "Em Execução"
 // vence "Atribuída".
-async function listarColaboradoresMassivaHoje(db) {
+async function listarColaboradoresMassivaHoje(db, dataBr) {
   const restante = `(CASE WHEN t.qtd_digitados_nao_digitados ~ '^[0-9]+/[0-9]+$'
     THEN split_part(t.qtd_digitados_nao_digitados, '/', 1)::int + split_part(t.qtd_digitados_nao_digitados, '/', 2)::int
     ELSE 0 END)`;
 
   const { rows: linhas } = await db.query(`
     WITH ultimo_atribuidas AS (
-      SELECT dt_import, hr_import FROM atribuidas_im ORDER BY id DESC LIMIT 1
+      SELECT dt_import, hr_import FROM atribuidas_im WHERE dt_import = $1 ORDER BY id DESC LIMIT 1
     ), ultimo_execucao AS (
-      SELECT dt_import, hr_import FROM em_execucao_im ORDER BY id DESC LIMIT 1
+      SELECT dt_import, hr_import FROM em_execucao_im WHERE dt_import = $1 ORDER BY id DESC LIMIT 1
     ), atribuidas AS (
       SELECT DISTINCT ON (t.leiturista, t.livro)
         t.leiturista, t.livro, t.etapa, t.qtd_digitados_nao_digitados, t.hr_import,
@@ -115,7 +136,7 @@ async function listarColaboradoresMassivaHoje(db) {
     SELECT DISTINCT ON (leiturista, livro) leiturista, livro, etapa, qtd_digitados_nao_digitados, hr_import, situacao
     FROM (SELECT * FROM atribuidas UNION ALL SELECT * FROM execucao) unidos
     ORDER BY leiturista, livro, prioridade DESC
-  `);
+  `, [dataBr]);
 
   const porColaborador = new Map();
   for (const linha of linhas) {
@@ -142,8 +163,13 @@ async function listarColaboradoresMassivaHoje(db) {
   return porColaborador;
 }
 
-async function listarAtividadeHoje(db) {
-  const hoje = new Date().toLocaleDateString('pt-BR');
+// dataIso ("YYYY-MM-DD", mesmo formato do <input type="date"> do
+// frontend): quando informada, consulta a atividade DAQUELE dia em vez de
+// hoje — usuário pediu pra poder navegar dias de execução passados pelo
+// calendário da aba Trilho. undefined/null continua consultando hoje.
+async function listarAtividadeHoje(db, dataIso) {
+  const hojeIsoConsultado = dataIso || hojeIso();
+  const hoje = isoParaDataBr(hojeIsoConsultado) || new Date().toLocaleDateString('pt-BR');
 
   // Agregado por (livro, hora_import) — um livro agora tem várias linhas
   // (uma por UC/medidor, ver ADR 0018 Adendo 2), todas compartilhando o
@@ -188,7 +214,7 @@ async function listarAtividadeHoje(db) {
       `,
       [hoje],
     ),
-    obterMapaPrazoRegulatorio(db),
+    obterMapaPrazoRegulatorio(db, hojeIsoConsultado),
   ]);
 
   const porColaborador = new Map();
@@ -328,7 +354,7 @@ async function listarAtividadeHoje(db) {
   // Colaboradores só com massiva atribuída não aparecem em contr_execucao_leitura
   // (que é só leitura/releitura) e cairiam em "sem serviço" mesmo trabalhando —
   // mescla quem já está na lista e cria entrada nova pra quem só tem massiva.
-  const massivaPorColaborador = await listarColaboradoresMassivaHoje(db);
+  const massivaPorColaborador = await listarColaboradoresMassivaHoje(db, hoje);
   for (const [nome, livrosMassiva] of massivaPorColaborador) {
     const existente = colaboradores.find(c => c.colaborador === nome);
     const digitadosMassiva = livrosMassiva.reduce((soma, l) => soma + l.digitados, 0);
@@ -371,9 +397,9 @@ async function listarAtividadeHoje(db) {
   // motivo/INSS, mais detalhado), licença de ativos_inativos e suspensão da
   // tabela suspensao só preenchem quem não tinha nada nas fontes anteriores.
   const [afastamentosHoje, licencasHoje, suspensoesHoje] = await Promise.all([
-    obterAfastamentosHoje(db),
-    obterLicencasAtivosInativosHoje(db),
-    obterSuspensoesHoje(db),
+    obterAfastamentosHoje(db, hojeIsoConsultado),
+    obterLicencasAtivosInativosHoje(db, hojeIsoConsultado),
+    obterSuspensoesHoje(db, hojeIsoConsultado),
   ]);
   for (const [nome, info] of Object.entries(licencasHoje)) {
     if (!afastamentosHoje[nome]) afastamentosHoje[nome] = info;
@@ -407,9 +433,8 @@ function paraDataIso(str) {
   return null;
 }
 
-async function obterAfastamentosHoje(db) {
-  const agora = new Date();
-  const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+async function obterAfastamentosHoje(db, dataConsultaIso) {
+  const dataRef = dataConsultaIso || hojeIso();
 
   const { rows: linhas } = await db.query(`
     SELECT colaborador, data_afastamento, data_retorno, qtd_dias_afastado, "afastado_INSS", motivo_afastamento
@@ -422,7 +447,7 @@ async function obterAfastamentosHoje(db) {
     const inicio = paraDataIso(linha.data_afastamento);
     const fim = paraDataIso(linha.data_retorno);
     if (!inicio || !fim) continue;
-    if (!(inicio <= hojeIso && hojeIso < fim)) continue;
+    if (!(inicio <= dataRef && dataRef < fim)) continue;
 
     porColaborador[linha.colaborador] = {
       origem: 'atestado',
@@ -443,9 +468,8 @@ async function obterAfastamentosHoje(db) {
 // retorno ("YYYY-MM-DD") ou o texto "INDETERMINADO" quando ainda não
 // definida. Só entra se hoje já está dentro do período — data de início já
 // chegou e (retorno indeterminado OU ainda não chegou a data de retorno).
-async function obterLicencasAtivosInativosHoje(db) {
-  const agora = new Date();
-  const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+async function obterLicencasAtivosInativosHoje(db, dataConsultaIso) {
+  const dataRef = dataConsultaIso || hojeIso();
 
   const { rows: linhas } = await db.query(`
     SELECT colaborador, situacao, volta_afastamento
@@ -459,12 +483,12 @@ async function obterLicencasAtivosInativosHoje(db) {
     const match = /^A2\s*-\s*(\d{2})\/(\d{2})\/(\d{4})$/.exec((linha.situacao || '').trim());
     if (!match) continue;
     const inicio = `${match[3]}-${match[2]}-${match[1]}`;
-    if (hojeIso < inicio) continue;
+    if (dataRef < inicio) continue;
 
     const voltaTexto = (linha.volta_afastamento || '').trim();
     const indeterminado = voltaTexto.toUpperCase() === 'INDETERMINADO';
     const fim = indeterminado ? null : paraDataIso(voltaTexto);
-    if (!indeterminado && fim && hojeIso >= fim) continue;
+    if (!indeterminado && fim && dataRef >= fim) continue;
 
     porColaborador[linha.colaborador] = {
       origem: 'licenca',
@@ -485,9 +509,8 @@ async function obterLicencasAtivosInativosHoje(db) {
 // (data_falta), não um período com início/fim como atestado/licença. "Hoje
 // contempla" aqui é: existe uma linha com data_falta = hoje. Igual às outras
 // duas fontes, só preenche quem ainda não tem entrada (prioridade menor).
-async function obterSuspensoesHoje(db) {
-  const agora = new Date();
-  const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+async function obterSuspensoesHoje(db, dataConsultaIso) {
+  const dataRef = dataConsultaIso || hojeIso();
 
   const { rows: linhas } = await db.query(`
     SELECT colaborador, data_falta, justificativa, observacao
@@ -498,7 +521,7 @@ async function obterSuspensoesHoje(db) {
 
   for (const linha of linhas) {
     const data = paraDataIso(linha.data_falta);
-    if (!data || data !== hojeIso) continue;
+    if (!data || data !== dataRef) continue;
 
     porColaborador[linha.colaborador] = {
       origem: 'suspensao',

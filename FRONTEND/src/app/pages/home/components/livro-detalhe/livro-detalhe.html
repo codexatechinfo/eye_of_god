@@ -150,7 +150,10 @@
     >
       Nenhuma UC realizada ainda para este livro.
     </div>
-    <ol class="relative border-l-2 border-slate-100 ml-2" *ngIf="!colaboradoresService.carregandoTimelineLivro() && colaboradoresService.timelineLivro().length">
+    <ol
+      class="relative border-l-2 border-slate-100 ml-2"
+      *ngIf="!colaboradoresService.carregandoTimelineLivro() && (colaboradoresService.timelineLivro().length || naoRealizadas().length)"
+    >
       <li class="mb-3 ml-4" *ngFor="let item of colaboradoresService.timelineLivro()">
         <div
           class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
@@ -164,6 +167,15 @@
             </span>
           </span>
           <span class="text-slate-400 shrink-0 tabular-nums">{{ item.data_import }} {{ item.hora_import }}</span>
+        </div>
+      </li>
+      <!-- UCs ainda sem codigo — sem "quando" (nunca aconteceu), aparecem
+           depois das realizadas com ponto cinza, pra listar o livro inteiro. -->
+      <li class="mb-3 ml-4" *ngFor="let item of naoRealizadas()">
+        <div class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1 bg-slate-300"></div>
+        <div class="flex items-center justify-between gap-2 text-[11px]">
+          <span class="truncate flex-1 px-1.5 font-semibold tabular-nums text-slate-400">{{ item.uc }}</span>
+          <span class="text-slate-300 shrink-0">Ainda não realizada</span>
         </div>
       </li>
     </ol>

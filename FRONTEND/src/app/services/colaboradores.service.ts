@@ -282,6 +282,17 @@ export class ColaboradoresService {
     return lista.filter(c => categoriaDe(atividade[c.colaborador], afastamentos[c.colaborador]) === filtro);
   });
 
+  // "hoje" enquanto a data selecionada for o dia atual; "em DD/MM/YYYY"
+  // quando o usuário navegou pro calendário pra um dia passado — usado nos
+  // rótulos "Livros de hoje"/"Nenhuma atividade hoje" da lista lateral.
+  rotuloDataAtividade = computed(() => {
+    const data = this.dataAtividade();
+    if (!data) return 'hoje';
+    const [dia, mes, ano] = data.split('/');
+    const iso = `${ano}-${mes}-${dia}`;
+    return iso === hojeIso() ? 'hoje' : `em ${data}`;
+  });
+
   alternarFiltroCategoria(categoria: CategoriaAtividade): void {
     this.filtroCategoria.set(this.filtroCategoria() === categoria ? '' : categoria);
   }
@@ -293,7 +304,12 @@ export class ColaboradoresService {
     this.carregarOpcoesFiltro();
     this.buscar();
     this.carregarAtividadeHoje();
-    setInterval(() => this.carregarAtividadeHoje(), this.INTERVALO_ATIVIDADE_MS);
+    // Só repete sozinho enquanto a data selecionada for hoje — consultar
+    // um dia passado não tem "chegando dado novo" pra esperar, e ficar
+    // refazendo a mesma busca a cada 60s seria trabalho à toa.
+    setInterval(() => {
+      if (this.filtroData() === hojeIso()) this.carregarAtividadeHoje();
+    }, this.INTERVALO_ATIVIDADE_MS);
   }
 
   carregarOpcoesFiltro(): void {
@@ -338,11 +354,21 @@ export class ColaboradoresService {
     this.filtroRegional.set('');
     this.filtroData.set(hojeIso());
     this.buscar();
+    this.carregarAtividadeHoje();
+  }
+
+  // Chamado pelo template quando o usuário troca a data no calendário —
+  // recarrega a atividade (Realizados/Impedimentos/cards/lista de livros)
+  // pra refletir o dia selecionado.
+  onFiltroDataChange(data: string): void {
+    this.filtroData.set(data);
+    this.carregarAtividadeHoje();
   }
 
   carregarAtividadeHoje(): void {
     this.carregandoAtividade.set(true);
-    this.http.get<AtividadeHojeResponse>(`${this.apiUrl}/colaboradores/atividade-hoje`).subscribe({
+    const params = new HttpParams().set('data', this.filtroData());
+    this.http.get<AtividadeHojeResponse>(`${this.apiUrl}/colaboradores/atividade-hoje`, { params }).subscribe({
       next: resposta => {
         const mapa: Record<string, AtividadeColaborador> = {};
         for (const item of resposta.colaboradores) {

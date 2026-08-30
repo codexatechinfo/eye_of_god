@@ -274,7 +274,9 @@
 
         <!-- Lista de livros com histórico por faixa de hora -->
         <div *ngIf="a.livros.length">
-          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Livros de hoje</div>
+          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+            Livros {{ colaboradoresService.rotuloDataAtividade() }}
+          </div>
           <div class="space-y-1">
             <div *ngFor="let livro of a.livros">
               <button
@@ -352,7 +354,7 @@
           </div>
         </ng-container>
         <ng-template #semJustificativa>
-          <p class="text-[11px] text-slate-400">Nenhuma atividade registrada hoje.</p>
+          <p class="text-[11px] text-slate-400">Nenhuma atividade registrada {{ colaboradoresService.rotuloDataAtividade() }}.</p>
         </ng-template>
       </ng-template>
     </div>

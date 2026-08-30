@@ -1000,6 +1000,79 @@ leitura nesse meio-tempo.
   só em teoria.
 - `npm test` (12 testes de isolamento de tenant) continua passando.
 
+## Adendo 20 — calendário de datas passadas, UCs pendentes na timeline, e confirmação do sintoma do Adendo 19
+
+Três pedidos do usuário, o último confirmando ao vivo que o Adendo 19 já tinha resolvido um
+sintoma que ele via como suspeito:
+
+### 1. Calendário da aba Trilho: navegar pra dias de execução passados
+
+O campo de data (`filtros-colaboradores.html`) já existia, mas travado só em hoje (`[min]`/
+`[max]="hoje"`, tooltip "por enquanto só é possível consultar o dia de hoje") — `filtroData` era
+setado mas nunca chegava a influenciar a busca de atividade.
+
+`atividadeColaboradoresService.js#listarAtividadeHoje(db, dataIso)` ganhou um segundo parâmetro
+opcional (`"YYYY-MM-DD"`, mesmo formato do `<input type="date">`; `undefined` continua
+consultando hoje). Threading completo da data por todas as sub-consultas que antes assumiam
+"hoje" implicitamente:
+
+- `WHERE data_import = $1` (query principal) já usava uma variável local `hoje` — só precisou
+  deixar de vir sempre de `new Date()` e passar a vir do parâmetro quando presente.
+- `listarColaboradoresMassivaHoje(db, dataBr)`: antes pegava sempre o batch **mais recente de
+  sempre** de `atribuidas_im`/`em_execucao_im` (`ORDER BY id DESC LIMIT 1`, sem filtro de data) —
+  numa consulta de dia passado isso mostraria a massiva de HOJE misturada com a leitura/releitura
+  do dia antigo. Adicionado `WHERE dt_import = $1` nas duas CTEs (`ultimo_atribuidas`/
+  `ultimo_execucao`).
+- `obterMapaPrazoRegulatorio(db, dataConsultaIso)`: usava `CURRENT_DATE` pra achar o mês de
+  `prazo_reg_livros` — errado ao navegar pra um mês diferente do atual (ex.: virou o mês desde a
+  execução consultada). Trocado por `date_trunc('month', $1::date)`.
+- `obterAfastamentosHoje`/`obterLicencasAtivosInativosHoje`/`obterSuspensoesHoje`: cada uma
+  computava seu próprio "hoje" via `new Date()` — pra afastamento/licença/suspensão refletirem o
+  dia CONSULTADO (não o dia real), passaram a receber a mesma data ISO como parâmetro.
+
+Rota (`GET /colaboradores/atividade-hoje?data=YYYY-MM-DD`) e frontend
+(`ColaboradoresService.carregarAtividadeHoje` envia `filtroData()` como querystring;
+`onFiltroDataChange(data)` seta o filtro e recarrega) atualizados. Removido o `[min]`/`[max]`
+travando em hoje (só `[max]="hoje"` continua — não faz sentido consultar o futuro). O polling
+automático de 60s (`INTERVALO_ATIVIDADE_MS`) só dispara quando `filtroData() === hojeIso()` —
+consultar um dia passado não tem "dado novo chegando" pra esperar, refazer a mesma busca a cada
+60s seria só desperdício. Rótulos "Livros de hoje"/"Nenhuma atividade registrada hoje" (lista
+lateral) trocados por um `computed` (`rotuloDataAtividade`) que mostra "hoje" só quando a data
+selecionada realmente é hoje, senão "em DD/MM/YYYY".
+
+Verificado direto contra o banco (chamando `listarAtividadeHoje` fora da camada HTTP): hoje sem
+parâmetro (dia novo, virou a data durante a sessão — 0 colaboradores, esperado); um dia passado
+(`2026-08-28`) devolveu 214 colaboradores com dados plausíveis; uma data sem nenhum dado
+(`2020-01-01`) devolveu lista vazia sem erro.
+
+### 2. UCs ainda não realizadas na timeline (ponto cinza)
+
+A timeline do painel de livro (Adendos 16/17) só listava UCs **realizadas** (com `codigo`
+preenchido) — pedido do usuário: mostrar também as pendentes, pra a lista representar o livro
+inteiro, não só o que já rodou. `LivroDetalhe.naoRealizadas()` filtra `atuaisLivro()` por
+`!uc.codigo` (já buscado pra alimentar o card "Impedimentos", nenhuma chamada HTTP nova) e o
+template (`livro-detalhe.html`) as lista depois das realizadas, no mesmo `<ol>`, com ponto
+cinza (`bg-slate-300`) e "Ainda não realizada" no lugar da data/hora (não têm "quando" — nunca
+aconteceu).
+
+### 3. Confirmação: o "sincronismo" que parecia sempre avançar sem UC nova era o bug do Adendo 19
+
+Usuário questionou se "Último sincronismo" estava sendo preenchido mesmo sem nenhuma UC
+realizada naquele horário — print mostrava `23:39:36` avançando a cada ciclo. Verificado direto
+no banco: ANTES do fix do Adendo 19 (duplicidade de UC no mesmo lote com `codigo` divergente
+entre cópias), `digitados`/`naoDigitados` oscilavam de forma espúria entre lotes mesmo sem
+nenhuma leitura nova — disparando falsamente a checagem `inalterado` de
+`listarAtividadeHoje` (que só deveria marcar "mudou" quando `situacao`/`digitados`/
+`naoDigitados` realmente diferem do lote anterior) e fazendo "Último sincronismo" avançar a
+cada ciclo. Com o dedup do Adendo 19 já em produção, testado ao vivo pro mesmo colaborador/livro
+do print (`AMILTON STELLI`, livro `004489`, dia `29/08/2026`): `digitados`/`naoDigitados` ficaram
+estáveis em `237/36` em **todos os 10 lotes** do dia (`19:43:41` até `23:39:36`), e
+`ultimaMudancaHora` corretamente parou em `19:43:41` (a única mudança real) — não mais
+`23:39:36`. Confirma que o mecanismo já funciona como deveria; o sintoma que o usuário viu era
+efeito direto do bug já corrigido, não um problema novo.
+
+`npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

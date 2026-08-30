@@ -24,7 +24,8 @@ async function opcoesFiltro(req, res) {
 
 async function atividadeHoje(req, res) {
   try {
-    const dados = await listarAtividadeHoje(req.db);
+    const { data } = req.query;
+    const dados = await listarAtividadeHoje(req.db, data);
     res.json({ sucesso: true, ...dados });
   } catch (erro) {
     console.error('❌ Erro ao obter atividade dos colaboradores:', erro);

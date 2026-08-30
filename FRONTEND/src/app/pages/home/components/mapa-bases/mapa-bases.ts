@@ -73,10 +73,49 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       fadeAnimation: false,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const ruas = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
       maxZoom: 18,
     }).addTo(this.mapa);
+
+    // Esri World Imagery — satélite sem precisar de chave de API (diferente
+    // do Google Maps). "Satélite c/ rótulos" soma essa camada com os rótulos
+    // de referência (estradas/cidades) que a Esri publica separadamente.
+    const urlSatelite = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    const urlRotulosSatelite =
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+
+    const satelite = L.tileLayer(urlSatelite, { attribution: 'Tiles © Esri', maxZoom: 19 });
+
+    // Instâncias próprias (não reaproveita "satelite") — cada opção do
+    // controle de camadas precisa da sua própria instância de tile, senão
+    // trocar entre "Satélite" e "Satélite c/ rótulos" mexe na mesma camada
+    // por baixo dos panos.
+    const sateliteComRotulos = L.layerGroup([
+      L.tileLayer(urlSatelite, { attribution: 'Tiles © Esri', maxZoom: 19 }),
+      L.tileLayer(urlRotulosSatelite, { attribution: 'Tiles © Esri', maxZoom: 19 }),
+    ]);
+
+    const topografico = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenTopoMap',
+      maxZoom: 17,
+    });
+
+    // topleft: o painel de detalhe do livro (app-livro-detalhe) cobre o lado
+    // direito da tela quando aberto — no canto padrão (topright) o controle
+    // ficaria escondido atrás dele.
+    L.control
+      .layers(
+        {
+          Ruas: ruas,
+          Satélite: satelite,
+          'Satélite c/ rótulos': sateliteComRotulos,
+          Topográfico: topografico,
+        },
+        {},
+        { position: 'topleft' },
+      )
+      .addTo(this.mapa);
 
     for (const base of BASES_REGIONAIS) {
       const marcador = L.circleMarker([base.lat, base.lng], {

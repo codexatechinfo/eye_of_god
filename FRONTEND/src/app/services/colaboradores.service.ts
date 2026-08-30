@@ -209,6 +209,13 @@ interface UcsLivroResponse {
   timeline: TimelineUcItem[];
 }
 
+// "000" = leitura normal, "099" = sem leitura (não é problema de campo);
+// qualquer outro código preenchido é um impedimento real (portão trancado,
+// cão solto, etc.) — pedido explícito do usuário pro card "Impedimentos".
+function ehCodigoDeImpedimento(codigo: string | null): boolean {
+  return !!codigo && codigo !== '000' && codigo !== '099';
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -237,9 +244,12 @@ export class ColaboradoresService {
   livroSelecionado = signal<LivroSelecionado | null>(null);
 
   timelineLivro = signal<TimelineUcItem[]>([]);
+  atuaisLivro = signal<TimelineUcItem[]>([]);
   carregandoTimelineLivro = signal(false);
   erroTimelineLivro = signal<string | null>(null);
-  private cacheTimelineLivro = new Map<string, TimelineUcItem[]>();
+  private cacheUcsLivro = new Map<string, { atuais: TimelineUcItem[]; timeline: TimelineUcItem[] }>();
+
+  impedimentosLivro = computed(() => this.atuaisLivro().filter(uc => ehCodigoDeImpedimento(uc.codigo)).length);
 
   contagemPorRegional = computed(() => {
     const contagem = new Map<string, number>();
@@ -364,22 +374,25 @@ export class ColaboradoresService {
   private buscarTimelineLivro(livro: string): void {
     this.erroTimelineLivro.set(null);
 
-    const cache = this.cacheTimelineLivro.get(livro);
+    const cache = this.cacheUcsLivro.get(livro);
     if (cache) {
-      this.timelineLivro.set(cache);
+      this.timelineLivro.set(cache.timeline);
+      this.atuaisLivro.set(cache.atuais);
       this.carregandoTimelineLivro.set(false);
       return;
     }
 
     this.carregandoTimelineLivro.set(true);
     this.timelineLivro.set([]);
+    this.atuaisLivro.set([]);
 
     this.http
       .get<UcsLivroResponse>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
       .subscribe({
         next: resposta => {
-          this.cacheTimelineLivro.set(livro, resposta.timeline);
+          this.cacheUcsLivro.set(livro, { atuais: resposta.atuais, timeline: resposta.timeline });
           this.timelineLivro.set(resposta.timeline);
+          this.atuaisLivro.set(resposta.atuais);
           this.carregandoTimelineLivro.set(false);
         },
         error: () => {

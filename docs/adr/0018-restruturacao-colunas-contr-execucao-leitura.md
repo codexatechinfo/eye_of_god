@@ -772,6 +772,45 @@ Verificado por teste direto contra dado real (livro `004489`): 272 UCs em `atuai
 mexe em RLS/tenant. Frontend recarregado via HMR ao longo de toda a edição sem erro de
 compilação/console.
 
+## Adendo 16 — ajustes na timeline UC-a-UC e card "Impedimentos" (aba Trilho)
+
+Usuário viu a timeline do Adendo 15 ao vivo (print da tela) e pediu 2 ajustes, mais um pedido
+separado sobre o mapa:
+
+1. **A timeline devia mostrar só o número da UC e a hora de execução** — a versão anterior
+   também mostrava o valor de `codigo` (badge verde) ao lado, redundante com o que já estava
+   implícito ("hora de execução" já É a hora em que `codigo` apareceu preenchido pela primeira
+   vez — ver Adendo 15). Removida a exibição do `codigo` em
+   `livro-detalhe.html`, mantendo só `UC {uc}` e `{data_import} {hora_import}`.
+2. **Card "Impedimentos" (antes um placeholder "Em breve")**: usuário definiu a regra —
+   `codigo` diferente de `'000'` (leitura normal) e `'099'` (sem leitura, não é problema de
+   campo) conta como impedimento real (ex.: portão trancado, cão solto). Card trocado de
+   cinza/tracejado para o estilo âmbar (mesmo padrão visual dos outros cards preenchidos —
+   `Realizadas` em verde, `A realizar` em vermelho), mostrando a contagem real.
+
+   Fonte do dado: `atuais` (estado **atual** de cada UC, não a timeline de quando ela foi
+   realizada — impedimento é sobre o código de agora, não sobre histórico). `ColaboradoresService`
+   ganhou `atuaisLivro` (armazena o array `atuais` da mesma resposta de `/massivas/livro-ucs`
+   já buscada pra timeline — nenhuma chamada HTTP extra) e um `computed` `impedimentosLivro`
+   que filtra por `ehCodigoDeImpedimento(codigo)` (`codigo && codigo !== '000' && codigo !==
+   '099'`). Cache trocado de `Map<livro, timeline[]>` para `Map<livro, {atuais, timeline}>`
+   pra guardar as duas listas de uma vez.
+3. **Tipos de mapa (satélite, topográfico etc.)** — pedido à parte, sobre `app-mapa-bases.ts`
+   (mapa de bases regionais da aba Trilho, Leaflet com só uma camada OSM fixa até então).
+   Adicionado `L.control.layers` com 4 opções: `Ruas` (OSM, a mesma de antes), `Satélite` (Esri
+   World Imagery — escolhida por não exigir chave de API, ao contrário do Google Maps),
+   `Satélite c/ rótulos` (a mesma camada de satélite + uma camada de referência de
+   estradas/cidades da Esri por cima, num `L.layerGroup`) e `Topográfico` (OpenTopoMap). Cada
+   opção do controle usa sua própria instância de `L.tileLayer` (mesmo a satélite "pura" e a
+   satélite dentro do `layerGroup` da versão "c/ rótulos" são instâncias separadas, com a
+   mesma URL) — evita o comportamento inconsistente de reaproveitar a mesma instância de
+   camada em duas entradas do controle ao trocar entre elas. Controle posicionado em
+   `topleft` (não no canto padrão `topright`) porque o painel `app-livro-detalhe` cobre o lado
+   direito da tela quando um livro está aberto, o que esconderia o controle ali.
+
+Sem mudança de backend. Frontend recarregado via HMR sem erro de console/compilação durante
+toda a edição. `npm test` (12 testes de isolamento de tenant) continua passando.
+
 ## Consequências
 
 - `contr_execucao_leitura` com o novo schema confirmado via `\d` (RLS/FK/PK intactos).

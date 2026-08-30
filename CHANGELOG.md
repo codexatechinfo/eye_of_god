@@ -47,6 +47,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   sincronismo" do colaborador ficou sempre visível na lista lateral da aba Trilho (antes só no
   card expandido). Ver Adendo 15 da
   [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+- Timeline UC-a-UC do painel de livro (aba Trilho) simplificada para mostrar só o número da
+  UC e a hora de execução, sem o código repetido ao lado. Card "Impedimentos" (antes
+  placeholder "Em breve") passou a mostrar a contagem real de UCs com código diferente de
+  `000`/`099` (leitura normal / sem leitura). Mapa de bases regionais (`app-mapa-bases`, aba
+  Trilho) ganhou seletor de camadas — Ruas, Satélite, Satélite c/ rótulos e Topográfico. Ver
+  Adendo 16 da [ADR 0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
 
 ### Corrigido
 

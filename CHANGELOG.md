@@ -11,10 +11,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   `unidade_consumidora` — UC repetida substitui a linha, UC nova só adiciona), incluindo
   `geom`/`geom_area` (aceita o mesmo formato hexadecimal WKB que a tabela já usa). Novo botão
   "Baixar exemplo de todas as tabelas" — gera um `.xlsx` com uma aba por tabela importável,
-  cabeçalho + 1 linha real de exemplo, pra servir de referência de formato. Corrigido no
-  processo: um erro numa tabela (config de import desatualizada de
+  cabeçalho + 1 linha real de exemplo, pra servir de referência de formato — e depois passou a
+  baixar só a tabela escolhida no mesmo seletor do import (antes baixava sempre todas de uma
+  vez). Corrigido no processo: um erro numa tabela (config de import desatualizada de
   `contr_execucao_leitura`, já conhecida) não trava mais o exemplo das demais tabelas. Ver
-  Adendo 3 da [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
+  Adendos 3 e 4 da [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
 
 - Nova tabela `coordenadas_ucs_mineradas` (20 colunas de UC/endereço/coordenadas), com RLS
   multi-tenant idêntico ao das demais tabelas de negócio. PostGIS instalado no banco;

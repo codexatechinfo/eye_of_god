@@ -286,3 +286,26 @@ bloqueavam a funcionalidade nova:**
   dado real de 4,1 milhões de linhas): substituição de UC existente e inserção de UC nova, os
   dois corretos.
 - `npm test` (12 testes) continua passando. Frontend recarregado via HMR sem erro de console.
+
+## Adendo 4 — exportar exemplo de uma tabela específica, não só todas de uma vez
+
+Usuário pediu: "assim como eu escolho qual importar quero escolher qual exportar" — o botão do
+Adendo 3 só baixava todas as tabelas de uma vez, sem opção de escolher uma só.
+
+`gerarExemploTodasTabelas(db, tabelaFiltro)` ganhou um segundo parâmetro opcional: quando
+informado, gera só a aba dessa tabela; sem ele, mantém o comportamento anterior (todas).
+`GET /importacao/exemplo?tabela=nome` (novo query param opcional; 400 se a tabela não estiver
+em `CONFIG_IMPORTACAO`, mesma mensagem de erro já usada em `POST /importacao/:tabela`).
+`ImportacaoService.baixarExemplo(tabela?)` repassa o parâmetro e ajusta o nome do arquivo
+baixado (`exemplo_<tabela>.xlsx` vs `exemplo_importacao.xlsx`).
+
+No frontend, o botão "Baixar exemplo" saiu do topo da tela (antes solto, sem relação visual
+com nenhuma tabela específica) pra dentro do bloco de informação que já aparece quando uma
+tabela é selecionada no mesmo seletor usado pra import — reaproveita o `tabelaSelecionada`
+já existente no componente, sem select novo. Passa a chamar
+`baixarExemplo(tabelaSelecionada())`, sempre baixando só a tabela escolhida.
+
+Testado via HTTP real: exemplo de uma tabela só (`?tabela=coordenadas_ucs_mineradas`) devolve
+`.xlsx` com 1 aba só; tabela inválida devolve `400` com a mensagem esperada; chamar sem o
+parâmetro (endpoint ainda aceita, mantido por compatibilidade) continua devolvendo as 13 abas
+de antes. `npm test` (12 testes) continua passando.

@@ -144,10 +144,16 @@ async function importarArquivo(db, tabela, empresaId, buffer) {
 // só enxerga linha da própria empresa porque a RLS já filtra sozinha; ROOT
 // pode ver qualquer linha — mesmo comportamento de leitura já usado no resto
 // do app, não é um caminho novo de acesso.
-async function gerarExemploTodasTabelas(db) {
+//
+// `tabelaFiltro`: quando informado, só gera a aba dessa tabela (mesma
+// escolha do usuário no seletor de import) — sem ele, gera todas.
+async function gerarExemploTodasTabelas(db, tabelaFiltro) {
   const workbook = new ExcelJS.Workbook();
+  const entradas = tabelaFiltro
+    ? Object.entries(CONFIG_IMPORTACAO).filter(([tabela]) => tabela === tabelaFiltro)
+    : Object.entries(CONFIG_IMPORTACAO);
 
-  for (const [tabela, config] of Object.entries(CONFIG_IMPORTACAO)) {
+  for (const [tabela, config] of entradas) {
     const planilha = workbook.addWorksheet(tabela);
     planilha.addRow(config.colunas);
 

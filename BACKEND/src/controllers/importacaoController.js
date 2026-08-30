@@ -58,9 +58,15 @@ async function importar(req, res) {
 
 async function exemplo(req, res) {
   try {
-    const buffer = await gerarExemploTodasTabelas(req.db);
+    const { tabela } = req.query;
+    if (tabela && !CONFIG_IMPORTACAO[tabela]) {
+      return res.status(400).json({ sucesso: false, erro: `Tabela "${tabela}" não está habilitada para importação.` });
+    }
+
+    const buffer = await gerarExemploTodasTabelas(req.db, tabela || null);
+    const nomeArquivo = tabela ? `exemplo_${tabela}.xlsx` : 'exemplo_importacao.xlsx';
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="exemplo_importacao.xlsx"');
+    res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
     res.send(Buffer.from(buffer));
   } catch (erro) {
     console.error('❌ Erro ao gerar exemplo de importação:', erro);

@@ -537,13 +537,22 @@ async function coletarDadosAcompanhamento() {
   // COPEL_HEADLESS=false abre o Chromium com janela visível — útil pra
   // acompanhar ao vivo o que o site está fazendo durante uma investigação;
   // default headless (sem janela), que é o certo pro job rodando sozinho o
-  // dia inteiro em produção. slowMo só faz sentido com janela visível (é
-  // pra dar tempo de ACOMPANHAR visualmente) — em headless não há nada pra
-  // ver, então os 100ms de atraso em CADA ação do Playwright (clique, fill,
-  // evaluate, waitForSelector...) eram puro desperdício, somando minutos ao
-  // longo de um ciclo com centenas de livros.
+  // dia inteiro em produção.
+  //
+  // REVERTIDO: tentei remover o slowMo de 100ms em headless (parecia puro
+  // desperdício, sem janela pra acompanhar) — rodado ao vivo, a taxa de
+  // "sessão/busca perdida" disparou pra quase 1 evento por livro processado
+  // (contra ~3% no melhor ciclo já documentado na ADR 0020, 552 livros/5
+  // abas). Hipótese mais provável: o slowMo, mesmo sem intenção, espaçava as
+  // ações das 5 abas o suficiente pra evitar o problema já registrado nesta
+  // ADR de o servidor sobrescrever o estado de busca compartilhado da sessão
+  // quando duas abas agem quase ao mesmo tempo. Sem evidência de que um
+  // valor intermediário resolveria sem repetir o problema, mantido o último
+  // valor validado com sucesso ao vivo (100ms) em vez de arriscar mais
+  // tempo perdido em retentativas — o pedido explícito era não perder dado
+  // e não duplicar, não ganhar velocidade a qualquer custo.
   const headless = process.env.COPEL_HEADLESS !== 'false';
-  const browser = await chromium.launch({ headless, slowMo: headless ? 0 : 300 });
+  const browser = await chromium.launch({ headless, slowMo: headless ? 100 : 300 });
   // Um `browserContext` explícito, compartilhado por TODAS as abas — é o
   // que faz elas dividirem a mesma sessão (cookies), sem precisar logar de
   // novo em cada uma. `browser.newPage()` direto criaria um context NOVO E
@@ -599,13 +608,35 @@ async function coletarDadosAcompanhamento() {
     const etapasLocator = page.locator('a.color:has-text("ETAPA")');
     const totalEtapas = await etapasLocator.count();
     const filaLivros = [];
+    // osId é o identificador globalmente único de cada livro/OS (ver
+    // extrairDadosOs) — garante que a MESMA OS nunca entra duas vezes na
+    // fila, mesmo que a tabela de alguma etapa tenha uma linha repetida
+    // (o DOM já demonstrou anomalias antes, ver ADR 0020) ou que a mesma OS
+    // apareça listada sob mais de uma etapa por algum motivo do portal. Sem
+    // essa garantia na ORIGEM da fila, um livro duplicado aqui vira um
+    // livro processado duas vezes por abas diferentes — duas extrações
+    // completas das mesmas UCs, sem nenhuma constraint no banco pra barrar
+    // isso na importação (contr_execucao_leitura não tem UNIQUE além do id
+    // surrogate).
+    const osIdsVistos = new Set();
+    let duplicadosDescartados = 0;
     for (let i = 0; i < totalEtapas; i++) {
       const etapaLink = etapasLocator.nth(i);
       const etapaTexto = await etapaLink.innerText();
       const etapaNumero = numeroDaEtapa(etapaTexto);
       if (!etapaNumero) continue;
       const livrosDaEtapa = await extrairLivrosDaEtapa(etapaLink, etapaNumero);
-      filaLivros.push(...livrosDaEtapa);
+      for (const livro of livrosDaEtapa) {
+        if (osIdsVistos.has(livro.osId)) {
+          duplicadosDescartados++;
+          continue;
+        }
+        osIdsVistos.add(livro.osId);
+        filaLivros.push(livro);
+      }
+    }
+    if (duplicadosDescartados > 0) {
+      logWarn(`[Coleta Acomp] ⚠️ ${duplicadosDescartados} livro(s) com osId repetido descartado(s) ao montar a fila (evita processar/importar a mesma OS duas vezes).`);
     }
     log(`[Coleta Acomp] 📋 ${filaLivros.length} livro(s) encontrado(s) em ${totalEtapas} etapa(s).`);
 

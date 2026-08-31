@@ -57,14 +57,19 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
-- Scraper de Acompanhamento (`copelScraperService.js`): revisão geral de velocidade/robustez.
-  Removido `slowMo` de 100ms em modo headless (só faz sentido com janela visível, em produção
-  era atraso puro em toda ação do Playwright); bloqueio de imagem/CSS/fonte/mídia via
-  `context.route()` (extração só lê tabela/formulário, não precisa do visual); novo teto de
-  duração do ciclo (`COPEL_TIMEOUT_CICLO_MIN`, default 45min) — evita que um ciclo travado
-  prenda o job Massivas indefinidamente (os dois nunca logam ao mesmo tempo,
-  `copelSessaoLock.js`). Ver último Adendo da
-  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+- Scraper de Acompanhamento (`copelScraperService.js`): revisão geral de velocidade/robustez,
+  testada ao vivo contra o portal real (pedido explícito do usuário). Bloqueio de imagem/CSS/
+  fonte/mídia via `context.route()`; novo teto de duração do ciclo (`COPEL_TIMEOUT_CICLO_MIN`,
+  default 45min, evita que um ciclo travado prenda o job Massivas indefinidamente —
+  `copelSessaoLock.js`); dedup por `osId` na montagem da fila (`contr_execucao_leitura` não tem
+  nenhuma constraint além do `id`, nada barraria a mesma OS entrando duas vezes); `SAVEPOINT`
+  por lote na importação (um lote com erro não perde mais os demais lotes já inseridos com
+  sucesso no mesmo ciclo). Tentativa de remover o `slowMo` de 100ms em modo headless foi
+  **revertida**: testada ao vivo, a taxa de "sessão perdida" disparou — o atraso, mesmo sem
+  intenção, parecia espaçar as 5 abas o suficiente pra evitar o problema de corrupção de estado
+  de sessão no servidor já documentado nesta ADR. Verificado ao vivo: ciclo completo com 425
+  livros, 401 processados (94,4%), 13.520 UCs importadas, zero duplicata real. Ver últimos dois
+  Adendos da [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
 
 - Scraper de Acompanhamento (`copelScraperService.js`): fila de trabalho compartilhada entre
   as abas passou a ser **por livro**, não mais por etapa inteira. Usuário mostrou o HTML real

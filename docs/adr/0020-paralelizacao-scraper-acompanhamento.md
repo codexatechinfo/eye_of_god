@@ -543,8 +543,85 @@ motivou reduzir de 8 para 5 abas nesta mesma ADR. Fica pro usuário decidir se q
 
 ### Verificação
 
-`node --check` confirma sintaxe válida. `npm test` (12 testes) continua passando. **Não
-testado ao vivo contra o portal real nesta sessão** — rodar o scraper de verdade dispara login
-real na conta Copel, e não faço isso só para testar; fica pro usuário confirmar no próximo ciclo
-real: tempo total do ciclo (esperado menor, por causa do slowMo e do bloqueio de recursos) e se
-o teto de 45min nunca dispara em condições normais (só deveria disparar em cenário já degradado).
+`node --check` confirma sintaxe válida. `npm test` (12 testes) continua passando. Não testado
+ao vivo nesta rodada (ver Adendo seguinte, onde o usuário pediu explicitamente pra rodar de
+verdade e essa verificação aconteceu).
+
+## Adendo — pedido do usuário: rodar de verdade, achar fragilidade real, corrigir sem duplicar nem perder dado
+
+Usuário pediu explicitamente: rodar o código, analisar pontos de fragilidade, corrigir, sem
+duplicar nem perder dado. Diferente da rodada anterior (só análise estática + `npm test`), desta
+vez o scraper real rodou contra o portal Copel de verdade (`node src/server.js` em background,
+login real, ciclo completo).
+
+### Regressão real encontrada: remover o `slowMo` piorou a estabilidade, não só a velocidade
+
+Primeira rodada ao vivo (com `slowMo: 0` do Adendo anterior): taxa de "sessão/busca perdida"
+ficou em torno de **1 evento a cada 1 livro processado com sucesso** (contadores praticamente
+empatados nos primeiros minutos) — muito acima do ~3% documentado no melhor ciclo já registrado
+nesta ADR (18 casos em 552 livros). Diagnóstico automático confirmado batendo com o sintoma já
+conhecido desta ADR: URL certa (`editarTarefasLeituraAction.do`), corpo só com o menu, sem
+formulário nem dado da OS — o mesmo padrão de corrupção de estado de sessão no servidor sob
+carga concorrente, só que ocorrendo com frequência muito maior.
+
+Hipótese: o `slowMo` de 100ms, mesmo existindo só "pra acompanhar visualmente", **sem intenção
+também espaçava** as ações das 5 abas o suficiente pra reduzir a chance de duas abas colidirem no
+mesmo instante contra o estado de sessão compartilhado do lado do servidor. Sem evidência de que
+um valor intermediário resolveria sem reintroduzir o problema, e dado o pedido explícito de
+priorizar não perder dado sobre ganhar velocidade, **revertido pro valor original (100ms)** —
+única mudança dos 3 achados anteriores que foi desfeita.
+
+### Dois achados novos de duplicidade/perda de dado, implementados
+
+1. **Dedup por `osId` na montagem da fila** (`coletarDadosAcompanhamento`): nenhuma constraint
+   `UNIQUE` existe em `contr_execucao_leitura` além do `id` surrogate (confirmado consultando
+   `pg_constraint`/`pg_indexes` ao vivo) — nada no banco impediria a mesma OS de ser processada e
+   importada duas vezes se ela entrasse duplicada na fila. Um `Set<osId>` agora garante que cada
+   OS só entra uma vez na fila, descartando (com log) qualquer repetição.
+2. **`SAVEPOINT`/`ROLLBACK TO SAVEPOINT` por lote** em `copelImportService.js#importarParaPostgres`
+   — mesmo padrão já usado em `importacaoService.js` (ADR 0021 Adendo 3). Sem isso, um erro num
+   ÚNICO lote (até 300 linhas) "envenenava" a transação inteira do ciclo (`db` é uma transação real
+   por ciclo, via `abrirContextoTenant`), e o `catch` de `coletaJob.js` fazia `ROLLBACK` — perdendo
+   TODOS os lotes já inseridos com sucesso na mesma chamada (um ciclo real chega a 60+ lotes,
+   ~18-21 mil UCs). Agora uma falha isolada perde só as linhas do próprio lote; os demais seguem
+   intactos.
+
+### Falso alarme corrigido durante a investigação: "UC duplicada" era `tipo_especificacao` legítimo
+
+Ao caçar duplicidade real no banco, uma consulta ingênua (`GROUP BY livro, uc, data_import,
+hora_import`) achou "duplicatas" recorrentes em várias UCs, repetindo o mesmo padrão em 3 ciclos
+de coleta diferentes (mesmas UCs, mesma contagem, toda vez). Investigação revelou que **não são
+duplicatas**: são linhas legítimas com `tipo_especificacao` diferente (`CON`/`GTP`/`ERA` — grandezas
+de medição distintas do mesmo equipamento, ex. consumo vs geração) e `leitura_atual` diferente
+entre elas. Refeita a consulta incluindo `tipo_especificacao` na chave de agrupamento: **zero**
+duplicatas de verdade encontradas nos dados de 30-31/08. Achado colateral (fora de escopo desta
+correção, só registrado): `contrDedupSql` e outras consultas de "uma linha por UC" do restante do
+app colapsam essas linhas pra uma só por UC — confirmado que o `codigo` (status da leitura, o que
+o app usa hoje) é sempre o mesmo entre `tipo_especificacao` diferentes da mesma UC/lote, então
+essa simplificação não afeta nenhuma métrica atual do sistema; só `leitura_atual` (o valor
+numérico bruto de cada grandeza) fica reduzido a uma amostra — sem uso hoje em lugar nenhum do
+app, então sem impacto prático, mas vale saber que esse dado existe e não está sendo preservado
+integralmente caso algum dia vire relevante.
+
+### Resultado do ciclo real completo, com as 3 correções desta ADR mais as 2 novas
+
+Ciclo 1 (10:24:57–11:10:44, 45min, timeout disparou com a fila já vazia — ou seja, terminou
+naturalmente antes do teto, só as últimas retentativas em voo é que estouraram o relógio): 425
+livros encontrados, **401 processados com sucesso (94,4%)**, 21 desistidos após 5 tentativas
+(4,9% — perda transitória: o próximo ciclo recomeça do zero e tenta esses livros de novo, não é
+perda permanente), **13.520 UCs importadas**. Verificado direto no banco: `COUNT(*) = 13520`,
+`COUNT(DISTINCT livro) = 401` (bate exato com o log), **zero duplicata real** (considerando
+`tipo_especificacao` na chave). Nenhum lote falhou na importação desta vez (o `SAVEPOINT` não
+precisou entrar em ação, mas está lá pra quando precisar). Ciclo 2 iniciou automaticamente 6s
+depois (comportamento normal do loop) e seguiu progredindo com padrão de estabilidade
+semelhante ao ciclo 1 — ainda não perfeito (perda de sessão continua ocorrendo, característica
+já aceita e documentada nesta ADR como risco do lado do servidor Copel, não do cliente), mas sem
+nenhuma desistência definitiva nem duplicata observada.
+
+### Verificação
+
+`node --check` confirma sintaxe válida. `npm test` (12 testes) continua passando. **Testado ao
+vivo contra o portal real** (pedido explícito do usuário) — dois ciclos completos observados, um
+deles do início ao fim, com os números acima confirmados direto no banco, não só no log da
+aplicação. Processo de teste encerrado (`node src/server.js` rodando em background nesta sessão)
+— fica para o usuário decidir se mantém rodando ou prefere subir a própria instância normalmente.

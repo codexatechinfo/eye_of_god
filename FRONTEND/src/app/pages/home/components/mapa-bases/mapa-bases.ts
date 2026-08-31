@@ -105,7 +105,7 @@ function tooltipDoPonto(item: TimelineUcItem): string {
   const sequencia = item.sequencia ? `#${item.sequencia} · ` : '';
   const endereco = item.endereco ? ` — ${item.endereco}` : '';
   const codigo = item.codigo ? ` · código ${item.codigo}` : ' · pendente';
-  return `${sequencia}UC ${item.uc}${endereco}${codigo}`;
+  return `${sequencia}${item.uc}${endereco}${codigo}`;
 }
 
 // Andrew's monotone chain — casco convexo dos pontos válidos do livro
@@ -269,6 +269,69 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
   }
 
+  // Controle Leaflet custom (não um painel Angular sobreposto) — só assim
+  // ele empilha naturalmente no mesmo canto/ordem do controle de tipos de
+  // mapa. DOM montado à mão com L.DomUtil (mesmo padrão que o próprio
+  // Leaflet usa internamente pro L.Control.Layers nativo), reaproveitando as
+  // classes leaflet-control-layers* do leaflet.css já carregado — não
+  // reimplementa o visual, herda ícone/sombra/hover-pra-expandir de graça.
+  // Os checkboxes só escrevem nos signals camadaX; quem liga/desliga o
+  // grupo de verdade são os effects do construtor (funciona igual não
+  // importa se o signal mudou por aqui ou por outro lugar no futuro).
+  private criarControleCamadas(mapa: L.Map): void {
+    const Controle = L.Control.extend({
+      onAdd: () => this.montarDomControleCamadas(),
+    });
+    new Controle({ position: 'topleft' }).addTo(mapa);
+  }
+
+  private montarDomControleCamadas(): HTMLElement {
+    const container = L.DomUtil.create('div', 'leaflet-control-layers');
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+    container.addEventListener('mouseenter', () => container.classList.add('leaflet-control-layers-expanded'));
+    container.addEventListener('mouseleave', () => container.classList.remove('leaflet-control-layers-expanded'));
+
+    const toggle = L.DomUtil.create('a', 'leaflet-control-layers-toggle', container) as HTMLAnchorElement;
+    toggle.href = '#';
+    toggle.title = 'Camadas';
+    toggle.setAttribute('role', 'button');
+    toggle.addEventListener('click', e => e.preventDefault());
+
+    const lista = L.DomUtil.create('div', 'leaflet-control-layers-list', container);
+    const overlays = L.DomUtil.create('div', 'leaflet-control-layers-overlays', lista);
+
+    const itemAtivo = (texto: string, sinal: { (): boolean; set: (v: boolean) => void }) => {
+      const label = L.DomUtil.create('label', '', overlays) as HTMLLabelElement;
+      const input = L.DomUtil.create('input', 'leaflet-control-layers-selector', label) as HTMLInputElement;
+      input.type = 'checkbox';
+      input.checked = sinal();
+      input.addEventListener('change', () => sinal.set(input.checked));
+      label.appendChild(document.createTextNode(' ' + texto));
+    };
+
+    const itemDesabilitado = (texto: string) => {
+      const label = L.DomUtil.create('label', '', overlays) as HTMLLabelElement;
+      label.style.opacity = '0.5';
+      label.style.cursor = 'not-allowed';
+      label.title = 'Ainda não implementado';
+      const input = L.DomUtil.create('input', 'leaflet-control-layers-selector', label) as HTMLInputElement;
+      input.type = 'checkbox';
+      input.disabled = true;
+      label.appendChild(document.createTextNode(' ' + texto));
+    };
+
+    itemDesabilitado('Rastro executado');
+    itemAtivo('Pontos coletados', this.camadaPontos);
+    itemDesabilitado('Paradas e gaps');
+    itemAtivo('Setor planejado', this.camadaSetorPlanejado);
+    itemAtivo('Limites municipais', this.camadaLimitesMunicipais);
+    itemAtivo('Demais agentes', this.camadaAgentes);
+    itemAtivo('Sequência planejada', this.camadaSequencia);
+
+    return container;
+  }
+
   ngAfterViewInit(): void {
     this.mapa = L.map(this.mapaEl.nativeElement, {
       center: [-24.5, -51.8],
@@ -320,6 +383,14 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         { position: 'topleft' },
       )
       .addTo(this.mapa);
+
+    // Painel "Camadas" logo abaixo do controle de tipos de mapa (mesmo
+    // canto topleft — Leaflet empilha controles do mesmo canto na ordem em
+    // que são adicionados). Mesmo comportamento visual do controle nativo
+    // (ícone recolhido, expande no hover): construído com as MESMAS classes
+    // CSS do leaflet.css (leaflet-control-layers*), não uma reimplementação
+    // — herda o ícone, sombra, borda arredondada etc. de graça.
+    this.criarControleCamadas(this.mapa);
 
     // Os effects de toggle (constructor) já rodaram antes do mapa existir —
     // reaplica o estado inicial de cada grupo agora que this.mapa está pronto

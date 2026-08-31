@@ -234,7 +234,7 @@
               </span>
             </span>
             <span class="text-slate-400 shrink-0 tabular-nums" *ngIf="item.codigo">{{ item.hora_import }}</span>
-            <span class="text-slate-300 shrink-0" *ngIf="!item.codigo">Pendente</span>
+            <span class="text-slate-300 shrink-0" *ngIf="!item.codigo">A realizar</span>
           </div>
           <div class="text-[9.5px] text-slate-400 truncate pl-1.5">
             UC {{ item.uc }} · livro {{ sel.livro.livro }} · #{{ item.sequencia || '—' }}
@@ -265,7 +265,7 @@
               </div>
               <div>
                 <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Situação</div>
-                <div class="text-slate-600">{{ item.codigo ? 'Realizada' : 'Pendente' }}</div>
+                <div class="text-slate-600">{{ item.codigo ? 'Realizada' : 'A realizar' }}</div>
               </div>
               <div>
                 <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Apontamento</div>

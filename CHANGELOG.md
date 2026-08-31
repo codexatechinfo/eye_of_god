@@ -9,10 +9,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 - Aba Trilho: painel "Camadas" no mapa com 5 toggles ativos (Pontos coletados, Setor planejado,
   Limites municipais, Demais agentes, Sequência planejada) e 2 desabilitados pra funcionalidade
-  futura (Rastro executado, Paradas e gaps). "Setor planejado" desenha o casco convexo das
-  instalações do livro aberto; "Limites municipais" desenha o contorno real dos 399 municípios
-  do Paraná, importado do IBGE (nova tabela `municipios_limites`, novo endpoint `GET
-  /municipios/limites`, script `BACKEND/scripts/importarLimitesMunicipais.js`). Ver [ADR
+  futura (Rastro executado, Paradas e gaps), agora como controle nativo do Leaflet (ícone
+  recolhido abaixo do seletor de tipo de mapa, expande no hover — mesmo estilo do controle de
+  tiles). "Setor planejado" desenha o casco convexo das instalações do livro aberto; "Limites
+  municipais" desenha o contorno real dos 399 municípios do Paraná, importado do IBGE (nova
+  tabela `municipios_limites`, novo endpoint `GET /municipios/limites`, script
+  `BACKEND/scripts/importarLimitesMunicipais.js`). Tooltip do ponto no mapa não repete mais "UC"
+  antes do número. Timeline do livro: "Pendente" virou "A realizar" (é só "ainda não realizada",
+  nunca foi a situação real do portal). Ver [ADR
   0022](docs/adr/0022-camadas-mapa-e-limites-municipais.md).
 
 - Aba Trilho: mapa mostra sempre um ícone por colaborador (moto para motoqueiro/monitor, pessoa

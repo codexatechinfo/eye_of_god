@@ -16,9 +16,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
-- Nova tabela `base_dados_leitura` (empresa_id + RLS), réplica exata da estrutura de
-  `control_empreiteiras` — mesmo cabeçalho de planilha fornecido pelo usuário. Ver [ADR
-  0024](docs/adr/0024-tabela-base-dados-leitura.md).
+- Nova tabela `base_dados_leitura` (empresa_id + RLS, `id` autoincremento), réplica exata da
+  estrutura de `control_empreiteiras` — mesmo cabeçalho de planilha fornecido pelo usuário.
+  Habilitada pra importação pela aba Importação (upsert por
+  data/hora/usuário/UC). Ver [ADR 0024](docs/adr/0024-tabela-base-dados-leitura.md).
 
 - Aba Trilho: painel "Camadas" no mapa com 5 toggles ativos (Pontos coletados, Setor planejado,
   Limites municipais, Demais agentes, Sequência planejada) e 2 desabilitados pra funcionalidade

@@ -128,6 +128,21 @@ const CONFIG_IMPORTACAO = {
     chave: ['UC'],
     colunas: ['UC', 'latitude', 'longitude'],
   },
+  // Ver ADR 0024 — mesmo cabeçalho de control_empreiteiras (planilha fornecida
+  // pelo usuário bate coluna a coluna), mesma chave de upsert por consistência.
+  base_dados_leitura: {
+    modo: 'upsert',
+    temEmpresa: true,
+    chave: ['data_da_leitura', 'hora_da_leitura', 'nome_do_usuario', 'unidade_consumidora'],
+    colunas: [
+      'concessionaria', 'empreiteira', 'equipe', 'nome_do_usuario', 'mes_ref_livro',
+      'data_da_leitura', 'hora_da_leitura', 'unidade_consumidora', 'codigo_da_localidade',
+      'descricao_da_localidade', 'tipo_de_localizacao_da_uc', 'etapa', 'livro',
+      'status_releitura', 'equipamento', 'especificacao', 'mensagem',
+      'mensagem_auxiliar', 'observacao_de_campo', 'status_foto',
+      'faturamento_em_campo', 'status_impressao_do_comunicado', 'forma_de_entrega',
+    ],
+  },
   // Ver ADR 0021 — chave por UC: linha com unidade_consumidora já existente
   // substitui a linha (coordenada/endereço atualizados); UC nova é só
   // inserida. geom/geom_area são geometry(Point,4326)/geometry(Polygon,4326)

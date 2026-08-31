@@ -224,7 +224,7 @@
                 'text-red-700': corDoPonto(item) === 'vermelho'
               }"
             >
-              {{ item.endereco || ('UC ' + item.uc) }}
+              {{ item.endereco || item.uc }}
               <span
                 *ngIf="corDoPonto(item) === 'laranja' || corDoPonto(item) === 'vermelho'"
                 class="ml-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full align-middle"
@@ -237,7 +237,7 @@
             <span class="text-slate-300 shrink-0" *ngIf="!item.codigo">A realizar</span>
           </div>
           <div class="text-[9.5px] text-slate-400 truncate pl-1.5">
-            UC {{ item.uc }} · livro {{ sel.livro.livro }} · #{{ item.sequencia || '—' }}
+            Livro {{ sel.livro.livro }} · #{{ item.sequencia || '—' }}
             <span *ngIf="item.nom_municipio"> · {{ item.nom_municipio }}</span>
             <span *ngIf="item.localidade"> · {{ item.localidade }}</span>
             <span *ngIf="item.classe_principal"> · {{ item.classe_principal }}</span>

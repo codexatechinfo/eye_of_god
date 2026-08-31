@@ -149,3 +149,45 @@ Usuário testou ao vivo e trouxe 4 pontos, com 4 prints:
    início→fim + km); usuário optou por só registrar o diagnóstico e não mexer agora.
 
 `ng build --configuration development` limpo depois das mudanças de frontend.
+
+## Adendo 2 — Ícone próprio pro controle de camadas; limites municipais restritos ao livro aberto
+
+Usuário testou o Adendo 1 ao vivo, trouxe mais 4 pontos:
+
+1. O controle "Camadas" reaproveitava a MESMA imagem de ícone do controle nativo de tipos de
+   mapa (mesma classe `leaflet-control-layers-toggle`) — os dois ficavam visualmente idênticos,
+   difícil de distinguir de relance. Adicionado um ícone próprio (checklist, SVG inline via
+   `background-image` no elemento — sobrescreve a regra do `leaflet.css` sem precisar de
+   `!important` nem de um arquivo de imagem novo no build).
+2. "Limites municipais" desenhava os 399 municípios do Paraná inteiros — usuário pediu pra
+   mostrar só o(s) município(s) que o livro aberto realmente toca (um se o livro fica todo num
+   município, dois se atravessa a divisa). Endpoint reescrito: `GET /municipios/limites` (malha
+   inteira) virou `POST /municipios/limites-por-pontos` (recebe `{ pontos: [[lat,lng], ...] }`
+   — as mesmas coordenadas de UC que o mapa já carrega pro livro aberto, mesma fonte do casco
+   convexo) e devolve só os municípios onde `ST_Contains(geom, ponto)` é verdadeiro pra pelo
+   menos um ponto. Implementado com `WHERE EXISTS (...)` em vez de `JOIN + DISTINCT` — testado e
+   corrigido ao vivo: a primeira versão usava `JOIN` seguido de `SELECT DISTINCT` pra deduplicar
+   município repetido (livro com 2+ UCs no mesmo município), e Postgres não sabe comparar
+   igualdade em coluna `json` (só `jsonb`) pra fazer esse `DISTINCT` — `ST_AsGeoJSON(...)::json`
+   quebrava com `could not identify an equality operator for type json`. `EXISTS` já devolve no
+   máximo uma linha por município de saída, sem precisar deduplicar nada. Testado ao vivo contra
+   coordenadas reais de 3 municípios diferentes: 3 pontos → 3 municípios corretos (nomes batendo
+   mesmo com formatação de acento/maiúscula diferente entre a fonte do ponto e o nome do IBGE,
+   confirma que o contains espacial é mais robusto que casar por nome); 1 ponto → 1 município; 0
+   pontos → 0 municípios. Frontend: `colaboradoresService.limitesMunicipais` deixou de ser um
+   cache único de "todos os municípios, buscado uma vez" e virou "os municípios do livro
+   atualmente selecionado" — recalculado quando o livro muda (rastreado por
+   `limitesMunicipaisLivroAtual` em `mapa-bases.ts`, evita rebuscar a cada refresh de 60s do
+   mesmo livro), redesenhado (substitui via `grupoLimitesMunicipais.clearLayers()`, não acumula)
+   a cada resultado novo.
+3. Tooltip do mapa já tinha perdido o prefixo "UC" no Adendo 1 — usuário esclareceu que também
+   valia pra timeline do livro (`livro-detalhe.html`), que eu tinha deixado de fora por engano
+   de escopo. Corrigido: cabeçalho de cada item (`item.endereco || item.uc`, antes `'UC ' +
+   item.uc`) e linha secundária (antes `UC {{ item.uc }} · livro ...`, agora só `Livro {{
+   sel.livro.livro }} · #{{ item.sequencia }}`).
+4. A linha secundária de cada UC repetia o número da UC de novo (já aparecia no cabeçalho do
+   item, o card de detalhe expandido também mostra) — removida a repetição junto com o fix do
+   item 3 acima (mesma edição).
+
+`node --check` nos arquivos backend alterados, `npm test` (12/12) e `ng build --configuration
+development` limpos depois das mudanças.

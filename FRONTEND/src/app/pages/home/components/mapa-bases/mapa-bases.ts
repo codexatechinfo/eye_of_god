@@ -86,6 +86,16 @@ const ICONE_PEDESTRE = iconeColaborador(
   '<circle cx="12" cy="4" r="2"/><path d="M12 6v6l-3 8"/><path d="M12 12l3 8"/><path d="M9 10 6 12"/><path d="M15 10l3 2"/>',
 );
 
+// Ícone do controle "Camadas" — checklist (linhas com quadrado marcável),
+// deliberadamente diferente da pilha de quadrados do controle nativo de
+// tipos de mapa (mesma classe CSS leaflet-control-layers-toggle, ícone
+// diferente) pra dar pra distinguir os dois de relance.
+const ICONE_CAMADAS_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<rect x="3" y="4" width="5" height="5" rx="1"/><path d="M12 6.5h9"/>' +
+  '<rect x="3" y="15" width="5" height="5" rx="1"/><path d="M12 17.5h9"/>' +
+  '</svg>';
+
 // Mesma paleta das 4 cores da timeline do painel (livro-detalhe.html:
 // bg-emerald-400/bg-slate-300/bg-amber-500/bg-red-500), exceto "cinza" —
 // slate-300 (#cbd5e1) é claro demais sobre tile de mapa (rua ou satélite) e
@@ -174,7 +184,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   private linhasDesvio: L.Polyline[] = [];
   private livroComBoundsAplicado: string | null = null;
   private poligonoSetorPlanejado?: L.Polygon;
-  private limitesMunicipaisRenderizados = false;
+  // Último livro pro qual "Limites municipais" já buscou dado — evita
+  // rebuscar a cada refresh de 60s do mesmo livro (ver effect no construtor).
+  private limitesMunicipaisLivroAtual: string | null = null;
 
   // Grupos do painel "CAMADAS" — cada checkbox só liga/desliga o grupo
   // inteiro (mapa.addLayer/removeLayer), nunca decide SE algo é desenhado.
@@ -234,20 +246,50 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     effect(() => this.alternarGrupo(this.grupoSequencia, this.camadaSequencia()));
     effect(() => this.alternarGrupo(this.grupoAgentes, this.camadaAgentes()));
     effect(() => this.alternarGrupo(this.grupoSetorPlanejado, this.camadaSetorPlanejado()));
+    // "Limites municipais" é por LIVRO (só o(s) município(s) que o livro
+    // aberto toca, não a malha inteira do estado — ver ADR 0022 Adendo 2).
+    // Só busca de novo quando o livro muda, não a cada refresh de 60s do
+    // mesmo livro (limitesMunicipaisLivroAtual guarda o último buscado).
+    // A busca em si continua opt-in (só corre com a camada ligada) — isso é
+    // sobre evitar rede desnecessária pra quem nunca liga a camada, não tem
+    // relação com o "não fazer" dos grupos de pontos/agentes (aqueles têm o
+    // dado local sempre pronto; este depende de uma chamada de rede nova).
     effect(() => {
       const ligado = this.camadaLimitesMunicipais();
       this.alternarGrupo(this.grupoLimitesMunicipais, ligado);
-      if (ligado) this.colaboradoresService.carregarLimitesMunicipais();
+      if (!ligado) return;
+
+      const selecionado = this.colaboradoresService.livroSelecionado();
+      const atuais = this.colaboradoresService.atuaisLivro();
+      if (!selecionado) {
+        this.limitesMunicipaisLivroAtual = null;
+        this.grupoLimitesMunicipais.clearLayers();
+        return;
+      }
+      if (selecionado.livro.livro === this.limitesMunicipaisLivroAtual) return;
+
+      const pontos = this.pontosValidosDoLivro(atuais);
+      if (!pontos.length) return;
+      this.limitesMunicipaisLivroAtual = selecionado.livro.livro;
+      this.colaboradoresService.carregarLimitesMunicipaisDoLivro(pontos.map(([lat, lng]) => [lat, lng]));
     });
-    // Renderiza os polígonos assim que o fetch (sob demanda, acima) chegar —
-    // só uma vez (limitesMunicipaisRenderizados), independente de quantas
-    // vezes o toggle for ligado/desligado depois.
+    // Redesenha (substitui, não acumula) sempre que o resultado da busca
+    // acima chegar — um por livro, nunca a malha inteira acumulada.
     effect(() => {
       const dados = this.colaboradoresService.limitesMunicipais();
-      if (!dados || this.limitesMunicipaisRenderizados) return;
-      this.limitesMunicipaisRenderizados = true;
+      if (dados === null) return;
       this.renderizarLimitesMunicipais(dados);
     });
+  }
+
+  // Mesmo filtro (Number.isFinite explícito, mais estrito que o
+  // truthy-string de pontosLivro/rotaLivro) usado tanto pelo casco convexo
+  // quanto pela busca de limites municipais — ver comentário de
+  // cascoConvexo sobre por que NaN não pode vazar pra nenhum dos dois.
+  private pontosValidosDoLivro(atuais: TimelineUcItem[]): L.LatLngTuple[] {
+    return atuais
+      .map((item): L.LatLngTuple => [Number(item.latitude), Number(item.longitude)])
+      .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
   }
 
   private alternarGrupo(grupo: L.LayerGroup, ligado: boolean): void {
@@ -260,6 +302,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   }
 
   private renderizarLimitesMunicipais(municipios: MunicipioLimite[]): void {
+    this.grupoLimitesMunicipais.clearLayers();
     for (const municipio of municipios) {
       L.geoJSON(municipio.geometry as GeoJSON.Geometry, {
         style: { color: '#0ea5e9', weight: 1, fillOpacity: 0.02 },
@@ -297,6 +340,12 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     toggle.title = 'Camadas';
     toggle.setAttribute('role', 'button');
     toggle.addEventListener('click', e => e.preventDefault());
+    // Ícone próprio (checklist), não o de pilha de camadas que o controle de
+    // tipos de mapa já usa — inline style vence a regra do leaflet.css
+    // (leaflet-control-layers-toggle) sem precisar de !important nem de um
+    // arquivo de imagem novo no build.
+    toggle.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(ICONE_CAMADAS_SVG)}")`;
+    toggle.style.backgroundSize = '18px 18px';
 
     const lista = L.DomUtil.create('div', 'leaflet-control-layers-list', container);
     const overlays = L.DomUtil.create('div', 'leaflet-control-layers-overlays', lista);
@@ -522,10 +571,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     // Setor planejado (casco convexo de TODAS as instalações do livro, não só
     // as ordenadas/com sequência) — filtro próprio com Number.isFinite, mais
     // estrito que o truthy-string acima (ver comentário de cascoConvexo).
-    const pontosParaHull: L.LatLngTuple[] = atuais
-      .map((item): L.LatLngTuple => [Number(item.latitude), Number(item.longitude)])
-      .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
-    const hull = cascoConvexo(pontosParaHull);
+    const hull = cascoConvexo(this.pontosValidosDoLivro(atuais));
     if (hull.length >= 3) {
       if (this.poligonoSetorPlanejado) {
         this.poligonoSetorPlanejado.setLatLngs(hull);

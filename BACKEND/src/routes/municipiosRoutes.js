@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { limites } = require('../controllers/municipiosController');
+const { limitesPorPontos } = require('../controllers/municipiosController');
 
-router.get('/limites', limites);
+router.post('/limites-por-pontos', limitesPorPontos);
 
 module.exports = router;

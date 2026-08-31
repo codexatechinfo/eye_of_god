@@ -14,10 +14,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   tiles). "Setor planejado" desenha o casco convexo das instalações do livro aberto; "Limites
   municipais" desenha o contorno real dos 399 municípios do Paraná, importado do IBGE (nova
   tabela `municipios_limites`, novo endpoint `GET /municipios/limites`, script
-  `BACKEND/scripts/importarLimitesMunicipais.js`). Tooltip do ponto no mapa não repete mais "UC"
-  antes do número. Timeline do livro: "Pendente" virou "A realizar" (é só "ainda não realizada",
-  nunca foi a situação real do portal). Ver [ADR
-  0022](docs/adr/0022-camadas-mapa-e-limites-municipais.md).
+  `BACKEND/scripts/importarLimitesMunicipais.js`) — mostra só o(s) município(s) que o livro
+  aberto realmente toca, não a malha inteira do estado (`POST
+  /municipios/limites-por-pontos`). Ícone do controle "Camadas" trocado (era o mesmo do
+  controle de tipos de mapa, difícil distinguir). Tooltip do ponto no mapa e a timeline do livro
+  não repetem mais "UC" antes do número nem o número da UC duas vezes na mesma linha. Timeline
+  do livro: "Pendente" virou "A realizar" (é só "ainda não realizada", nunca foi a situação real
+  do portal). Ver [ADR 0022](docs/adr/0022-camadas-mapa-e-limites-municipais.md).
 
 - Aba Trilho: mapa mostra sempre um ícone por colaborador (moto para motoqueiro/monitor, pessoa
   a pé para pedestre) na posição da última UC que ele realizou (qualquer dia) — os círculos de

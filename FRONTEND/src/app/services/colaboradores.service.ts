@@ -425,10 +425,10 @@ export class ColaboradoresService {
   // — buscada uma vez só (não muda a cada minuto como atividadeHoje).
   localizacoes = signal<LocalizacaoColaborador[]>([]);
 
-  // Contorno dos 399 municípios (camada "Limites municipais" do mapa, ADR
-  // 0022) — null até o primeiro toggle da camada (fetch sob demanda, não no
-  // carregamento do mapa: são 399 polígonos, não vale pagar esse custo pra
-  // quem nunca liga a camada). [] depois de buscado e vazio.
+  // Contorno só dos município(s) que o livro aberto no mapa toca (camada
+  // "Limites municipais", ADR 0022) — não a malha inteira do estado.
+  // Recalculado sempre que o livro selecionado muda enquanto a camada está
+  // ligada (ver mapa-bases.ts). null até a primeira busca.
   limitesMunicipais = signal<MunicipioLimite[] | null>(null);
 
   // UC com o card de detalhe expandido na timeline (accordion, uma por vez)
@@ -573,11 +573,11 @@ export class ColaboradoresService {
     });
   }
 
-  // Fetch único, cacheado em memória (signal já preenchido = não refaz a
-  // chamada) — ver comentário do signal `limitesMunicipais`.
-  carregarLimitesMunicipais(): void {
-    if (this.limitesMunicipais() !== null) return;
-    this.http.get<LimitesMunicipaisResponse>(`${this.apiUrl}/municipios/limites`).subscribe({
+  // pontos: coordenadas [latitude, longitude] das UCs do livro aberto (o
+  // mapa já tem esse dado carregado — mesma fonte do casco convexo). Quem
+  // decide QUANDO chamar (evitar refetch pro mesmo livro) é mapa-bases.ts.
+  carregarLimitesMunicipaisDoLivro(pontos: number[][]): void {
+    this.http.post<LimitesMunicipaisResponse>(`${this.apiUrl}/municipios/limites-por-pontos`, { pontos }).subscribe({
       next: resposta => this.limitesMunicipais.set(resposta.municipios),
       error: () => this.limitesMunicipais.set([]),
     });

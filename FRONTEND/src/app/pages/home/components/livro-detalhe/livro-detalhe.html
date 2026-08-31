@@ -63,16 +63,30 @@
         </div>
       </div>
 
-      <!-- Km percorrido — sem fonte de dado ainda (nenhuma tabela rastreia GPS/distância) -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
+      <!-- Km percorrido — Haversine entre UCs realizadas consecutivas na
+           ordem de rota (não é distância real de trajeto a pé/moto, é linha
+           reta entre coordenadas) -->
+      <div
+        class="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
+        [ngClass]="colaboradoresService.distanciaTotalLivro() !== null ? 'border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50' : 'border border-dashed border-slate-200 bg-slate-50/60'"
+      >
+        <div
+          class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+          [ngClass]="colaboradoresService.distanciaTotalLivro() !== null ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-300'"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 12h4l3-9 4 18 3-9h4" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-slate-300 uppercase tracking-wide truncate">Km percorrido</div>
-          <div class="text-xs font-bold text-slate-300 truncate">Em breve</div>
+          <div
+            class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
+            [ngClass]="colaboradoresService.distanciaTotalLivro() !== null ? 'text-blue-400' : 'text-slate-300'"
+          >Km percorrido</div>
+          <div
+            class="text-xs font-bold truncate"
+            [ngClass]="colaboradoresService.distanciaTotalLivro() !== null ? 'text-blue-700' : 'text-slate-300'"
+          >{{ distanciaFormatada(colaboradoresService.distanciaTotalLivro()) }}</div>
         </div>
       </div>
 
@@ -154,44 +168,134 @@
       class="relative border-l-2 border-slate-100 ml-2"
       *ngIf="!colaboradoresService.carregandoTimelineLivro() && ucsOrdenadas().length"
     >
-      <li class="mb-3 ml-4" *ngFor="let item of ucsOrdenadas()">
-        <div
-          class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
-          [ngClass]="{
-            'bg-emerald-400': corDoPonto(item) === 'verde',
-            'bg-slate-300': corDoPonto(item) === 'cinza',
-            'bg-amber-500': corDoPonto(item) === 'laranja',
-            'bg-red-500': corDoPonto(item) === 'vermelho'
-          }"
-        ></div>
-        <div class="flex items-center justify-between gap-2 text-[11px]">
-          <span
-            class="truncate flex-1 px-1.5 font-semibold tabular-nums"
+      <ng-container *ngFor="let item of ucsOrdenadas(); let i = index; let ultimoItem = last">
+        <!-- Separador de deslocamento entre duas UCs realizadas consecutivas
+             na ordem de rota — laranja/destacado quando o intervalo passou
+             do limite (>5min urbana / >15min rural) e vira "pausa". -->
+        <li *ngIf="item.tipo_intervalo && i > 0" class="mb-2 ml-4 pl-1.5 text-[9px] flex items-center gap-1" [ngClass]="item.tipo_intervalo === 'pausa' ? 'text-orange-600 font-semibold' : 'text-slate-400'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+          <span>+{{ duracaoFormatada(item.intervalo_anterior_segundos) }} desloc {{ distanciaFormatada(item.distancia_anterior_metros) }} · {{ item.velocidade_m_por_min?.toFixed(1) }} m/min</span>
+        </li>
+
+        <li
+          #linhaUc
+          [attr.data-uc]="item.uc"
+          class="mb-3 ml-4 rounded-r-lg -mr-1 cursor-pointer transition-colors"
+          [ngClass]="colaboradoresService.ucFocada() === item.uc ? 'bg-blue-50/70' : ''"
+          (click)="toggleExpandir(item)"
+        >
+          <div
+            class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
             [ngClass]="{
-              'text-slate-600': corDoPonto(item) === 'verde',
-              'text-slate-400': corDoPonto(item) === 'cinza',
-              'text-amber-700': corDoPonto(item) === 'laranja',
-              'text-red-700': corDoPonto(item) === 'vermelho'
+              'bg-emerald-400': corDoPonto(item) === 'verde',
+              'bg-slate-300': corDoPonto(item) === 'cinza',
+              'bg-amber-500': corDoPonto(item) === 'laranja',
+              'bg-red-500': corDoPonto(item) === 'vermelho'
             }"
-          >
-            {{ item.uc }}
+          ></div>
+          <div class="flex items-center justify-between gap-2 text-[11px]">
             <span
-              *ngIf="corDoPonto(item) === 'laranja' || corDoPonto(item) === 'vermelho'"
-              class="ml-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full align-middle"
-              [ngClass]="corDoPonto(item) === 'vermelho' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+              class="truncate flex-1 px-1.5 font-semibold"
+              [ngClass]="{
+                'text-slate-600': corDoPonto(item) === 'verde',
+                'text-slate-400': corDoPonto(item) === 'cinza',
+                'text-amber-700': corDoPonto(item) === 'laranja',
+                'text-red-700': corDoPonto(item) === 'vermelho'
+              }"
             >
-              Código {{ item.codigo }}
+              {{ item.endereco || ('UC ' + item.uc) }}
+              <span
+                *ngIf="corDoPonto(item) === 'laranja' || corDoPonto(item) === 'vermelho'"
+                class="ml-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full align-middle"
+                [ngClass]="corDoPonto(item) === 'vermelho' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+              >
+                Código {{ item.codigo }}
+              </span>
             </span>
-          </span>
-          <span class="text-slate-400 shrink-0 tabular-nums" *ngIf="item.codigo">{{ item.data_import }} {{ item.hora_import }}</span>
-          <span class="text-slate-300 shrink-0" *ngIf="!item.codigo">Ainda não realizada</span>
-        </div>
-        <div *ngIf="item.nom_municipio" class="text-[9.5px] text-slate-400 truncate pl-1.5">
-          {{ item.nom_municipio }}<span *ngIf="item.localidade"> · {{ item.localidade }}</span>
-          <span *ngIf="item.endereco"> · {{ item.endereco }}</span>
-          <span *ngIf="item.classe_principal"> · {{ item.classe_principal }}</span>
-        </div>
-      </li>
+            <span class="text-slate-400 shrink-0 tabular-nums" *ngIf="item.codigo">{{ item.hora_import }}</span>
+            <span class="text-slate-300 shrink-0" *ngIf="!item.codigo">Pendente</span>
+          </div>
+          <div class="text-[9.5px] text-slate-400 truncate pl-1.5">
+            UC {{ item.uc }} · livro {{ sel.livro.livro }} · #{{ item.sequencia || '—' }}
+            <span *ngIf="item.nom_municipio"> · {{ item.nom_municipio }}</span>
+            <span *ngIf="item.localidade"> · {{ item.localidade }}</span>
+            <span *ngIf="item.classe_principal"> · {{ item.classe_principal }}</span>
+          </div>
+
+          <!-- Card de detalhe expandido — só os campos que o sistema
+               realmente tem (sem inventar GPS/OS/setor, ver ADR). -->
+          <div *ngIf="colaboradoresService.ucExpandida() === item.uc" class="mt-2 mr-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 text-[10.5px]" (click)="$event.stopPropagation()">
+            <div
+              *ngIf="ehImpedimento(item.codigo) && colaboradoresService.regimeSucessivoPorUc().get(item.uc) as regime"
+              class="mb-2 rounded-md bg-red-50 border border-red-100 px-2 py-1.5 text-red-700 text-[10px]"
+              [class.hidden]="regime.ciclosConsecutivos < 2"
+            >
+              <strong>{{ regime.ciclosConsecutivos }}º mês consecutivo</strong> com Código {{ regime.codigoAtual }}.
+            </div>
+
+            <div class="grid grid-cols-2 gap-x-2 gap-y-1.5">
+              <div class="col-span-2">
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Endereço</div>
+                <div class="text-slate-600">{{ item.endereco || '—' }}<span *ngIf="item.nom_municipio">, {{ item.nom_municipio }}</span><span *ngIf="item.localidade"> ({{ item.localidade }})</span></div>
+              </div>
+              <div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Livro / Seq. na rota</div>
+                <div class="text-slate-600 tabular-nums">{{ sel.livro.livro }} · #{{ item.sequencia || '—' }} / {{ ucsOrdenadas().length }}</div>
+              </div>
+              <div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Situação</div>
+                <div class="text-slate-600">{{ item.codigo ? 'Realizada' : 'Pendente' }}</div>
+              </div>
+              <div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Apontamento</div>
+                <div class="text-slate-600">{{ item.codigo ? ('Código ' + item.codigo) : '—' }}</div>
+              </div>
+              <div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Horário da leitura</div>
+                <div class="text-slate-600 tabular-nums">{{ item.codigo ? (item.data_import + ' ' + item.hora_import) : '—' }}</div>
+              </div>
+              <div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Intervalo anterior</div>
+                <div class="text-slate-600 tabular-nums" [ngClass]="item.tipo_intervalo === 'pausa' ? 'text-orange-600 font-semibold' : ''">{{ duracaoFormatada(item.intervalo_anterior_segundos) }}</div>
+              </div>
+              <div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Deslocamento</div>
+                <div class="text-slate-600 tabular-nums">{{ distanciaFormatada(item.distancia_anterior_metros) }}</div>
+              </div>
+              <div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Velocidade média</div>
+                <div class="text-slate-600 tabular-nums">{{ item.velocidade_m_por_min !== null ? item.velocidade_m_por_min.toFixed(1) + ' m/min' : '—' }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Coordenada</div>
+                <div class="text-slate-600 tabular-nums">{{ item.latitude && item.longitude ? (item.latitude + ', ' + item.longitude) : '—' }}</div>
+              </div>
+            </div>
+
+            <div class="flex gap-1.5 mt-2.5">
+              <button
+                type="button"
+                (click)="centralizarNoMapa(item)"
+                [disabled]="!item.latitude || !item.longitude"
+                class="flex-1 text-[9.5px] font-semibold px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Centralizar no mapa
+              </button>
+              <a
+                *ngIf="linkStreetView(item) as link"
+                [href]="link"
+                target="_blank"
+                rel="noopener"
+                class="flex-1 text-center text-[9.5px] font-semibold px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Street View
+              </a>
+            </div>
+          </div>
+        </li>
+      </ng-container>
     </ol>
   </div>
 </div>

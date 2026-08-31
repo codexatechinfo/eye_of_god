@@ -220,6 +220,16 @@ export interface TimelineUcItem {
   endereco: string | null;
   classe_principal: string | null;
   sequencia: string | null;
+  etapa: string | null;
+  // Deslocamento desde a última UC REALIZADA antes desta, na ordem de rota
+  // (sequencia) — não é a ordem cronológica. null quando não há UC
+  // realizada anterior (primeira da rota) ou falta coordenada de algum dos
+  // dois lados. Só calculado em `atuais`, nunca em `timeline`. Ver
+  // massivasService.js#anexarSegmentosDeslocamento.
+  intervalo_anterior_segundos: number | null;
+  distancia_anterior_metros: number | null;
+  velocidade_m_por_min: number | null;
+  tipo_intervalo: 'deslocamento' | 'pausa' | null;
 }
 
 interface UcsLivroResponse {
@@ -227,6 +237,7 @@ interface UcsLivroResponse {
   livro: string;
   atuais: TimelineUcItem[];
   timeline: TimelineUcItem[];
+  distanciaTotalMetros: number;
 }
 
 // Última UC que o colaborador realizou, em qualquer dia — usada pra
@@ -236,10 +247,47 @@ interface UcsLivroResponse {
 export interface LocalizacaoColaborador {
   colaborador: string;
   uc: string;
+  livro: string;
   data_import: string;
   hora_import: string;
   latitude: string;
   longitude: string;
+}
+
+// N° de meses consecutivos em que uma UC recebeu o MESMO código de
+// impedimento (ver massivasService.js#obterRegimeSucessivo). Buscado sob
+// demanda, só quando o card da UC é expandido.
+export interface RegimeSucessivo {
+  uc: string;
+  codigoAtual: string | null;
+  ciclosConsecutivos: number;
+}
+
+interface RegimeSucessivoResponse extends RegimeSucessivo {
+  sucesso: boolean;
+}
+
+// Jornada do colaborador NO DIA — timeline cronológica de todas as UCs que
+// ele realizou, cruzando todos os livros. Ver
+// atividadeColaboradoresService.js#obterJornadaColaborador.
+// "trabalhado"/"ocioso" não separam execução de deslocamento (adiado, sem
+// dado de tempo médio por UC) — o intervalo inteiro entre duas leituras
+// vira "trabalhado" (dentro do limite por etapa) ou "ocioso" (acima).
+export interface JornadaColaborador {
+  colaborador: string;
+  data: string;
+  semDado: boolean;
+  inicio?: string;
+  fim?: string;
+  trabalhadoSegundos?: number;
+  ociosoSegundos?: number;
+  distanciaMetros?: number;
+  ocupacaoPercentual?: number | null;
+  totalRealizadas?: number;
+}
+
+interface JornadaResponse extends JornadaColaborador {
+  sucesso: boolean;
 }
 
 interface LocalizacoesResponse {
@@ -252,6 +300,73 @@ interface LocalizacoesResponse {
 // cão solto, etc.) — pedido explícito do usuário pro card "Impedimentos".
 export function ehCodigoDeImpedimento(codigo: string | null): boolean {
   return !!codigo && codigo !== '000' && codigo !== '099';
+}
+
+// Qual UC foi a primeira, cronologicamente, a mostrar cada código de
+// impedimento no livro — usado só pra decidir "vermelho" (código repetido em
+// UC diferente). `timeline` precisa estar em ordem cronológica (mesma ordem
+// que já vem de GET /massivas/livro-ucs). Compartilhado entre a timeline do
+// painel (livro-detalhe.ts) e os pontos do mapa (mapa-bases.ts) — mesma
+// regra de cor nos dois lugares.
+export function mapaPrimeiraUcPorCodigo(timeline: TimelineUcItem[]): Map<string, string> {
+  const mapa = new Map<string, string>();
+  for (const item of timeline) {
+    if (item.codigo && ehCodigoDeImpedimento(item.codigo) && !mapa.has(item.codigo)) {
+      mapa.set(item.codigo, item.uc);
+    }
+  }
+  return mapa;
+}
+
+// Cor de uma UC: verde = realizada (código normal), cinza = ainda pendente,
+// âmbar = impedimento (primeira vez que esse código aparece no livro),
+// vermelho = esse código de impedimento já apareceu antes em OUTRA UC do
+// mesmo livro (padrão recorrente). Compara sempre o código ATUAL da UC
+// (nunca o código antigo dela mesma) contra `primeiraUcPorCodigo`.
+export function corDaUc(item: TimelineUcItem, primeiraUcPorCodigo: Map<string, string>): 'verde' | 'cinza' | 'laranja' | 'vermelho' {
+  if (!item.codigo) return 'cinza';
+  if (!ehCodigoDeImpedimento(item.codigo)) return 'verde';
+  const primeiraUc = primeiraUcPorCodigo.get(item.codigo);
+  return primeiraUc && primeiraUc !== item.uc ? 'vermelho' : 'laranja';
+}
+
+// Ordem de rota (sequencia) usada tanto pela lista lateral (livro-detalhe)
+// quanto pelos pontos/linha do mapa (mapa-bases) — uma implementação só.
+// `sequencia == null` (UC sem correspondência em coordenadas_ucs_mineradas,
+// ~4% dos casos, ver ADR 0021 Adendo 5) tem que ir pro FIM da rota via
+// Infinity explícito — checar `== null` ANTES de `Number(...)` é o que
+// importa aqui: `Number(null)` é `0` (finito!), então uma versão anterior
+// desta função que fazia `Number.isFinite(Number(a.sequencia)) ? ... :
+// Infinity` sem esse guard tratava UC sem sequencia como sequencia=0 e
+// jogava ela pro INÍCIO da rota — bug real, pego só ao revisar este código
+// de novo pra um propósito diferente.
+// Formatação compartilhada dos campos de deslocamento — usada tanto na
+// timeline do painel de livro (livro-detalhe) quanto na jornada do
+// colaborador (lista-colaboradores), pra não ter duas versões divergentes.
+export function formatarDistancia(metros: number | null): string {
+  if (metros === null) return 'Em breve';
+  if (metros < 1000) return `${Math.round(metros)} m`;
+  return `${(metros / 1000).toFixed(1)} km`;
+}
+
+export function formatarDuracao(segundos: number | null): string {
+  if (segundos === null) return '—';
+  if (segundos < 60) return `${Math.round(segundos)}s`;
+  const minutos = Math.floor(segundos / 60);
+  const resto = Math.round(segundos % 60);
+  if (minutos < 60) return resto > 0 ? `${minutos}m ${resto}s` : `${minutos}m`;
+  const horas = Math.floor(minutos / 60);
+  const minutosResto = minutos % 60;
+  return minutosResto > 0 ? `${horas}h ${minutosResto}m` : `${horas}h`;
+}
+
+export function ordenarPorSequencia<T extends { sequencia: string | null; uc: string }>(itens: T[]): T[] {
+  const valor = (seq: string | null): number => {
+    if (seq == null) return Infinity;
+    const n = Number(seq);
+    return Number.isFinite(n) ? n : Infinity;
+  };
+  return [...itens].sort((a, b) => valor(a.sequencia) - valor(b.sequencia) || a.uc.localeCompare(b.uc));
 }
 
 @Injectable({
@@ -283,6 +398,7 @@ export class ColaboradoresService {
 
   timelineLivro = signal<TimelineUcItem[]>([]);
   atuaisLivro = signal<TimelineUcItem[]>([]);
+  distanciaTotalLivro = signal<number | null>(null);
   carregandoTimelineLivro = signal(false);
   erroTimelineLivro = signal<string | null>(null);
   // Sem cache indefinido de propósito: "atuais"/"impedimentos" são estado
@@ -296,14 +412,23 @@ export class ColaboradoresService {
   // — buscada uma vez só (não muda a cada minuto como atividadeHoje).
   localizacoes = signal<LocalizacaoColaborador[]>([]);
 
-  contagemPorRegional = computed(() => {
-    const contagem = new Map<string, number>();
-    for (const colaborador of this.colaboradores()) {
-      const regional = normalizarRegional(colaborador.base);
-      contagem.set(regional, (contagem.get(regional) ?? 0) + 1);
-    }
-    return contagem;
-  });
+  // UC com o card de detalhe expandido na timeline (accordion, uma por vez)
+  // — signal no service (não local ao componente) porque tanto um clique na
+  // lista (livro-detalhe) quanto um clique num ponto do mapa (mapa-bases)
+  // precisam setá-la, e os dois são componentes irmãos.
+  ucExpandida = signal<string | null>(null);
+  // UC que deve ganhar foco visual (scroll até ela) na timeline — setada
+  // junto com ucExpandida quando o clique vem do mapa.
+  ucFocada = signal<string | null>(null);
+  // Coordenada pra centralizar o mapa — setada pelo botão "Centralizar no
+  // mapa" do card de detalhe, consumida por um effect em mapa-bases.ts.
+  centralizarEm = signal<{ lat: number; lng: number } | null>(null);
+  // Cache simples por UC — evita rebuscar regime sucessivo se o usuário
+  // reabrir a mesma UC mais de uma vez na mesma sessão.
+  regimeSucessivoPorUc = signal<Map<string, RegimeSucessivo>>(new Map());
+  // Jornada do dia por colaborador — recarregada toda vez que o card dele é
+  // reaberto (sem polling, não muda minuto a minuto como atividadeHoje).
+  jornadaPorColaborador = signal<Map<string, JornadaColaborador>>(new Map());
 
   // Sempre ordenada por destaque (mais grave primeiro) e, quando um toggle
   // está ativo, filtrada só para quem está naquela categoria.
@@ -429,6 +554,20 @@ export class ColaboradoresService {
     });
   }
 
+  carregarRegimeSucessivo(uc: string): void {
+    if (this.regimeSucessivoPorUc().has(uc)) return;
+    this.http
+      .get<RegimeSucessivoResponse>(`${this.apiUrl}/massivas/uc-regime`, { params: new HttpParams().set('uc', uc) })
+      .subscribe({
+        next: resposta => {
+          const mapa = new Map(this.regimeSucessivoPorUc());
+          mapa.set(uc, { uc: resposta.uc, codigoAtual: resposta.codigoAtual, ciclosConsecutivos: resposta.ciclosConsecutivos });
+          this.regimeSucessivoPorUc.set(mapa);
+        },
+        error: () => {},
+      });
+  }
+
   atividadeDe(nome: string): AtividadeColaborador | null {
     return this.atividadeHoje()[nome] ?? null;
   }
@@ -438,7 +577,27 @@ export class ColaboradoresService {
   }
 
   selecionarColaborador(nome: string): void {
-    this.colaboradorSelecionado.set(this.colaboradorSelecionado() === nome ? null : nome);
+    const abrindo = this.colaboradorSelecionado() !== nome;
+    this.colaboradorSelecionado.set(abrindo ? nome : null);
+    if (abrindo) this.carregarJornada(nome);
+  }
+
+  // Sem cache (diferente de regimeSucessivoPorUc) — recarrega toda vez que
+  // o card é reaberto, já que a jornada de hoje muda ao longo do dia.
+  // Segue a mesma data selecionada no calendário da sidebar (filtroData).
+  carregarJornada(nome: string): void {
+    this.http
+      .get<JornadaResponse>(`${this.apiUrl}/colaboradores/jornada`, {
+        params: new HttpParams().set('colaborador', nome).set('data', this.filtroData()),
+      })
+      .subscribe({
+        next: resposta => {
+          const mapa = new Map(this.jornadaPorColaborador());
+          mapa.set(nome, resposta);
+          this.jornadaPorColaborador.set(mapa);
+        },
+        error: () => {},
+      });
   }
 
   abrirLivro(colaboradorNome: string, livro: LivroAtividade): void {
@@ -472,6 +631,7 @@ export class ColaboradoresService {
       this.carregandoTimelineLivro.set(true);
       this.timelineLivro.set([]);
       this.atuaisLivro.set([]);
+      this.distanciaTotalLivro.set(null);
     }
 
     this.http
@@ -480,6 +640,7 @@ export class ColaboradoresService {
         next: resposta => {
           this.timelineLivro.set(resposta.timeline);
           this.atuaisLivro.set(resposta.atuais);
+          this.distanciaTotalLivro.set(resposta.distanciaTotalMetros);
           this.carregandoTimelineLivro.set(false);
         },
         error: () => {

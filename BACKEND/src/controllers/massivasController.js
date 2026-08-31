@@ -1,4 +1,11 @@
-const { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro, obterUcsDoLivro } = require('../services/massivasService');
+const {
+  obterResumo,
+  obterOpcoesFiltro,
+  obterDetalhe,
+  obterHistoricoLivro,
+  obterUcsDoLivro,
+  obterRegimeSucessivo,
+} = require('../services/massivasService');
 
 async function resumo(req, res) {
   try {
@@ -61,4 +68,18 @@ async function ucsLivro(req, res) {
   }
 }
 
-module.exports = { resumo, opcoesFiltro, detalhe, historicoLivro, ucsLivro };
+async function regimeSucessivo(req, res) {
+  try {
+    const { uc } = req.query;
+    if (!uc) {
+      return res.status(400).json({ sucesso: false, erro: 'Parâmetro "uc" é obrigatório.' });
+    }
+    const dados = await obterRegimeSucessivo(req.db, uc);
+    res.json({ sucesso: true, ...dados });
+  } catch (erro) {
+    console.error('❌ Erro ao obter regime sucessivo da UC:', erro);
+    res.status(500).json({ sucesso: false, erro: erro.message });
+  }
+}
+
+module.exports = { resumo, opcoesFiltro, detalhe, historicoLivro, ucsLivro, regimeSucessivo };

@@ -1,10 +1,12 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   AtividadeColaborador,
   CategoriaAtividade,
   ColaboradoresService,
+  formatarDistancia,
+  formatarDuracao,
   LivroAtividade,
   normalizarRegional,
   OPCOES_CATEGORIA,
@@ -22,10 +24,27 @@ type CorBarra = 'verde' | 'amarelo' | 'vermelho';
 export class ListaColaboradores {
   opcoesCategoria = OPCOES_CATEGORIA;
 
+  // Barra de jornada expandida (cards de ocupação/trabalhado/ocioso/km) —
+  // um só de cada vez, sempre fechada de novo ao trocar de colaborador.
+  jornadaExpandida = signal(false);
+
   constructor(public colaboradoresService: ColaboradoresService) {}
 
   selecionar(nome: string): void {
+    this.jornadaExpandida.set(false);
     this.colaboradoresService.selecionarColaborador(nome);
+  }
+
+  toggleJornada(): void {
+    this.jornadaExpandida.set(!this.jornadaExpandida());
+  }
+
+  distanciaFormatada(metros: number | null | undefined): string {
+    return formatarDistancia(metros ?? null);
+  }
+
+  duracaoFormatada(segundos: number | null | undefined): string {
+    return formatarDuracao(segundos ?? null);
   }
 
   toggleCategoria(categoria: CategoriaAtividade): void {

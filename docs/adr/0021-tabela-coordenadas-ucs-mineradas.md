@@ -404,3 +404,137 @@ verificado sem erro de console via Browser pane (`read_console_messages`) após 
 editado — sem login disponível nesta sessão (credencial nunca é inserida), não houve
 verificação visual da interface; fica para o usuário confirmar visualmente os 4 pontos do
 pedido.
+
+## Adendo 6 — bug do painel fechando sozinho, navegação mapa↔timeline, card de detalhe por UC, regime sucessivo, e jornada do colaborador
+
+Usuário testou o Adendo 5 e trouxe 7 pedidos novos, com 3 telas de um sistema diferente (mais
+rico em dado, GPS contínuo) como referência visual — não pra copiar campos que este sistema não
+tem como preencher de verdade. Antes de implementar, `AskUserQuestion` resolveu 6 ambiguidades
+reais (código sem descrição → mostrar só o código bruto; "regime sucessivo" → meses
+consecutivos, não passadas do scraper; sem GPS contínuo → só o horário único da leitura, sem
+chegada/saída separada; botões → só "Centralizar no mapa" e "Street View", sem sistema de
+auditoria; execução vs deslocamento → adiado, intervalo inteiro vira só "trabalhado"; limite de
+pausa → >5min etapa urbana / >15min rural). Um agente Plan revisou o plano por escrito antes de
+codar — achou 4 problemas reais (detalhados abaixo) e confirmou que 3 outros achados estavam
+desatualizados (revisou contra o commit anterior, sem ver trabalho desta mesma sessão ainda não
+commitado).
+
+### Causa raiz do painel fechando sozinho ao interagir com o mapa
+
+`livro-detalhe.ts#aoClicarFora` fechava o painel em QUALQUER clique fora do próprio elemento. Um
+clique no marcador do colaborador no mapa ABRE o painel e, no mesmo evento, bolha até
+`document` — como o alvo (o marcador) não está dentro do elemento do painel, fechava de volta
+imediatamente. Corrigido excluindo cliques dentro de `app-mapa-bases` dessa lógica.
+
+### Bug real encontrado na sequencia ao revisitar o código (achado do agente Plan)
+
+`Number(null) === 0` em JS — as duas ordenações por `sequencia` (mapa e painel) tratavam UC sem
+sequência (`null`) como `0` (`Number.isFinite(0)` é `true`), jogando ela pro INÍCIO da rota, não
+pro fim como os comentários afirmavam. Corrigido checando `sequencia == null` antes de
+`Number(...)`, e extraído um `ordenarPorSequencia` único em `colaboradores.service.ts`
+(frontend) + réplica em JS puro no backend (`massivasService.js`, runtimes diferentes não
+compartilham módulo).
+
+### Novo módulo `BACKEND/src/services/deslocamentoService.js`
+
+Haversine + classificação de intervalo (deslocamento vs pausa por etapa urbana/rural),
+compartilhado entre a timeline do livro, a jornada do colaborador e os cards "Km percorrido".
+
+### Timeline do painel (item 5) + Km percorrido do livro (item 7 parte 1)
+
+`massivasService.js#obterUcsDoLivro`: `consultarUcsBrutasDoLivro` passou a trazer `etapa`; novo
+`anexarSegmentosDeslocamento` percorre `atuais` na ordem de sequencia calculando o segmento entre
+cada UC realizada e a ÚLTIMA UC realizada antes dela nessa ordem (pula pendentes no meio) —
+anexa `intervalo_anterior_segundos`, `distancia_anterior_metros`, `velocidade_m_por_min`,
+`tipo_intervalo` por UC, mais `distanciaTotalMetros` do livro inteiro. `livro-detalhe.html`: lista
+única reescrita — endereço como linha principal, "UC X · livro Y · #seq" como subline, separador
+"+Xm desloc Ym · Zm · V m/min" entre UCs consecutivas realizadas (laranja/tracejado quando vira
+"pausa"). Card "Km percorrido" (antes "Em breve") passa a mostrar a soma.
+
+### Card de detalhe por UC (item 4) + regime sucessivo (item 2 do usuário)
+
+Clicar numa UC expande um card com os campos que o sistema TEM de verdade: endereço, livro/seq.
+na rota, situação, apontamento (código bruto, sem descrição inventada), intervalo anterior,
+deslocamento, velocidade média, horário único da leitura, coordenada — mais os botões
+"Centralizar no mapa" e "Street View" (link `google.com/maps?layer=c&cbll=...`, sem API paga).
+
+Novo `massivasService.js#obterRegimeSucessivo(db, uc)`: "ciclo" = mês de leitura (confirmado com
+o usuário) — pega o último código de cada mês (`DISTINCT ON` + `date_trunc('month', ...)`), conta
+quantos meses CONSECUTIVOS a partir do mais recente têm o mesmo código, checando adjacência real
+de mês (não só "linhas seguidas do resultado" — a query só devolve meses com leitura; sem esse
+checagem, um mês pulado por atraso de coleta contaria como consecutivo, achado do agente Plan).
+Novo endpoint `GET /massivas/uc-regime?uc=X`, chamado sob demanda (só quando o card expande),
+com cache simples por UC no frontend (`regimeSucessivoPorUc`). Testado ao vivo: 53-60ms sem
+índice, aceitável no volume atual (revisitar se `contr_execucao_leitura` crescer sem índice em
+`uc`).
+
+`ucExpandida`/`ucFocada`/`centralizarEm` viraram signals em `ColaboradoresService` (não locais ao
+componente) — mapa e timeline são componentes irmãos, e clicar num ponto do mapa (item 3) precisa
+setar os dois primeiros; o botão "Centralizar no mapa" seta o terceiro, consumido por um `effect`
+em `mapa-bases.ts` que dá `flyTo` num zoom bem próximo (17).
+
+### Clique no ponto do mapa → foco na timeline (item 3)
+
+Cada `L.circleMarker` de UC (já existente desde o Adendo 5) ganhou `.on('click', ...)` setando
+`ucFocada`/`ucExpandida`. Cuidado de correção: como o circleMarker é reaproveitado entre
+refreshes de 60s (nunca recriado), o listener não pode fechar sobre o `codigo` da UC no momento
+da criação — uma UC pendente quando o marcador nasceu e realizada depois (só via `setStyle`, sem
+recriar o marcador) usaria um `codigo` desatualizado pra decidir se busca o regime sucessivo.
+Corrigido buscando o estado ATUAL em `atuaisLivro()` no momento do clique, não no fechamento do
+loop de criação. `livro-detalhe.ts` ganhou `@ViewChildren('linhaUc')` + `effect()` reagindo a
+`ucFocada()` pra rolar (`scrollIntoView`) até a UC certa.
+
+### Círculos azuis das bases regionais removidos (item 1 do usuário anterior)
+
+Usuário: "completamente inúteis". Removido `atualizarMarcadores`/`marcadores`/o `computed`
+`contagemPorRegional` (agora sem uso em lugar nenhum, removido do service) e o clique que os
+controlava. Os ícones de colaborador no mapa passaram a aparecer SEMPRE (todos os que têm
+localização válida), sem precisar clicar num círculo antes — `BASES_REGIONAIS` continua existindo
+só para o zoom-por-regional já disparado pelo filtro da sidebar (`aplicarZoomRegional`).
+
+### Jornada do colaborador (item 6) + Km percorrido do colaborador (item 7 parte 2)
+
+Novo `atividadeColaboradoresService.js#obterJornadaColaborador(db, colaborador, dataBr)` —
+**dois bugs reais achados e corrigidos só ao testar contra dado real, não previstos no plano**:
+
+1. Primeira versão lia toda linha com `codigo IS NOT NULL` do dia — resultado: 12.087 UCs
+   "realizadas" num dia só pra um colaborador, 13.884 km de deslocamento. Causa: a coleta roda
+   24h contínua e RE-RASPA a mesma UC já realizada dezenas de vezes (confirmado ao vivo: uma UC
+   comum apareceu 153 vezes no mesmo dia, mesmo código). Corrigido pegando só a PRIMEIRA vez que
+   cada (livro, UC) ficou realizada no dia (`DISTINCT ON` + `MIN(id)`), mesmo padrão de
+   `listarTimelineUcsRealizadasDoLivro`.
+2. Ainda incorreto: as 237 UCs do dia inteiro de um colaborador real (Amilton Stelli — número
+   batendo com o já visto em sessões anteriores) apareciam TODAS no mesmo horário, `00:15:32` (o
+   primeiro lote do dia) — porque já estavam realizadas de DIAS ANTERIORES e o scraper só as
+   revisitou hoje. Mesmo raciocínio de `obterBaselineDigitadosPorLivro`/"Último sincronismo" (ADR
+   0018 Adendo 21): adicionado `ja_realizado_antes`, excluindo (livro, UC) que já tinha código
+   preenchido antes do primeiro `id` do dia consultado. Depois do fix: números plausíveis (ex.:
+   100 UCs realizadas, 09:57→18:05, ~69min "trabalhado" dentro do limite, ~5h32 "ocioso" acima
+   dele, 17% de ocupação — colaborador com muitos intervalos grandes naquele dia real).
+
+"Ocupação" aqui é simplificada: % do tempo sem pausa grande (`trabalhado / (trabalhado +
+ocioso)`), não a métrica mais rica do anexo 3 (que exigiria separar execução de deslocamento,
+adiado). Novo endpoint `GET /colaboradores/jornada?colaborador=X&data=YYYY-MM-DD`. Frontend:
+`jornadaPorColaborador` (sem cache, recarrega toda vez que o card do colaborador é reaberto, via
+`selecionarColaborador`), barra segmentada trabalhado/ocioso em `lista-colaboradores.html`,
+expansível ao clicar (cards de trabalhado/ocioso/ocupação/km). "Km percorrido" do resumo geral do
+colaborador (antes mock `"--"`) passa a ler o mesmo dado.
+
+### Fora de escopo (confirmado com o usuário ou por falta de dado)
+
+Separar execução de deslocamento; "meta 85%"/"perfil"/comparação com baseline histórico; "fora de
+serviço"/geofence de setor planejado; GPS (precisão, fonte, sinais, chegada/saída separadas);
+"Marcar p/ auditoria"; frase de negócio "abre OS e trava faturamento por média" no aviso de
+regime sucessivo (regra operacional da Copel não confirmada — mostrado só o fato).
+
+### Verificação
+
+Cada função nova testada isoladamente contra o Postgres real (`node -e`, transação com
+`ROLLBACK`) — incluindo os dois bugs de `obterJornadaColaborador` encontrados e corrigidos só
+nessa etapa, não no código revisado por escrito. `npm test` (12 testes) continua passando.
+Frontend sem erro de console (Browser pane) após cada arquivo. Backend testado subindo o
+processo real (`node src/server.js`, ~8s) — confirmou que as rotas novas carregam sem erro; o job
+de scraping em segundo plano (login real no Copel) iniciou como já faz normalmente ao subir o
+servidor, sem relação com as mudanças desta sessão. Sem login disponível nesta sessão — sem
+verificação visual direta; fica para o usuário confirmar na tela, com prioridade nos itens 1/2
+(bug do painel fechando).

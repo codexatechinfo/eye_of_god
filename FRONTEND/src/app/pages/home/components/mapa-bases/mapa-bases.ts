@@ -1,9 +1,13 @@
-﻿import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, effect, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, effect } from '@angular/core';
 import * as L from 'leaflet';
 import {
   ColaboradoresService,
+  corDaUc,
+  ehCodigoDeImpedimento,
+  LivroAtividade,
   LivroSelecionado,
-  normalizarRegional,
+  mapaPrimeiraUcPorCodigo,
+  ordenarPorSequencia,
   TimelineUcItem,
 } from '../../../../services/colaboradores.service';
 
@@ -19,6 +23,10 @@ interface BaseRegional {
   lng: number;
 }
 
+// Usadas só pelo zoom-por-regional disparado pelo filtro da sidebar
+// (aplicarZoomRegional) — os círculos que antes marcavam essas bases no
+// mapa foram removidos (usuário: "completamente inúteis"), mas o ponto de
+// voo de cada regional continua precisando de uma coordenada de referência.
 const BASES_REGIONAIS: BaseRegional[] = [
   { regional: 'APUCARANA', lat: -23.55, lng: -51.46 },
   { regional: 'CAMPO MOURÃO', lat: -24.043, lng: -52.378 },
@@ -35,13 +43,14 @@ const BASES_REGIONAIS: BaseRegional[] = [
 const CENTRO_PADRAO: L.LatLngTuple = [-24.5, -51.8];
 const ZOOM_PADRAO = 7;
 const ZOOM_REGIONAL = 11;
+const ZOOM_FOCO = 17;
 
 // Compara ignorando acento/caixa: as opções do filtro vêm sem acento
 // ("CAMPO MOURAO") enquanto as bases do mapa têm acento ("CAMPO MOURÃO").
 function normalizarParaComparacao(texto: string): string {
   return texto
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toUpperCase()
     .trim();
 }
@@ -76,6 +85,21 @@ const ICONE_PEDESTRE = iconeColaborador(
   '<circle cx="12" cy="4" r="2"/><path d="M12 6v6l-3 8"/><path d="M12 12l3 8"/><path d="M9 10 6 12"/><path d="M15 10l3 2"/>',
 );
 
+// Mesma paleta das 4 cores da timeline do painel (livro-detalhe.html:
+// bg-emerald-400/bg-slate-300/bg-amber-500/bg-red-500), em hex pro Leaflet.
+const CORES_PONTO: Record<'verde' | 'cinza' | 'laranja' | 'vermelho', string> = {
+  verde: '#34d399',
+  cinza: '#cbd5e1',
+  laranja: '#f59e0b',
+  vermelho: '#ef4444',
+};
+
+function tooltipDoPonto(item: TimelineUcItem): string {
+  const endereco = item.endereco ? ` — ${item.endereco}` : '';
+  const codigo = item.codigo ? ` · código ${item.codigo}` : ' · pendente';
+  return `UC ${item.uc}${endereco}${codigo}`;
+}
+
 @Component({
   selector: 'app-mapa-bases',
   imports: [],
@@ -86,45 +110,48 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   @ViewChild('mapaEl') mapaEl!: ElementRef<HTMLDivElement>;
 
   private mapa?: L.Map;
-  private marcadores = new Map<string, L.CircleMarker>();
   private resizeObserver?: ResizeObserver;
 
-  // Regional aberta no mapa por clique no circulo (mostra os colaboradores
-  // dessa regional). Signal proprio do componente, NAO reaproveita
-  // filtroRegional (que e da sidebar): os nomes das bases tem acento
-  // ("CAMPO MOURAO") e o filtro da sidebar nao, e se esse clique tambem
-  // disparasse buscar() a lista lateral seria filtrada, o que zeraria (via
-  // contagemPorRegional, que e computed sobre colaboradores()) os OUTROS
-  // circulos do mapa. Fica totalmente desacoplado de proposito.
-  regionalMapa = signal<string | null>(null);
   private marcadoresColaboradores = new Map<string, L.Marker>();
 
-  // Rota do livro aberto no painel lateral (linha ligando as UCs na ordem de
-  // sequencia). Instancia unica, atualizada via setLatLngs (nunca recriada)
-  // porque atuaisLivro/timelineLivro sao atualizados a cada 60s enquanto o
-  // painel esta aberto - recriar a cada ciclo causaria flicker.
+  // Rota planejada do livro aberto (linha ligando as UCs na ordem de
+  // sequencia) + um ponto colorido por UC (verde/cinza/âmbar/vermelho, mesma
+  // regra de corDaUc do painel lateral) + linhas de desvio quando a ordem
+  // REAL de execução (timelineLivro, cronológica) pula pra uma UC que não é
+  // a próxima da sequencia. Tudo atualizado em cima da instância existente
+  // (nunca recriado do zero) porque atuaisLivro/timelineLivro são
+  // atualizados a cada 60s enquanto o painel está aberto — recriar a cada
+  // ciclo causaria flicker.
   private rotaLivro?: L.Polyline;
+  private pontosLivro = new Map<string, L.CircleMarker>();
+  private linhasDesvio: L.Polyline[] = [];
   private livroComBoundsAplicado: string | null = null;
 
   constructor(public colaboradoresService: ColaboradoresService) {
-    effect(() => {
-      const contagem = this.colaboradoresService.contagemPorRegional();
-      this.atualizarMarcadores(contagem);
-    });
     effect(() => {
       const regional = this.colaboradoresService.filtroRegional();
       this.aplicarZoomRegional(regional);
     });
     effect(() => {
-      const regional = this.regionalMapa();
       this.colaboradoresService.localizacoes();
       this.colaboradoresService.colaboradores();
-      this.atualizarMarcadoresColaboradores(regional);
+      this.atualizarMarcadoresColaboradores();
     });
     effect(() => {
       const selecionado = this.colaboradoresService.livroSelecionado();
       const atuais = this.colaboradoresService.atuaisLivro();
-      this.atualizarRotaLivro(selecionado, atuais);
+      const timeline = this.colaboradoresService.timelineLivro();
+      this.atualizarRotaLivro(selecionado, atuais, timeline);
+    });
+    // "Centralizar no mapa" (botão do card de detalhe de UC, item 4) — voa
+    // bem de perto (ZOOM_FOCO) num ponto específico, diferente do
+    // ZOOM_REGIONAL usado pro clique de colaborador/filtro. Objeto novo a
+    // cada clique (mesmo pra repetir a mesma UC) garante que o effect
+    // sempre reexecuta, já que signal de objeto compara por referência.
+    effect(() => {
+      const alvo = this.colaboradoresService.centralizarEm();
+      if (!alvo || !this.mapa) return;
+      this.mapa.flyTo([alvo.lat, alvo.lng], ZOOM_FOCO, { duration: 0.6 });
     });
   }
 
@@ -180,31 +207,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       )
       .addTo(this.mapa);
 
-    for (const base of BASES_REGIONAIS) {
-      const marcador = L.circleMarker([base.lat, base.lng], {
-        radius: 10,
-        color: '#2563eb',
-        weight: 2,
-        fillColor: '#3b82f6',
-        fillOpacity: 0.55,
-      })
-        .addTo(this.mapa)
-        .bindTooltip(base.regional, { direction: 'top', offset: [0, -8] });
-
-      marcador.on('click', () => {
-        const novoValor = this.regionalMapa() === base.regional ? null : base.regional;
-        this.regionalMapa.set(novoValor);
-        if (novoValor) {
-          this.mapa!.flyTo([base.lat, base.lng], ZOOM_REGIONAL, { duration: 0.8 });
-        } else {
-          this.mapa!.flyTo(CENTRO_PADRAO, ZOOM_PADRAO, { duration: 0.8 });
-        }
-      });
-
-      this.marcadores.set(base.regional, marcador);
-    }
-
-    this.atualizarMarcadores(this.colaboradoresService.contagemPorRegional());
+    this.atualizarMarcadoresColaboradores();
     this.aplicarZoomRegional(this.colaboradoresService.filtroRegional());
 
     this.resizeObserver = new ResizeObserver(() => this.mapa?.invalidateSize());
@@ -227,31 +230,12 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
   }
 
-  private atualizarMarcadores(contagem: Map<string, number>): void {
-    // A base de dados às vezes guarda o nome da regional sem acento; casa
-    // ignorando acento/caixa pra não deixar marcador zerado por causa disso.
-    const contagemNormalizada = new Map<string, number>();
-    for (const [regional, total] of contagem) {
-      contagemNormalizada.set(normalizarParaComparacao(regional), total);
-    }
-
-    for (const [regional, marcador] of this.marcadores) {
-      const total = contagemNormalizada.get(normalizarParaComparacao(regional)) ?? 0;
-      const raio = total > 0 ? 8 + Math.min(Math.sqrt(total) * 3, 22) : 6;
-
-      marcador.setRadius(raio);
-      marcador.setStyle({ fillOpacity: total > 0 ? 0.6 : 0.15, opacity: total > 0 ? 1 : 0.35 });
-      marcador.setTooltipContent(`${regional}: ${total} colaborador${total === 1 ? '' : 'es'}`);
-    }
-  }
-
-  // Desenha um marcador por colaborador da regional aberta, na posicao da
-  // ultima UC que ele realizou (qualquer dia). Sempre limpa TODOS os
-  // marcadores atuais primeiro, mesmo quando a regional continua aberta -
-  // trocar direto de uma regional pra outra sem passar por null vazaria
-  // camada Leaflet (marcador antigo nunca removido do mapa, so perderia a
-  // referencia no Map JS).
-  private atualizarMarcadoresColaboradores(regional: string | null): void {
+  // Um marcador por colaborador com posição conhecida (última UC realizada,
+  // qualquer dia) — sem filtro de regional (os círculos que faziam essa
+  // seleção foram removidos). Sempre limpa tudo primeiro: mais simples que
+  // diffar, e o volume (algumas centenas no máximo) não justifica a
+  // complexidade de atualizar em cima da instância existente.
+  private atualizarMarcadoresColaboradores(): void {
     if (!this.mapa) return;
 
     for (const marcador of this.marcadoresColaboradores.values()) {
@@ -259,15 +243,11 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
     this.marcadoresColaboradores.clear();
 
-    if (!regional) return;
-
-    const alvo = normalizarParaComparacao(regional);
     const porNome = new Map(this.colaboradoresService.colaboradores().map(c => [c.colaborador, c]));
 
     for (const loc of this.colaboradoresService.localizacoes()) {
       const colaborador = porNome.get(loc.colaborador);
       if (!colaborador) continue;
-      if (normalizarParaComparacao(normalizarRegional(colaborador.base)) !== alvo) continue;
 
       const lat = Number(loc.latitude);
       const lng = Number(loc.longitude);
@@ -276,60 +256,150 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       const ehMoto = colaborador.cargo === 'LEITURISTA MOTOCICLISTA' || colaborador.cargo === 'MONITOR';
       const marcador = L.marker([lat, lng], { icon: ehMoto ? ICONE_MOTO : ICONE_PEDESTRE })
         .addTo(this.mapa)
-        .bindTooltip(`${colaborador.colaborador} - ultima leitura em ${loc.data_import} ${loc.hora_import}`, {
+        .bindTooltip(`${colaborador.colaborador} - última leitura em ${loc.data_import} ${loc.hora_import}`, {
           direction: 'top',
           offset: [0, -14],
         });
 
+      // Abre exatamente o livro da UC que posicionou esse marcador (loc.livro)
+      // — não "o livro em execução hoje", que podia ser um livro DIFERENTE do
+      // que gerou a posição (ou nem existir, se o colaborador não tiver
+      // atividade hoje). Se esse livro não aparecer em atividadeHoje (ex.:
+      // última execução foi em outro dia), usa um objeto mínimo só com o
+      // número do livro — os cards de resumo do painel ficam em branco nesse
+      // caso, mas a rota/timeline (que é o que importa aqui) carrega normal,
+      // já que dependem só do número do livro (GET /massivas/livro-ucs).
       marcador.on('click', () => {
-        const livroEmExecucao = this.colaboradoresService
+        const livro: LivroAtividade = this.colaboradoresService
           .atividadeDe(colaborador.colaborador)
-          ?.livros.find(l => l.situacaoAtual === 'Em Execução');
-        if (livroEmExecucao) {
-          this.colaboradoresService.abrirLivro(colaborador.colaborador, livroEmExecucao);
-        }
+          ?.livros.find(l => l.livro === loc.livro) ?? {
+          livro: loc.livro,
+          etapa: '',
+          situacaoAtual: '',
+          digitados: 0,
+          naoDigitados: 0,
+          tipoServico: null,
+          diasPrazoRegulatorio: null,
+          primeiraVez: '',
+          ultimaVez: '',
+          ultimaExecucao: null,
+          historico: [],
+        };
+        this.colaboradoresService.abrirLivro(colaborador.colaborador, livro);
       });
 
       this.marcadoresColaboradores.set(loc.colaborador, marcador);
     }
   }
 
-  // Rota do livro aberto no painel: linha ligando as UCs de atuaisLivro na
-  // ordem de sequencia (mesmo criterio de ordenacao usado em
-  // livro-detalhe.ts#ucsOrdenadas). So aplica fitBounds na primeira vez que
-  // desenha essa rota especifica - nos refreshes automaticos seguintes do
-  // mesmo livro (a cada 60s), so atualiza os pontos, sem mexer no zoom/pan
-  // que o usuario ja ajustou manualmente.
-  private atualizarRotaLivro(selecionado: LivroSelecionado | null, atuais: TimelineUcItem[]): void {
+  // Rota do livro aberto no painel: linha planejada (ordem de sequencia) +
+  // um ponto colorido por UC + linhas de desvio quando a ordem real de
+  // execução pula a sequencia. Só aplica fitBounds na primeira vez que
+  // desenha essa rota específica — nos refreshes automáticos seguintes do
+  // mesmo livro (a cada 60s), só atualiza pontos/linhas, sem mexer no
+  // zoom/pan que o usuário já ajustou manualmente.
+  private atualizarRotaLivro(selecionado: LivroSelecionado | null, atuais: TimelineUcItem[], timeline: TimelineUcItem[]): void {
     if (!this.mapa) return;
 
     if (!selecionado) {
       if (this.rotaLivro) this.mapa.removeLayer(this.rotaLivro);
       this.rotaLivro = undefined;
+      for (const ponto of this.pontosLivro.values()) this.mapa.removeLayer(ponto);
+      this.pontosLivro.clear();
+      for (const linha of this.linhasDesvio) this.mapa.removeLayer(linha);
+      this.linhasDesvio = [];
       this.livroComBoundsAplicado = null;
       return;
     }
 
-    const pontos: L.LatLngTuple[] = [...atuais]
-      .filter(item => item.latitude && item.longitude)
-      .sort((a, b) => {
-        const sa = Number(a.sequencia);
-        const sb = Number(b.sequencia);
-        const va = Number.isFinite(sa) ? sa : Infinity;
-        const vb = Number.isFinite(sb) ? sb : Infinity;
-        return va - vb || a.uc.localeCompare(b.uc);
-      })
-      .map(item => [Number(item.latitude), Number(item.longitude)] as L.LatLngTuple);
+    const ordenados = ordenarPorSequencia(atuais).filter(item => item.latitude && item.longitude);
+    const pontosRota: L.LatLngTuple[] = ordenados.map(item => [Number(item.latitude), Number(item.longitude)]);
 
     if (this.rotaLivro) {
-      this.rotaLivro.setLatLngs(pontos);
-    } else if (pontos.length) {
-      this.rotaLivro = L.polyline(pontos, { color: '#2563eb', weight: 3, opacity: 0.8 }).addTo(this.mapa);
+      this.rotaLivro.setLatLngs(pontosRota);
+    } else if (pontosRota.length) {
+      this.rotaLivro = L.polyline(pontosRota, { color: '#94a3b8', weight: 2, opacity: 0.7, dashArray: '2 6' }).addTo(this.mapa);
     }
 
-    if (pontos.length && this.rotaLivro && this.livroComBoundsAplicado !== selecionado.livro.livro) {
+    if (pontosRota.length && this.rotaLivro && this.livroComBoundsAplicado !== selecionado.livro.livro) {
       this.mapa.fitBounds(this.rotaLivro.getBounds(), { padding: [40, 40] });
       this.livroComBoundsAplicado = selecionado.livro.livro;
+    }
+
+    // Pontos: atualiza em cima da instância existente por UC (posição/cor),
+    // cria só as novas, remove as que já não aparecem mais em `ordenados`.
+    const indexPorUc = new Map(ordenados.map((item, i) => [item.uc, i]));
+    const primeiraUcPorCodigo = mapaPrimeiraUcPorCodigo(timeline);
+    const vistos = new Set<string>();
+
+    for (const item of ordenados) {
+      vistos.add(item.uc);
+      const latLng: L.LatLngTuple = [Number(item.latitude), Number(item.longitude)];
+      const cor = CORES_PONTO[corDaUc(item, primeiraUcPorCodigo)];
+      const existente = this.pontosLivro.get(item.uc);
+      if (existente) {
+        existente.setLatLng(latLng);
+        existente.setStyle({ fillColor: cor });
+        existente.setTooltipContent(tooltipDoPonto(item));
+      } else {
+        const ponto = L.circleMarker(latLng, { radius: 5, color: '#fff', weight: 1, fillColor: cor, fillOpacity: 0.95 })
+          .addTo(this.mapa)
+          .bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
+        // Clicar no ponto foca E expande a UC na timeline do painel (item 3
+        // do pedido) — os dois juntos, sem precisar de um segundo clique na
+        // lista. O circleMarker é reaproveitado entre refreshes (nunca
+        // recriado, ver comentário da classe), então o listener não pode
+        // fechar sobre `item.codigo` direto — a UC pode ter sido pendente
+        // quando o marcador foi criado e virado realizada depois só com
+        // `setStyle` (sem recriar o marcador, sem re-registrar o listener).
+        // Busca o estado ATUAL da UC em atuaisLivro() no momento do clique.
+        const uc = item.uc;
+        ponto.on('click', () => {
+          this.colaboradoresService.ucFocada.set(uc);
+          this.colaboradoresService.ucExpandida.set(uc);
+          const atual = this.colaboradoresService.atuaisLivro().find(a => a.uc === uc);
+          if (ehCodigoDeImpedimento(atual?.codigo ?? null)) {
+            this.colaboradoresService.carregarRegimeSucessivo(uc);
+          }
+        });
+        this.pontosLivro.set(item.uc, ponto);
+      }
+    }
+    for (const [uc, ponto] of this.pontosLivro) {
+      if (!vistos.has(uc)) {
+        this.mapa.removeLayer(ponto);
+        this.pontosLivro.delete(uc);
+      }
+    }
+
+    // Desvios: timeline já vem em ordem cronológica (id ASC, ver
+    // listarTimelineUcsRealizadasDoLivro) — pra cada par consecutivo de UCs
+    // realizadas, se a próxima não é a "próxima da sequencia" da anterior
+    // (índice adjacente em `ordenados`), o colaborador pulou a ordem
+    // planejada: traça uma linha marcando esse trecho. Recriado inteiro a
+    // cada ciclo (não atualizado em cima da instância) — o número de desvios
+    // é tipicamente pequeno, não justifica a complexidade de diffar.
+    for (const linha of this.linhasDesvio) this.mapa.removeLayer(linha);
+    this.linhasDesvio = [];
+
+    for (let i = 1; i < timeline.length; i++) {
+      const anterior = timeline[i - 1];
+      const atual = timeline[i];
+      if (!anterior.latitude || !anterior.longitude || !atual.latitude || !atual.longitude) continue;
+
+      const indexAnterior = indexPorUc.get(anterior.uc);
+      const indexAtual = indexPorUc.get(atual.uc);
+      if (indexAnterior === undefined || indexAtual === undefined) continue;
+      if (indexAtual === indexAnterior + 1) continue;
+
+      const linha = L.polyline(
+        [
+          [Number(anterior.latitude), Number(anterior.longitude)],
+          [Number(atual.latitude), Number(atual.longitude)],
+        ],
+        { color: '#dc2626', weight: 2.5, opacity: 0.85, dashArray: '6 4' },
+      ).addTo(this.mapa);
+      this.linhasDesvio.push(linha);
     }
   }
 

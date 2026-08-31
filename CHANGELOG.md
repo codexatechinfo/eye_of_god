@@ -7,16 +7,24 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
-- Aba Trilho: clicar num círculo regional do mapa agora mostra um ícone por colaborador (moto
-  para motoqueiro/monitor, pessoa a pé para pedestre) na posição da última UC que ele realizou
-  (qualquer dia). Clicar no ícone abre o livro "Em Execução" desse colaborador e desenha no mapa
-  a rota das UCs na ordem de `sequencia`. A timeline do painel do livro deixou de separar
-  "realizadas"/"não realizadas" em dois blocos e passou a ser uma lista única ordenada por
-  `sequencia` (ordem de rota, não mais cronológica), com 4 cores: verde (realizada), cinza
-  (pendente), âmbar (impedimento), vermelho (código de impedimento repetido de outra UC do mesmo
-  livro) — e cada UC agora mostra o endereço (município, localidade, endereço, classe de
-  consumo) abaixo dela, vindo de `coordenadas_ucs_mineradas`. Novo endpoint `GET
-  /colaboradores/localizacoes`. Ver Adendo 5 da [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
+- Aba Trilho: mapa mostra sempre um ícone por colaborador (moto para motoqueiro/monitor, pessoa
+  a pé para pedestre) na posição da última UC que ele realizou (qualquer dia) — os círculos de
+  contagem por regional foram removidos. Clicar no ícone abre o livro da UC que gerou aquela
+  posição e desenha no mapa a rota das UCs na ordem de `sequencia`, com um ponto colorido por UC
+  (verde/cinza/âmbar/vermelho) e uma linha de desvio quando a execução real pula a ordem
+  planejada. A timeline do painel do livro é uma lista única ordenada por `sequencia`, com o
+  endereço de cada UC (município, localidade, endereço, classe de consumo), separadores de
+  deslocamento entre UCs consecutivas ("+3m desloc 120m · 40 m/min", destacado quando vira pausa
+  acima do limite por etapa) e um card de detalhe expansível por UC (situação, código,
+  deslocamento, velocidade, coordenada, "Centralizar no mapa"/"Street View", e um aviso de
+  "regime sucessivo" quando a mesma UC repete o mesmo código de impedimento em meses
+  consecutivos). Clicar num ponto do mapa foca e expande a UC correspondente na lista. Card "Km
+  percorrido" (livro e colaborador) e barra de "Jornada" do colaborador (trabalhado/ocioso,
+  expansível) passam a mostrar dado real, calculado por Haversine entre as UCs. Corrigido: o
+  painel e a rota fechavam sozinhos ao interagir com o mapa (clique no marcador borbulhava até o
+  fechamento por "clique fora"). Novos endpoints `GET /colaboradores/localizacoes`, `GET
+  /colaboradores/jornada`, `GET /massivas/uc-regime`. Ver Adendos 5 e 6 da
+  [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
 
 - Aba Importação: `coordenadas_ucs_mineradas` agora aceita import via planilha (upsert por
   `unidade_consumidora` — UC repetida substitui a linha, UC nova só adiciona), incluindo

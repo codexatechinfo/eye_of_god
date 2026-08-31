@@ -1,3 +1,5 @@
+const { calcularSegmento } = require('./deslocamentoService');
+
 const QTD_REGEX = /^(\d+)\/(\d+)$/;
 const LIMITE_PARADO_MINUTOS = 20;
 
@@ -733,7 +735,7 @@ async function obterSuspensoesHoje(db, dataConsultaIso) {
 async function obterUltimaUcRealizadaPorColaborador(db) {
   const { rows } = await db.query(`
     SELECT DISTINCT ON (c.colaborador)
-      c.colaborador, c.uc, c.data_import, c.hora_import, m.latitude, m.longitude
+      c.colaborador, c.uc, c.livro, c.data_import, c.hora_import, m.latitude, m.longitude
     FROM contr_execucao_leitura c
     JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = c.uc
     WHERE c.colaborador IS NOT NULL AND c.codigo IS NOT NULL
@@ -742,4 +744,94 @@ async function obterUltimaUcRealizadaPorColaborador(db) {
   return rows;
 }
 
-module.exports = { listarAtividadeHoje, obterUltimaUcRealizadaPorColaborador };
+// Jornada do colaborador NO DIA (dataBr, "DD/MM/YYYY"): timeline cronológica
+// de TODAS as UCs que ele realizou, cruzando TODOS os livros dele nesse dia
+// (não um livro só) — dá pra calcular sem mudar a query principal de
+// listarAtividadeHoje porque aqui não importa status/histórico por livro,
+// só a sequência real de leituras.
+//
+// PEGA SÓ A PRIMEIRA VEZ que cada UC ficou realizada HOJE (MIN id por
+// livro+uc dentro do dia consultado), não toda linha com codigo preenchido
+// — a coleta roda 24h contínua e RE-RASPA a mesma UC já realizada dezenas
+// de vezes ao longo do dia (confirmado ao vivo: uma UC comum apareceu 153
+// vezes no mesmo dia, mesmo codigo, hora_import mudando a cada ciclo). Sem
+// esse filtro, a primeira versão desta função contava 12 mil "realizações"
+// num dia só pra um colaborador e 13 mil km de deslocamento — a mesma UC
+// batida repetidamente virava "movimento" entre cópias dela mesma e de
+// outras UCs igualmente repetidas.
+//
+// AINDA NÃO BASTA: sem excluir UCs já realizadas ANTES do dia consultado
+// (mesmo raciocínio de obterBaselineDigitadosPorLivro/baselinePorLivro,
+// usado pro "Último sincronismo" — ADR 0018 Adendo 21), todo o backlog de
+// dias anteriores aparece "realizado" no primeiro lote de hoje, todo no
+// MESMO horário — confirmado ao vivo: as 237 UCs do dia inteiro do
+// colaborador vieram todas com hora_import 00:15:32 (o primeiro lote do
+// dia), porque já estavam com codigo preenchido de antes e o scraper só as
+// revisitou. `ja_realizado_antes` exclui (livro, uc) que já tinha codigo
+// preenchido em qualquer linha com `id` menor que o primeiro id do dia
+// consultado — só sobra o que o colaborador realizou de fato HOJE.
+//
+// `LEFT JOIN` (não JOIN) com coordenadas_ucs_mineradas preserva as ~4% de
+// leituras sem correspondência (ADR 0021 Adendo 5) — elas contam pro total
+// de realizadas, só não contribuem com distância (calcularSegmento já
+// devolve null quando falta coordenada de um dos lados).
+async function obterJornadaColaborador(db, colaborador, dataBr) {
+  const { rows } = await db.query(
+    `
+    WITH corte_do_dia AS (
+      SELECT MIN(id) AS primeiro_id FROM contr_execucao_leitura WHERE data_import = $2
+    ), ja_realizado_antes AS (
+      SELECT DISTINCT c.livro, c.uc
+      FROM contr_execucao_leitura c
+      CROSS JOIN corte_do_dia cd
+      WHERE c.colaborador = $1 AND c.codigo IS NOT NULL AND c.id < cd.primeiro_id
+    ), primeira_realizacao AS (
+      SELECT DISTINCT ON (c.livro, c.uc)
+        c.id, c.uc, c.livro, c.etapa, c.data_import, c.hora_import
+      FROM contr_execucao_leitura c
+      WHERE c.colaborador = $1 AND c.data_import = $2 AND c.codigo IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM ja_realizado_antes j WHERE j.livro = c.livro AND j.uc = c.uc)
+      ORDER BY c.livro, c.uc, c.id ASC
+    )
+    SELECT pr.uc, pr.livro, pr.etapa, pr.data_import, pr.hora_import, m.latitude, m.longitude
+    FROM primeira_realizacao pr
+    LEFT JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = pr.uc
+    ORDER BY pr.id ASC
+    `,
+    [colaborador, dataBr],
+  );
+
+  if (!rows.length) return { colaborador, data: dataBr, semDado: true };
+
+  let trabalhadoSegundos = 0;
+  let ociosoSegundos = 0;
+  let distanciaMetros = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const segmento = calcularSegmento(rows[i - 1], rows[i]);
+    if (!segmento) continue;
+    if (segmento.tipo === 'pausa') ociosoSegundos += segmento.intervaloSegundos;
+    else trabalhadoSegundos += segmento.intervaloSegundos;
+    distanciaMetros += segmento.distanciaMetros;
+  }
+
+  const total = trabalhadoSegundos + ociosoSegundos;
+
+  return {
+    colaborador,
+    data: dataBr,
+    semDado: false,
+    inicio: rows[0].hora_import,
+    fim: rows[rows.length - 1].hora_import,
+    trabalhadoSegundos,
+    ociosoSegundos,
+    distanciaMetros,
+    // "Ocupação" aqui é % do tempo SEM pausa grande — mais simples do que a
+    // métrica que exigiria separar execução de deslocamento (adiado, ver
+    // ADR). null com uma UC só (sem nenhum segmento calculado ainda).
+    ocupacaoPercentual: total > 0 ? Math.round((trabalhadoSegundos / total) * 100) : null,
+    totalRealizadas: rows.length,
+  };
+}
+
+module.exports = { listarAtividadeHoje, obterUltimaUcRealizadaPorColaborador, obterJornadaColaborador };

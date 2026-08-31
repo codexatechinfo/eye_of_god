@@ -1,3 +1,5 @@
+const { calcularSegmento } = require('./deslocamentoService');
+
 // ── fontes "massiva" (tabelas de staging do scraper de massivas) ──
 const TABELAS_MASSIVA = {
   pendentes: { nome: 'pendentes_im', temLeiturista: false, rotulo: 'Pendente' },
@@ -928,7 +930,7 @@ async function consultarUcsBrutasDoLivro(db, livro) {
   const { rows } = await db.query(
     `
     SELECT id, uc, codigo, equipamento, tipo_especificacao, faturamento, leitura_atual,
-      situacao, colaborador, data_import, hora_import
+      situacao, colaborador, data_import, hora_import, etapa
     FROM contr_execucao_leitura
     WHERE livro = $1 AND uc IS NOT NULL
     `,
@@ -1029,6 +1031,98 @@ function comCoordenadas(linha, mapaCoordenadas) {
   };
 }
 
+// Ordem de rota (sequencia) — mesma regra de
+// FRONTEND/src/app/services/colaboradores.service.ts#ordenarPorSequencia,
+// replicada aqui em JS puro (não dá pra compartilhar módulo entre os dois
+// runtimes). `sequencia == null` (UC sem correspondência em
+// coordenadas_ucs_mineradas, ~4% dos casos) tem que ir pro FIM via Infinity
+// explícito — checar `== null` ANTES de `Number(...)` importa porque
+// `Number(null)` é `0` (finito), não `NaN`.
+function ordenarPorSequencia(itens) {
+  const valor = seq => {
+    if (seq == null) return Infinity;
+    const n = Number(seq);
+    return Number.isFinite(n) ? n : Infinity;
+  };
+  return [...itens].sort((a, b) => valor(a.sequencia) - valor(b.sequencia) || a.uc.localeCompare(b.uc));
+}
+
+// Percorre as UCs do livro na ordem de ROTA (sequencia, não a ordem
+// alfabética que `atuais` já vem) calculando o segmento (distância/tempo/
+// tipo) entre cada UC realizada e a ÚLTIMA UC realizada antes dela nessa
+// mesma ordem — pula UCs ainda pendentes no meio (não têm data/hora pra
+// servir de ponto de partida/chegada). Devolve `atuais` na mesma ordem
+// ORIGINAL (alfabética, pra não quebrar quem já consome esse array), só com
+// os 4 campos novos anexados por UC, mais a distância total do livro.
+function anexarSegmentosDeslocamento(atuaisComCoordenadas) {
+  const ordenados = ordenarPorSequencia(atuaisComCoordenadas);
+  const segmentoPorUc = new Map();
+  let ultimoRealizado = null;
+  let distanciaTotalMetros = 0;
+
+  for (const item of ordenados) {
+    if (!item.codigo) continue;
+    const segmento = ultimoRealizado ? calcularSegmento(ultimoRealizado, item) : null;
+    if (segmento) {
+      segmentoPorUc.set(item.uc, segmento);
+      distanciaTotalMetros += segmento.distanciaMetros;
+    }
+    ultimoRealizado = item;
+  }
+
+  const atuais = atuaisComCoordenadas.map(item => {
+    const segmento = segmentoPorUc.get(item.uc);
+    return {
+      ...item,
+      intervalo_anterior_segundos: segmento?.intervaloSegundos ?? null,
+      distancia_anterior_metros: segmento?.distanciaMetros ?? null,
+      velocidade_m_por_min: segmento?.velocidadeMetrosPorMinuto ?? null,
+      tipo_intervalo: segmento?.tipo ?? null,
+    };
+  });
+
+  return { atuais, distanciaTotalMetros };
+}
+
+// "Regime sucessivo": quantos MESES consecutivos (não passadas do scraper —
+// confirmado com o usuário) uma UC recebeu o MESMO código de impedimento.
+// "Ciclo" = mês de leitura: a UC reaparece num livro novo todo mês, e o
+// scraper roda 24h contínuo dentro de cada livro — contar passadas do
+// scraper deixaria esse número sempre alto pra qualquer UC lida há um
+// tempo, sem sentido de alerta. Pega o ÚLTIMO código de cada mês
+// (DISTINCT ON), ordena mês DESC, e conta a partir do mais recente enquanto
+// o código continuar o mesmo E o mês anterior for exatamente 1 mês antes do
+// contado (a query só devolve meses com leitura — sem esse segundo check,
+// um mês pulado por atraso de coleta contaria como "consecutivo" mesmo
+// sendo um buraco no calendário).
+async function obterRegimeSucessivo(db, uc) {
+  const { rows } = await db.query(
+    `
+    SELECT DISTINCT ON (date_trunc('month', to_date(data_import, 'DD/MM/YYYY')))
+      date_trunc('month', to_date(data_import, 'DD/MM/YYYY')) AS mes, codigo
+    FROM contr_execucao_leitura
+    WHERE uc = $1 AND codigo IS NOT NULL
+    ORDER BY mes DESC, id DESC
+    `,
+    [uc],
+  );
+
+  if (!rows.length) return { uc, codigoAtual: null, ciclosConsecutivos: 0 };
+
+  const codigoAtual = rows[0].codigo;
+  let ciclos = 0;
+  let mesEsperado = null;
+
+  for (const linha of rows) {
+    if (linha.codigo !== codigoAtual) break;
+    if (mesEsperado && linha.mes.getTime() !== mesEsperado.getTime()) break;
+    ciclos++;
+    mesEsperado = new Date(linha.mes.getFullYear(), linha.mes.getMonth() - 1, 1);
+  }
+
+  return { uc, codigoAtual, ciclosConsecutivos: ciclos };
+}
+
 async function obterUcsDoLivro(db, livro) {
   const [atuaisBrutas, timelineBruta] = await Promise.all([
     listarUcsAtuaisDoLivro(db, livro),
@@ -1047,10 +1141,11 @@ async function obterUcsDoLivro(db, livro) {
   const ucs = [...new Set([...atuaisBrutas, ...timelineBruta].map(l => l.uc))];
   const mapaCoordenadas = await buscarMapaCoordenadas(db, ucs);
 
-  const atuais = atuaisBrutas.map(l => comCoordenadas(l, mapaCoordenadas));
+  const atuaisComCoordenadas = atuaisBrutas.map(l => comCoordenadas(l, mapaCoordenadas));
   const timeline = timelineBruta.map(l => comCoordenadas(l, mapaCoordenadas));
+  const { atuais, distanciaTotalMetros } = anexarSegmentosDeslocamento(atuaisComCoordenadas);
 
-  return { livro, atuais, timeline };
+  return { livro, atuais, timeline, distanciaTotalMetros };
 }
 
 // Um livro pode ter mais de uma linha no mesmo lote (ex.: dois leituristas
@@ -1137,4 +1232,12 @@ async function historicoContrLivro(db, livro) {
   }));
 }
 
-module.exports = { obterResumo, obterOpcoesFiltro, obterDetalhe, obterHistoricoLivro, obterUcsDoLivro, contrDedupSql };
+module.exports = {
+  obterResumo,
+  obterOpcoesFiltro,
+  obterDetalhe,
+  obterHistoricoLivro,
+  obterUcsDoLivro,
+  obterRegimeSucessivo,
+  contrDedupSql,
+};

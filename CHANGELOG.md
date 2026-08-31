@@ -57,6 +57,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Scraper de Acompanhamento (`copelScraperService.js`): revisão geral de velocidade/robustez.
+  Removido `slowMo` de 100ms em modo headless (só faz sentido com janela visível, em produção
+  era atraso puro em toda ação do Playwright); bloqueio de imagem/CSS/fonte/mídia via
+  `context.route()` (extração só lê tabela/formulário, não precisa do visual); novo teto de
+  duração do ciclo (`COPEL_TIMEOUT_CICLO_MIN`, default 45min) — evita que um ciclo travado
+  prenda o job Massivas indefinidamente (os dois nunca logam ao mesmo tempo,
+  `copelSessaoLock.js`). Ver último Adendo da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+
 - Scraper de Acompanhamento (`copelScraperService.js`): fila de trabalho compartilhada entre
   as abas passou a ser **por livro**, não mais por etapa inteira. Usuário mostrou o HTML real
   da página depois da busca: todas as etapas e todos os livros de cada uma já vêm no DOM de

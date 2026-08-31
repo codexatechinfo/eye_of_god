@@ -6,6 +6,17 @@ const { log, logWarn, logErro } = require('../utils/logTempo');
 const DIR_DIAGNOSTICO = path.join(__dirname, '..', '..', 'diagnosticos');
 const URL_ACOMPANHAMENTO = 'https://www.copel.com/lis/acompanhamentoAction.do#';
 
+// Teto de duração pro processamento de livros de um ciclo — Coleta Acomp e
+// Massivas nunca logam ao mesmo tempo (copelSessaoLock.js): um ciclo que
+// trava ou degrada (já aconteceu, um caso real levou ~38min pra completar)
+// deixa o OUTRO job inteiro bloqueado esperando essa exclusão liberar. Sem
+// teto, um ciclo genuinamente travado prenderia Massivas indefinidamente.
+// Ao estourar, aborta com o que já foi coletado até agora (não descarta
+// nada, só para de esperar os livros restantes) — o próximo ciclo (5s
+// depois, ver coletaJob.js) recomeça do zero e pega o que ficou de fora.
+const TIMEOUT_CICLO_MIN = Math.max(5, parseInt(process.env.COPEL_TIMEOUT_CICLO_MIN || '45', 10));
+const TIMEOUT_CICLO_MS = TIMEOUT_CICLO_MIN * 60 * 1000;
+
 async function salvarDiagnostico(page, motivo) {
   try {
     if (!fs.existsSync(DIR_DIAGNOSTICO)) fs.mkdirSync(DIR_DIAGNOSTICO, { recursive: true });
@@ -526,9 +537,13 @@ async function coletarDadosAcompanhamento() {
   // COPEL_HEADLESS=false abre o Chromium com janela visível — útil pra
   // acompanhar ao vivo o que o site está fazendo durante uma investigação;
   // default headless (sem janela), que é o certo pro job rodando sozinho o
-  // dia inteiro em produção.
+  // dia inteiro em produção. slowMo só faz sentido com janela visível (é
+  // pra dar tempo de ACOMPANHAR visualmente) — em headless não há nada pra
+  // ver, então os 100ms de atraso em CADA ação do Playwright (clique, fill,
+  // evaluate, waitForSelector...) eram puro desperdício, somando minutos ao
+  // longo de um ciclo com centenas de livros.
   const headless = process.env.COPEL_HEADLESS !== 'false';
-  const browser = await chromium.launch({ headless, slowMo: headless ? 100 : 300 });
+  const browser = await chromium.launch({ headless, slowMo: headless ? 0 : 300 });
   // Um `browserContext` explícito, compartilhado por TODAS as abas — é o
   // que faz elas dividirem a mesma sessão (cookies), sem precisar logar de
   // novo em cada uma. `browser.newPage()` direto criaria um context NOVO E
@@ -538,6 +553,22 @@ async function coletarDadosAcompanhamento() {
   // dentro da MESMA coleta, ter várias sessões brigando pelo mesmo login
   // seria exatamente esse problema, só que multiplicado por N abas.
   const context = await browser.newContext();
+
+  // Bloqueia imagem/CSS/fonte/mídia — a extração só lê tabela/formulário
+  // (texto e atributos via evaluate), nunca depende do visual renderizado
+  // (não há mais nenhum `.click()` condicionado a elemento visível, ver
+  // ADR 0020). Registrado no CONTEXT (não por página) pra valer em toda
+  // aba nova criada a partir dele, sem precisar repetir por aba. Reduz
+  // tráfego e tempo de carregamento por navegação — importa mais ainda com
+  // várias abas competindo pela mesma sessão/rede.
+  await context.route('**/*', route => {
+    const tipo = route.request().resourceType();
+    if (['image', 'stylesheet', 'font', 'media'].includes(tipo)) {
+      return route.abort();
+    }
+    return route.continue();
+  });
+
   const page = await context.newPage();
 
   try {
@@ -599,12 +630,30 @@ async function coletarDadosAcompanhamento() {
 
     const registros = [];
     const tentativasPorLivro = new Map();
-    await Promise.all(
+    const trabalho = Promise.all(
       paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaLivros, registros, tentativasPorLivro)),
     );
+    // Se algum worker escapar do try/catch interno (não deveria, mas é
+    // "só" uma rede de segurança) DEPOIS do timeout já ter vencido a corrida
+    // abaixo, essa rejeição não teria mais ninguém esperando por ela —
+    // sem este catch preventivo, viraria unhandled rejection.
+    trabalho.catch(() => {});
+
+    const timeoutCiclo = new Promise(resolve => setTimeout(() => resolve('timeout'), TIMEOUT_CICLO_MS));
+    const resultado = await Promise.race([trabalho.then(() => 'concluido'), timeoutCiclo]);
+
+    if (resultado === 'timeout') {
+      logErro(
+        `[Coleta Acomp] ⏱️ Ciclo excedeu ${TIMEOUT_CICLO_MIN}min de processamento de livros — ` +
+          `abortando com ${registros.length} registro(s) já coletado(s) até agora (fila ainda tinha ` +
+          `${filaLivros.length} livro(s) pendente(s)). O próximo ciclo recomeça do zero.`,
+      );
+    }
 
     // Fecha só as abas extras — a principal fecha junto com o browser no
-    // finally.
+    // finally. Se o timeout venceu a corrida, algum worker pode ainda estar
+    // no meio de uma operação numa dessas páginas — fechar aqui e o browser
+    // inteiro logo depois (finally) é o que realmente interrompe ele.
     await Promise.all(paginas.slice(1).map(p => p.close().catch(() => {})));
 
     log('[Coleta Acomp] ✅ Extração concluída.');

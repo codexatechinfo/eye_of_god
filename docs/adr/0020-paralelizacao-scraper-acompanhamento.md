@@ -488,3 +488,63 @@ forma pra extrair o osId, é a mesma chamada, só captura um grupo a mais do reg
 `npm test` (12 testes) continua passando. Aplicado antes de confirmar ao vivo com um ciclo
 completo — o `nodemon` reiniciou o backend no meio do login do ciclo seguinte (sem perda real,
 nenhum livro tinha sido tocado ainda) para já rodar com essa versão.
+
+## Adendo — três correções de velocidade/robustez pedidas numa revisão geral do arquivo
+
+Usuário pediu uma nova análise do scraper de Acompanhamento em busca de velocidade e menos
+erros, sem um sintoma específico dessa vez — revisão preventiva. Reli o arquivo inteiro mais
+`coletaCopelService.js`, `copelImportService.js`, `copelSessaoLock.js` e todo o histórico desta
+ADR. Apontados 4 achados; usuário aprovou implementar 3 deles (baixo risco, não tocam a lógica
+de concorrência já validada em produção) e deixou o 4º — paralelizar a abertura das abas extras
+— de fora por esbarrar no mesmo risco de sobrecarga do servidor já documentado acima
+("todas as 8 abas... sobrecarga real sob 8 conexões simultâneas").
+
+### 1. `slowMo` de 100ms mesmo em modo headless
+
+`slowMo` atrasa TODA ação do Playwright (clique, fill, evaluate, waitForSelector) — existe pra
+dar tempo de acompanhar visualmente uma janela aberta. Em produção o Chromium roda headless (sem
+janela, nada pra ver), então esse atraso era puro desperdício, se somando a cada uma das
+centenas de ações por ciclo. `chromium.launch({ headless, slowMo: headless ? 100 : 300 })` virou
+`slowMo: headless ? 0 : 300` — mantém o atraso só quando `COPEL_HEADLESS=false` (uso manual,
+acompanhando ao vivo).
+
+### 2. Bloqueio de imagem/CSS/fonte/mídia via `context.route()`
+
+A extração só lê tabela e formulário via `evaluate`/atributo — não depende do visual renderizado
+desde que o Adendo "causa raiz do precisar clicar" (acima) eliminou o último `.click()`
+condicionado a elemento visível. `context.route('**/*', ...)` aborta requisições dos tipos
+`image`/`stylesheet`/`font`/`media`, registrado uma vez no `browserContext` compartilhado (vale
+pra toda aba nova criada a partir dele, sem repetir por aba). Reduz tráfego e tempo de
+carregamento por navegação — ganho que deve importar mais ainda com 5+ abas competindo pela
+mesma sessão/rede.
+
+### 3. Teto de duração do ciclo (`COPEL_TIMEOUT_CICLO_MIN`, default 45min)
+
+`copelSessaoLock.js` serializa Coleta Acomp e Massivas — nunca logam ao mesmo tempo. Sem teto,
+um ciclo que trava ou degrada (já aconteceu: um caso real completo levou ~38min, e há relatos de
+"All promises were rejected" em rajada) prenderia o job Massivas inteiro esperando essa exclusão
+liberar, por tempo indefinido. Novo `Promise.race` entre o `Promise.all` dos workers e um timer
+de `TIMEOUT_CICLO_MIN` (env `COPEL_TIMEOUT_CICLO_MIN`, default 45, mínimo 5) — se o timer vencer,
+loga o ocorrido (quantos registros já coletados, quantos livros ainda na fila) e segue para
+fechar as abas e devolver o que já tem, em vez de esperar os livros restantes. O próximo ciclo
+(5s depois, `coletaJob.js`) recomeça do zero e cobre o que ficou de fora — nada é perdido
+permanentemente, só adiado. Cuidado adicional: `trabalho.catch(() => {})` preventivo no
+`Promise.all` dos workers, para uma eventual rejeição tardia (depois do timeout já ter vencido a
+corrida) não virar unhandled rejection.
+
+### Fora de escopo desta rodada (achado 4, não implementado)
+
+Abertura das abas extras é sequencial (`for` com `await` dentro, uma aba de cada vez) — dá pra
+paralelizar com `Promise.all`, mas cada setup inclui login-menos-busca-e-scroll (até ~90s de
+estabilização na pior hipótese), e abrir tudo de uma vez multiplicaria a carga simultânea sobre
+o portal justo no momento mais sensível (login/busca) — o mesmo tipo de sobrecarga que já
+motivou reduzir de 8 para 5 abas nesta mesma ADR. Fica pro usuário decidir se quer arriscar
+(com escalonamento, não tudo de uma vez) numa mudança separada.
+
+### Verificação
+
+`node --check` confirma sintaxe válida. `npm test` (12 testes) continua passando. **Não
+testado ao vivo contra o portal real nesta sessão** — rodar o scraper de verdade dispara login
+real na conta Copel, e não faço isso só para testar; fica pro usuário confirmar no próximo ciclo
+real: tempo total do ciclo (esperado menor, por causa do slowMo e do bloqueio de recursos) e se
+o teto de 45min nunca dispara em condições normais (só deveria disparar em cenário já degradado).

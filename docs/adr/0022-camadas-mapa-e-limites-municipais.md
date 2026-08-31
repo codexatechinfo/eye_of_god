@@ -191,3 +191,22 @@ Usuário testou o Adendo 1 ao vivo, trouxe mais 4 pontos:
 
 `node --check` nos arquivos backend alterados, `npm test` (12/12) e `ng build --configuration
 development` limpos depois das mudanças.
+
+## Adendo 3 — Clique no ícone do colaborador também abre o card dele na lista da esquerda
+
+Usuário pediu: clicar no ícone do colaborador no mapa já abria a rota/timeline do livro à
+direita (`abrirLivro`) — deveria abrir também o card do colaborador na lista da esquerda
+(destaque + jornada expandida), mesma reação de clicar nele direto na lista.
+
+`colaboradoresService.selecionarColaborador(nome)` (usado pelo clique na lista) **alterna**
+— fecha se already selecionado, comportamento certo pra um clique manual repetido na lista, mas
+errado pro clique no mapa (que deve sempre ABRIR, nunca fechar um card que já estava aberto por
+coincidência). Novo método `abrirColaborador(nome)`, idêntico mas sem alternância — só marca
+`colaboradorSelecionado` e carrega a jornada se ainda não for o já selecionado. Chamado logo
+depois de `abrirLivro` no listener de clique do marcador (`mapa-bases.ts`).
+
+Sem alteração de scroll — o card abre/destaca na posição atual da lista, sem rolar
+automaticamente até ele (não foi pedido; lista tem paginação/scroll próprio de até ~360
+colaboradores).
+
+`ng build --configuration development` limpo.

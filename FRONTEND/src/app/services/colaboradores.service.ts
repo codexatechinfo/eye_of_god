@@ -611,6 +611,16 @@ export class ColaboradoresService {
     if (abrindo) this.carregarJornada(nome);
   }
 
+  // Igual selecionarColaborador, mas nunca fecha (não alterna) — usado pelo
+  // clique no ícone do colaborador no mapa (mapa-bases.ts), que deve sempre
+  // ABRIR o card na lista da esquerda junto com a rota do livro à direita,
+  // nunca fechar um card que já estava aberto por engano de um segundo clique.
+  abrirColaborador(nome: string): void {
+    if (this.colaboradorSelecionado() === nome) return;
+    this.colaboradorSelecionado.set(nome);
+    this.carregarJornada(nome);
+  }
+
   // Sem cache (diferente de regimeSucessivoPorUc) — recarrega toda vez que
   // o card é reaberto, já que a jornada de hoje muda ao longo do dia.
   // Segue a mesma data selecionada no calendário da sidebar (filtroData).

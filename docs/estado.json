@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-31T23:00:00.000Z",
+  "atualizado_em": "2026-08-31T23:15:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "f4b1da3",
+  "commit": "206a257",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -894,6 +894,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido timeout de 8-11 minutos na aba Monitoramento de Livros (indice faltando + estimativa de cardinalidade errada do Postgres escolhendo Nested Loop)",
       "detalhe": "Usuario reportou a aba Monitoramento de Livros presa em Carregando... indefinidamente (aba Massivas, mesmo componente, continuava funcionando - sinal de que o problema era especifico do escopo leiturarelitura). Sem login disponivel, reproduzido chamando obterResumo/obterDetalhe direto contra o banco fora do HTTP: confirmado travado alem de 30s isolado. pg_stat_activity revelou o quadro: varias sessoes REAIS da aplicacao (o usuario ja estava usando) presas 8-12 minutos rodando a mesma query, mais 2 sessoes idle in transaction orfas de scripts de diagnostico anteriores desta sessao interrompidos por timeout sem chegar ao finally/pool.end(). As travadas bloqueavam ate um CREATE INDEX CONCURRENTLY novo. Todas eram SELECT (sem risco de dado) - encerradas com pg_terminate_backend antes de seguir. Causa raiz camada 1: contr_execucao_leitura (871 mil linhas) sem indice em (data_import, hora_import), exatamente as colunas que contrDedupSql usa pra isolar o lote mais recente - toda chamada varria a tabela inteira, e contarFonteContr/obterFaixasDias sao chamadas ~8x por requisicao via Promise.all no MESMO client/transacao (serializado, nao paralelo). Corrigido com indice composto (empresa_id primeiro, padrao RLS do projeto) via CREATE INDEX CONCURRENTLY, mesmo padrao da ADR 0021 Adendo 5. Isso sozinho NAO resolveu - causa raiz camada 2, a que explicava os 8-11 minutos de verdade: EXPLAIN (sem ANALYZE) revelou que o planner do Postgres estima a saida do DISTINCT ON de contrDedupSql como 1 linha (chute generico do otimizador pra esse padrao de subquery, nao estatistica desatualizada) quando a saida real do lote mais recente, medida ao vivo, e 13054 linhas - com a estimativa errada em 4 ordens de grandeza, o planner escolhe Nested Loop pros LEFT JOIN com cidades_localidades (657 linhas) e calendario_leitura (74 linhas), otimo pra 1 linha externa, catastrofico pra 13 mil. Confirmado isolando a mesma query com SET LOCAL enable_nestloop = off (forca Hash Join): 8-11min -> 624ms numa chamada isolada. Corrigido chamando SET LOCAL enable_nestloop = off no inicio de obterResumo e obterDetalhe (massivasService.js#desligarNestedLoop) - vale so pra transacao da requisicao atual (sempre dentro de BEGIN via anexarContextoTenant), nao vaza pra outras requisicoes. Testado todos os 5 valores de tipoServico (massiva/leitura/releitura/todos/vazio) depois da correcao: 1.5s a 6s, nenhum trava. npm test (12/12) continua passando, node --check limpo. Ver ADR 0023."
+    },
+    {
+      "data": "2026-08-31T23:15:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Clique no icone do colaborador no mapa passou a abrir tambem o card dele na lista lateral esquerda",
+      "detalhe": "Usuario pediu: clicar no icone do colaborador no mapa ja abria a rota/timeline do livro a direita (abrirLivro) - deveria abrir tambem o card do colaborador na lista da esquerda (destaque + jornada expandida), mesma reacao de clicar nele direto na lista. selecionarColaborador(nome) (usado pelo clique na lista) alterna - fecha se ja selecionado, comportamento certo pra clique manual repetido mas errado pro clique no mapa (que deve sempre abrir, nunca fechar um card que ja estava aberto por coincidencia). Novo metodo abrirColaborador(nome) em colaboradores.service.ts, identico mas sem alternancia, chamado logo depois de abrirLivro no listener de clique do marcador (mapa-bases.ts). Sem scroll automatico ate o card (nao foi pedido, lista tem paginacao/scroll proprio de ate ~360 colaboradores). ng build --configuration development limpo. Ver Adendo 3 da ADR 0022."
     }
   ]
 }

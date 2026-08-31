@@ -529,6 +529,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
           historico: [],
         };
         this.colaboradoresService.abrirLivro(colaborador.colaborador, livro);
+        // Além da rota/timeline à direita, abre o card do colaborador na
+        // lista da esquerda também (destaque + jornada) — mesma reação de
+        // clicar nele direto na lista, pedido explícito do usuário.
+        this.colaboradoresService.abrirColaborador(colaborador.colaborador);
       });
 
       this.marcadoresColaboradores.set(loc.colaborador, marcador);

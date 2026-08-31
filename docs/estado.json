@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-31T23:35:00.000Z",
+  "atualizado_em": "2026-08-31T23:50:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "f85b30b",
+  "commit": "18d5a89",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -152,10 +152,10 @@
   ],
   "operacional": {
     "tabelas_sem_rls": 0,
-    "tabelas_negocio": 17,
+    "tabelas_negocio": 18,
     "indice_tenant": {
-      "ok": 17,
-      "total": 17
+      "ok": 18,
+      "total": 18
     },
     "cobertura_testes": null
   },
@@ -908,6 +908,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: clique no icone do colaborador no mapa nao parecia fazer nada - faltava rolar a lista ate ele",
       "detalhe": "Usuario testou o Adendo 3 e reportou cliquei no colaborador e nao fez nada. Sem login disponivel, perguntado onde clicou pra nao investigar as cegas: confirmado que foi no icone do mapa, nao na lista. O Adendo 3 tinha decidido deliberadamente nao adicionar scroll (nao foi pedido) - so que sem ele, colaboradorSelecionado/destaque de fato mudam mas ficam fora da area visivel numa lista de ~360 nomes ordenada por pontuacao de destaque (nao alfabetica, o colaborador clicado no mapa raramente esta entre os primeiros visiveis), o que pareceu nao fez nada pra quem clicou. Corrigido com o mesmo padrao ja usado pra UC clicada no mapa (ucFocada em livro-detalhe.ts): novo signal colaboradorFocado (setado so por abrirColaborador, nunca pelo clique direto na lista - clicar na propria linha nao deveria rolar a tela pra ela mesma), consumido por um effect novo em lista-colaboradores.ts (ViewChildren('linhaColaborador') + scrollIntoView smooth/center, casando por data-colaborador no li). abrirColaborador zera colaboradorFocado antes de setar de novo - sem isso, clicar duas vezes seguidas no mesmo icone do mapa escreveria o mesmo nome de novo e o effect nao reagiria (signal de string so dispara em mudanca de valor). ng build --configuration development limpo. Ver Adendo 4 da ADR 0022."
+    },
+    {
+      "data": "2026-08-31T23:50:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Nova tabela base_dados_leitura (replica exata de control_empreiteiras)",
+      "detalhe": "Usuario forneceu planilha (C:\\Users\\joaow\\Desktop\\base_dados_leitura.xlsx) so com cabecalho, sem linha de dado, pedindo pra criar a tabela correspondente. Cabecalho (23 colunas) bate EXATAMENTE, mesmos nomes e mesma ordem, com control_empreiteiras ja existente no banco - em vez do padrao generico de tudo varchar(255) usado quando nao ha nenhum precedente (ADR 0021), replicados os mesmos tipos de control_empreiteiras (maioria character varying(255), 3 colunas como text: mensagem/mensagem_auxiliar/observacao_de_campo), mais confiavel que o generico. empresa_id+RLS (mesma policy isolamento_empresa, sem excecao - ADR 0009), indices em empresa_id/livro/mes_ref_livro, mesmo conjunto de control_empreiteiras. Aplicado via docker exec supabase-db psql. Fora de escopo desta tarefa: nenhuma importacao foi wireada (nem importacaoConfig.js nem endpoint novo) - so a criacao da tabela foi pedida, mesmo padrao da ADR 0021 (coordenadas_ucs_mineradas criada primeiro, importacao so num Adendo posterior). Verificado: \\d confirma estrutura batendo, RLS fail-closed testado (sessao sem app.nivel/app.empresa_id devolve 0 linhas). Ver ADR 0024."
     }
   ]
 }

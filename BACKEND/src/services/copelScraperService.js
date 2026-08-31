@@ -539,18 +539,17 @@ async function coletarDadosAcompanhamento() {
   // default headless (sem janela), que é o certo pro job rodando sozinho o
   // dia inteiro em produção.
   //
-  // REVERTIDO: tentei remover o slowMo de 100ms em headless (parecia puro
-  // desperdício, sem janela pra acompanhar) — rodado ao vivo, a taxa de
-  // "sessão/busca perdida" disparou pra quase 1 evento por livro processado
-  // (contra ~3% no melhor ciclo já documentado na ADR 0020, 552 livros/5
-  // abas). Hipótese mais provável: o slowMo, mesmo sem intenção, espaçava as
-  // ações das 5 abas o suficiente pra evitar o problema já registrado nesta
-  // ADR de o servidor sobrescrever o estado de busca compartilhado da sessão
-  // quando duas abas agem quase ao mesmo tempo. Sem evidência de que um
-  // valor intermediário resolveria sem repetir o problema, mantido o último
-  // valor validado com sucesso ao vivo (100ms) em vez de arriscar mais
-  // tempo perdido em retentativas — o pedido explícito era não perder dado
-  // e não duplicar, não ganhar velocidade a qualquer custo.
+  // HISTÓRICO do slowMo em headless — duas tentativas de tirar, as duas
+  // revertidas depois de testar ao vivo: 1) slowMo=0 puro → taxa de
+  // "sessão perdida" disparou pra quase 1 evento por livro; 2) trocar por
+  // um espaçamento cirúrgico só no instante do `update()` (abrir livro),
+  // não em toda ação → mesmo resultado ruim (~1:1 perdas/sucessos num
+  // ciclo real de ~6min, 54 perdas contra 51 sucessos) — ou seja, a
+  // colisão de sessão não está concentrada só nesse instante específico,
+  // é mais ampla do que a hipótese assumia. Sem mais hipótese testável sem
+  // gastar outro ciclo ao vivo inteiro, mantido o único valor realmente
+  // validado (100ms em toda ação) — o pedido explícito do usuário prioriza
+  // não perder dado sobre ganhar velocidade.
   const headless = process.env.COPEL_HEADLESS !== 'false';
   const browser = await chromium.launch({ headless, slowMo: headless ? 100 : 300 });
   // Um `browserContext` explícito, compartilhado por TODAS as abas — é o
@@ -569,10 +568,24 @@ async function coletarDadosAcompanhamento() {
   // ADR 0020). Registrado no CONTEXT (não por página) pra valer em toda
   // aba nova criada a partir dele, sem precisar repetir por aba. Reduz
   // tráfego e tempo de carregamento por navegação — importa mais ainda com
-  // várias abas competindo pela mesma sessão/rede.
+  // várias abas competindo pela mesma sessão/rede. Testado ao vivo: cada
+  // abertura de OS carrega ~94 recursos de rede (nenhum cache entre livros
+  // na mesma aba, mesmo formulário/URL — o servidor não devolve 304 em
+  // nada disso), então esse bloqueio vale em TODO livro aberto, não só uma
+  // vez. Também bloqueia scripts de `/tags/calendar/` (widget de
+  // date-picker, sem relação com #tabFixedHeader, a tabela que extraímos)
+  // — testado ao vivo que a extração continua correta sem eles (~94 → ~43
+  // requisições por livro). `jquery.min.js`/`jquery.fixedheadertable.js`
+  // NÃO são bloqueados de propósito: o plugin `fixedheadertable` parece
+  // ser aplicado exatamente na tabela `#tabFixedHeader`, então bloqueá-los
+  // é risco real de quebrar como a tabela se monta.
   await context.route('**/*', route => {
     const tipo = route.request().resourceType();
+    const url = route.request().url();
     if (['image', 'stylesheet', 'font', 'media'].includes(tipo)) {
+      return route.abort();
+    }
+    if (tipo === 'script' && /\/tags\/calendar/i.test(url)) {
       return route.abort();
     }
     return route.continue();

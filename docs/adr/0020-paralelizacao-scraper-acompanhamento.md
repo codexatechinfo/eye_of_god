@@ -625,3 +625,66 @@ vivo contra o portal real** (pedido explícito do usuário) — dois ciclos comp
 deles do início ao fim, com os números acima confirmados direto no banco, não só no log da
 aplicação. Processo de teste encerrado (`node src/server.js` rodando em background nesta sessão)
 — fica para o usuário decidir se mantém rodando ou prefere subir a própria instância normalmente.
+
+## Adendo — usuário perguntou por 10min de ciclo; investigação de rede + tentativa de espaçamento cirúrgico, ambas concluídas sem viabilizar
+
+Usuário perguntou se dava pra chegar a 10min ou menos. Como só existe uma conta Copel disponível
+(confirmado com o usuário via pergunta direta), a opção de maior potencial — sessões
+independentes por aba, eliminando de vez a contenção de sessão compartilhada — não é viável
+(login duplicado da mesma conta derruba a sessão anterior, ver ADR 0019). Restaram duas
+investigações, as duas concluídas ao vivo nesta sessão.
+
+### 1. Investigação de rede: confirma que o gargalo não é peso de página
+
+Script descartável (`_temp_investigar_rede.js`, escrito, rodado e apagado — nunca fez parte do
+repositório) logou de verdade e inspecionou toda requisição/resposta ao abrir 3 livros
+seguidos na mesma aba. Achados:
+
+- Cada abertura de OS carrega **~94 requisições de rede** (1 documento + 7 CSS + 17 scripts + ~20
+  imagens + 1 XHR), somando ~2,6-2,9s — e **isso se repete EM TODO livro aberto**, não só no
+  primeiro da aba: o servidor não devolve `304 Not Modified` em nada, tudo baixa de novo sempre
+  (hipótese: cache-control agressivo, comum em app Java/Struts legado).
+- Bloquear imagem/CSS/fonte (já em produção) + scripts de `/tags/calendar/` (widget de
+  date-picker, sem relação com a tabela extraída) corta pra **~43 requisições** — quase metade —
+  com a extração continuando correta (mesmas UCs, mesmos dados, verificado linha a linha).
+  `jquery.min.js`/`jquery.fixedheadertable.js` deliberadamente NÃO bloqueados: o plugin
+  `fixedheadertable` parece ser aplicado exatamente na tabela `#tabFixedHeader` que extraímos —
+  bloqueá-los é risco real de quebrar a extração. **Aplicado em produção.**
+- Cálculo do teto teórico (zero perda de sessão): 425 livros ÷ 5 abas × ~2-3s/livro ≈ **3-5
+  minutos** — ou seja, o alvo de 10min é arquiteturalmente alcançável, SE a contenção de sessão
+  for eliminada. O peso de página nunca foi o gargalo real; a perda de sessão é 100% do motivo do
+  ciclo levar 35-50min em vez de ~5.
+
+### 2. Espaçamento cirúrgico no disparo de `update()`: testado ao vivo, não resolveu
+
+Hipótese: em vez de atrasar TODA ação do Playwright (`slowMo`), criar um espaçamento mínimo só
+no instante em que qualquer aba dispara `window.update()` pra abrir um livro novo — o ponto
+onde, supostamente, a colisão de sessão entre abas acontece. Implementado como
+`ESPACAMENTO_ABRIR_LIVRO_MS` (`COPEL_ESPACAMENTO_ABRIR_MS`, default 400ms): um "slot" de horário
+compartilhado entre workers, calculado atomicamente (sem `await` entre ler e escrever o próximo
+slot livre — JS single-thread garante isso), com `slowMo` voltando a 0 em headless (o
+espaçamento cirúrgico substituindo o papel que o slowMo fazia por acidente).
+
+Testado ao vivo (pedido do usuário, monitorado em tempo real): **não funcionou**. Nos primeiros
+minutos do ciclo, taxa de sessão perdida ficou em torno de 1:1 com os sucessos (mesmo padrão do
+teste anterior sem NENHUM espaçamento) — bem longe dos ~3% do `slowMo: 100` original. Ciclo
+interrompido depois de ~6 minutos (não deixado completar os 45min) assim que o padrão ficou
+claro: **54 perdas contra 51 sucessos**. Conclusão: a colisão de sessão no servidor não está
+concentrada só no instante do `update()` — é mais ampla do que a hipótese assumia (possivelmente
+qualquer ação de rede de uma aba enquanto outra está no meio de algo, não só a abertura de
+livro). Revertido por completo: `ESPACAMENTO_ABRIR_LIVRO_MS`/`aguardarVezDeAbrirLivro()`
+removidos, `slowMo` de volta a 100ms em headless (único valor com resultado bom comprovado ao
+vivo, ver Adendo anterior). Verificado no banco que a execução interrompida não deixou nenhum
+registro parcial (import só acontece depois do scraping completar, nunca chegou lá).
+
+### Conclusão pro usuário: 10min não é alcançável hoje, com uma conta só
+
+O teto teórico (3-5min) mostra que a arquitetura NÃO é o limite — é a estabilidade da sessão
+compartilhada do lado do servidor Copel, e as duas hipóteses testáveis sem mais contas (espaçar
+toda ação, espaçar só o disparo de abertura) já foram tentadas ao vivo. Patamar realista
+permanece **~35-50min por ciclo**, variando com a estabilidade do portal no momento. Única
+melhoria líquida desta rodada: bloqueio de scripts de calendário, que corta ~metade das
+requisições por livro sem risco — não resolve o gargalo principal, mas é um ganho real, seguro,
+já aplicado.
+
+`node --check` confirma sintaxe válida. `npm test` (12 testes) continua passando.

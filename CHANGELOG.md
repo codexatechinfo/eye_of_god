@@ -68,8 +68,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   **revertida**: testada ao vivo, a taxa de "sessão perdida" disparou — o atraso, mesmo sem
   intenção, parecia espaçar as 5 abas o suficiente pra evitar o problema de corrupção de estado
   de sessão no servidor já documentado nesta ADR. Verificado ao vivo: ciclo completo com 425
-  livros, 401 processados (94,4%), 13.520 UCs importadas, zero duplicata real. Ver últimos dois
-  Adendos da [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
+  livros, 401 processados (94,4%), 13.520 UCs importadas, zero duplicata real. Investigação de
+  rede (script descartável, apagado depois) confirmou que o gargalo real é a instabilidade de
+  sessão compartilhada no servidor, não peso de página — bloqueio de scripts de calendário
+  (`/tags/calendar/`) aplicado como ganho adicional seguro (corta ~metade das requisições por
+  livro aberto, extração continua correta). Tentativa de espaçamento cirúrgico só no disparo de
+  abertura de livro (em vez de atrasar toda ação) testada ao vivo e **revertida** — mesma taxa
+  ruim de sessão perdida do `slowMo` zerado, a colisão de sessão não está concentrada nesse
+  instante específico. `slowMo` de 100ms em headless permanece o único valor com resultado bom
+  comprovado ao vivo. Ver últimos Adendos da
+  [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
 
 - Scraper de Acompanhamento (`copelScraperService.js`): fila de trabalho compartilhada entre
   as abas passou a ser **por livro**, não mais por etapa inteira. Usuário mostrou o HTML real

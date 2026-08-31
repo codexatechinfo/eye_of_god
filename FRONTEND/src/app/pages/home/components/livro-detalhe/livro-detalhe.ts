@@ -11,6 +11,15 @@ import {
   TimelineUcItem,
 } from '../../../../services/colaboradores.service';
 
+// Mudança de colaborador/situação detectada entre uma UC realizada e a
+// última UC realizada antes dela na ordem de rota — ver mudancasPorUc.
+export interface MudancaContexto {
+  colaboradorAnterior: string | null;
+  colaboradorAtual: string | null;
+  situacaoAnterior: string | null;
+  situacaoAtual: string | null;
+}
+
 @Component({
   selector: 'app-livro-detalhe',
   imports: [CommonModule],
@@ -67,6 +76,46 @@ export class LivroDetalhe {
   // Mesma regra de cor usada nos pontos do mapa (mapa-bases.ts) — ver
   // mapaPrimeiraUcPorCodigo/corDaUc em colaboradores.service.ts.
   private primeiraUcPorCodigo = computed(() => mapaPrimeiraUcPorCodigo(this.colaboradoresService.timelineLivro()));
+
+  // colaborador/situacao em atuaisLivro() refletem o LOTE mais recente
+  // (o scraper grava esses dois campos iguais pra TODAS as UCs do livro em
+  // cada ciclo — confirmado ao vivo: nenhum lote tem UCs de colaboradores
+  // diferentes), então não servem pra saber "quem leu esta UC especifica".
+  // timelineLivro() (primeira vez que cada UC ficou com codigo) captura o
+  // lote de quando ela foi lida de fato — essa é a fonte certa pra detectar
+  // troca de colaborador/situação ao longo da rota.
+  private timelinePorUc = computed(() => new Map(this.colaboradoresService.timelineLivro().map(t => [t.uc, t])));
+
+  // Por UC realizada, se colaborador OU situação mudaram desde a última UC
+  // realizada antes dela na ordem de rota (mesma noção de "anterior" do
+  // deslocamento — pula UCs pendentes no meio). Só entra no mapa quando
+  // houve mudança de fato.
+  mudancasPorUc = computed(() => {
+    const timelinePorUc = this.timelinePorUc();
+    const mapa = new Map<string, MudancaContexto>();
+    let ultimoRealizado: TimelineUcItem | null = null;
+
+    for (const item of this.ucsOrdenadas()) {
+      if (!item.codigo) continue;
+      const dadosAtual = timelinePorUc.get(item.uc) ?? item;
+
+      if (ultimoRealizado) {
+        const dadosAnterior = timelinePorUc.get(ultimoRealizado.uc) ?? ultimoRealizado;
+        if (dadosAnterior.colaborador !== dadosAtual.colaborador || dadosAnterior.situacao !== dadosAtual.situacao) {
+          mapa.set(item.uc, {
+            colaboradorAnterior: dadosAnterior.colaborador,
+            colaboradorAtual: dadosAtual.colaborador,
+            situacaoAnterior: dadosAnterior.situacao,
+            situacaoAtual: dadosAtual.situacao,
+          });
+        }
+      }
+
+      ultimoRealizado = item;
+    }
+
+    return mapa;
+  });
 
   corDoPonto(item: TimelineUcItem): 'verde' | 'cinza' | 'laranja' | 'vermelho' {
     return corDaUc(item, this.primeiraUcPorCodigo());

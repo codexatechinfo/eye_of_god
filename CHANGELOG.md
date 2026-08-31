@@ -20,13 +20,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   acima do limite por etapa) e um card de detalhe expansível por UC (situação, código,
   deslocamento, velocidade, coordenada, "Centralizar no mapa"/"Street View", e um aviso de
   "regime sucessivo" quando a mesma UC repete o mesmo código de impedimento em meses
-  consecutivos). Clicar num ponto do mapa foca e expande a UC correspondente na lista. Card "Km
-  percorrido" (livro e colaborador) e barra de "Jornada" do colaborador (trabalhado/ocioso,
-  expansível) passam a mostrar dado real, calculado por Haversine entre as UCs. Corrigido: o
-  painel e a rota fechavam sozinhos ao interagir com o mapa (clique no marcador borbulhava até o
-  fechamento por "clique fora"). Novos endpoints `GET /colaboradores/localizacoes`, `GET
-  /colaboradores/jornada`, `GET /massivas/uc-regime`. Ver Adendos 5 e 6 da
-  [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
+  consecutivos), e um balão índigo entre duas UCs quando o livro mudou de colaborador e/ou de
+  situação entre uma e outra. Clicar num ponto do mapa foca e expande a UC correspondente na
+  lista. Card "Km percorrido" (livro e colaborador) e barra de "Jornada" do colaborador
+  (trabalhado/ocioso, expansível) passam a mostrar dado real, calculado por Haversine entre as
+  UCs. Corrigido: o painel e a rota fechavam sozinhos ao interagir com o mapa (clique no marcador
+  borbulhava até o fechamento por "clique fora"). Novos endpoints `GET
+  /colaboradores/localizacoes`, `GET /colaboradores/jornada`, `GET /massivas/uc-regime`. Ver
+  Adendos 5 a 8 da [ADR 0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
 
 - Aba Importação: `coordenadas_ucs_mineradas` agora aceita import via planilha (upsert por
   `unidade_consumidora` — UC repetida substitui a linha, UC nova só adiciona), incluindo

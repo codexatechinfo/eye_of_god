@@ -549,3 +549,48 @@ quando disponível; `CORES_PONTO.cinza` trocado por azul (`#3b82f6`) — reserva
 o cinza-azulado da rota planejada `#94a3b8` nem com os ícones de colaborador). A cor da lista
 lateral (`livro-detalhe.html`) não mudou — lá o fundo é branco, slate-300 tem contraste
 suficiente; o problema era específico do mapa. Frontend verificado sem erro de console.
+
+## Adendo 8 — balão de mudança de colaborador/situação na timeline
+
+Usuário pediu: entre a última UC realizada e a próxima (na ordem de rota), se o livro mudou de
+situação ou de colaborador, destacar isso com um balão — pediu explicitamente uma cor diferente
+do exemplo de referência, já que essa cor (âmbar/laranja) já é usada aqui pra "pausa" (Adendo 6).
+
+### Achado antes de implementar: `colaborador`/`situacao` não são atributos por UC
+
+Verificado ao vivo: dentro do MESMO lote de raspagem (`livro + data_import + hora_import`), TODAS
+as UCs sempre têm o mesmo `colaborador` e a mesma `situacao` — são atributos do LIVRO naquele
+instante (o scraper grava o cabeçalho do livro em cada linha), não "quem leu esta UC específica".
+Consequência prática: `atuaisLivro()` (linha mais recente por UC) mostraria sempre o
+colaborador/situação ATUAIS pra TODAS as UCs igualmente, mascarando qualquer troca que tenha
+acontecido no meio da execução. A fonte certa é `timelineLivro()` (primeira vez que cada UC ficou
+com `codigo` preenchido) — ela congela o colaborador/situação de QUANDO aquela UC foi lida de
+fato, não o estado de agora.
+
+### Implementação
+
+`livro-detalhe.ts`: novo `timelinePorUc` (Map uc→registro do `timelineLivro()`) e
+`mudancasPorUc` (computed) — percorre `ucsOrdenadas()` mantendo o último item REALIZADO (pula
+pendentes, mesma regra do separador de deslocamento), e pra cada UC realizada compara
+colaborador/situação (via `timelinePorUc`, não os campos crus do item) contra o último realizado
+anterior; só entra no mapa quando há diferença de fato. `livro-detalhe.html`: novo balão índigo
+(cor nova, não usada em nenhum outro elemento da timeline) entre as duas UCs, com o texto "Mudança
+de colaborador"/"Mudança de situação"/"Mudança de colaborador e situação" conforme o caso, e as
+duas pontas da troca (`anterior → atual`).
+
+### Verificação — mecanismo confirmado, mas sem exemplo visual ao vivo nesta sessão
+
+Testado com `node -e` contra o Postgres real: confirmado que nenhum lote mistura colaboradores
+diferentes pra UCs distintas (a premissa do design). Busca ampla no banco atual não encontrou
+nenhum livro onde, entre as UCs **atualmente** realizadas, haja de fato variação de colaborador
+OU situação — os 2 livros com histórico de reatribuição do dataset (`022637`, `022640`) tiveram
+a segunda pessoa reatribuída só DEPOIS que a primeira já tinha terminado tudo (sem sobreposição
+"realizado por A, depois realizado por B" dentro do mesmo livro), e um caso investigado
+(`022537`, UC `98200224`) revelou um problema de dado à parte — não relacionado a este pedido,
+não corrigido aqui —: uma UC teve `codigo` preenchido (`094`) e depois **voltou a `NULL`** em
+raspagens seguintes, contrariando a expectativa de que leitura já realizada não regride. A lógica
+do balão já lida bem com isso (`ucsOrdenadas()` usa o estado ATUAL — essa UC entra como pendente,
+não como realizada), mas o efeito colateral é que não há hoje, nesta base, um livro com o padrão
+exato "UC de um colaborador, próxima na rota de outro colaborador" pra confirmar visualmente.
+Mecanismo verificado por partes (fonte de dado certa, traversal, comparação); fica pro usuário
+confirmar na tela assim que um livro real passar por reatribuição no meio da execução.

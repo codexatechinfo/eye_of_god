@@ -538,3 +538,14 @@ de scraping em segundo plano (login real no Copel) iniciou como já faz normalme
 servidor, sem relação com as mudanças desta sessão. Sem login disponível nesta sessão — sem
 verificação visual direta; fica para o usuário confirmar na tela, com prioridade nos itens 1/2
 (bug do painel fechando).
+
+## Adendo 7 — tooltip do ponto ganha sequência, e ponto pendente deixou de ser cinza
+
+Usuário testou o Adendo 6 e trouxe dois ajustes visuais no mapa: 1) passar o mouse no ponto não
+mostrava a sequência da rota, só UC/endereço/código; 2) o cinza (`#cbd5e1`, slate-300) usado pro
+ponto "pendente" é claro demais sobre tile de mapa (rua ou satélite) — o ponto praticamente some
+visualmente, confirmado com print. `mapa-bases.ts#tooltipDoPonto` passou a prefixar `#sequencia ·`
+quando disponível; `CORES_PONTO.cinza` trocado por azul (`#3b82f6`) — reservado (não conflita com
+o cinza-azulado da rota planejada `#94a3b8` nem com os ícones de colaborador). A cor da lista
+lateral (`livro-detalhe.html`) não mudou — lá o fundo é branco, slate-300 tem contraste
+suficiente; o problema era específico do mapa. Frontend verificado sem erro de console.

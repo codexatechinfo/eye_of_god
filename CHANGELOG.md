@@ -11,8 +11,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   a pé para pedestre) na posição da última UC que ele realizou (qualquer dia) — os círculos de
   contagem por regional foram removidos. Clicar no ícone abre o livro da UC que gerou aquela
   posição e desenha no mapa a rota das UCs na ordem de `sequencia`, com um ponto colorido por UC
-  (verde/cinza/âmbar/vermelho) e uma linha de desvio quando a execução real pula a ordem
-  planejada. A timeline do painel do livro é uma lista única ordenada por `sequencia`, com o
+  (verde/azul/âmbar/vermelho — pendente é azul, não cinza, que sumia visualmente sobre o mapa) e
+  uma linha de desvio quando a execução real pula a ordem planejada; passar o mouse no ponto
+  mostra sequência, UC, endereço e código. A timeline do painel do livro é uma lista única
+  ordenada por `sequencia`, com o
   endereço de cada UC (município, localidade, endereço, classe de consumo), separadores de
   deslocamento entre UCs consecutivas ("+3m desloc 120m · 40 m/min", destacado quando vira pausa
   acima do limite por etapa) e um card de detalhe expansível por UC (situação, código,

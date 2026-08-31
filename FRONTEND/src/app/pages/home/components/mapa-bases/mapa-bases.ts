@@ -86,18 +86,25 @@ const ICONE_PEDESTRE = iconeColaborador(
 );
 
 // Mesma paleta das 4 cores da timeline do painel (livro-detalhe.html:
-// bg-emerald-400/bg-slate-300/bg-amber-500/bg-red-500), em hex pro Leaflet.
+// bg-emerald-400/bg-slate-300/bg-amber-500/bg-red-500), exceto "cinza" —
+// slate-300 (#cbd5e1) é claro demais sobre tile de mapa (rua ou satélite) e
+// o ponto praticamente some visualmente; usuário confirmou o sintoma com
+// print. Trocado por um azul (#3b82f6) que continua reservado (não conflita
+// com o azul da rota planejada, #94a3b8 cinza-azulado, nem com os ícones de
+// colaborador). A cor da lista lateral (livro-detalhe.html) não muda — lá o
+// fundo é branco, slate-300 tem contraste suficiente.
 const CORES_PONTO: Record<'verde' | 'cinza' | 'laranja' | 'vermelho', string> = {
   verde: '#34d399',
-  cinza: '#cbd5e1',
+  cinza: '#3b82f6',
   laranja: '#f59e0b',
   vermelho: '#ef4444',
 };
 
 function tooltipDoPonto(item: TimelineUcItem): string {
+  const sequencia = item.sequencia ? `#${item.sequencia} · ` : '';
   const endereco = item.endereco ? ` — ${item.endereco}` : '';
   const codigo = item.codigo ? ` · código ${item.codigo}` : ' · pendente';
-  return `UC ${item.uc}${endereco}${codigo}`;
+  return `${sequencia}UC ${item.uc}${endereco}${codigo}`;
 }
 
 @Component({

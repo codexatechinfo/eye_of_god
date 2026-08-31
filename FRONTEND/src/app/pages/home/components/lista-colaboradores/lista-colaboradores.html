@@ -40,7 +40,11 @@
   class="flex-1 min-h-0 space-y-0.5 overflow-y-auto pr-0.5"
   *ngIf="!colaboradoresService.carregando() && !colaboradoresService.erro() && colaboradoresService.colaboradores().length"
 >
-  <li *ngFor="let colaborador of colaboradoresService.colaboradoresOrdenados()">
+  <li
+    *ngFor="let colaborador of colaboradoresService.colaboradoresOrdenados()"
+    #linhaColaborador
+    [attr.data-colaborador]="colaborador.colaborador"
+  >
     <button
       type="button"
       (click)="selecionar(colaborador.colaborador)"

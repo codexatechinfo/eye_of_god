@@ -439,6 +439,12 @@ export class ColaboradoresService {
   // UC que deve ganhar foco visual (scroll até ela) na timeline — setada
   // junto com ucExpandida quando o clique vem do mapa.
   ucFocada = signal<string | null>(null);
+  // Mesma ideia de ucFocada, só que pro colaborador na lista da esquerda —
+  // setado junto com colaboradorSelecionado só quando o clique vem do ícone
+  // do mapa (abrirColaborador), nunca quando o usuário clica direto na
+  // lista (senão rolaria pra cima dele mesmo, sem necessidade). Consumido
+  // por um effect em lista-colaboradores.ts.
+  colaboradorFocado = signal<string | null>(null);
   // Coordenada pra centralizar o mapa — setada pelo botão "Centralizar no
   // mapa" do card de detalhe, consumida por um effect em mapa-bases.ts.
   centralizarEm = signal<{ lat: number; lng: number } | null>(null);
@@ -616,9 +622,17 @@ export class ColaboradoresService {
   // ABRIR o card na lista da esquerda junto com a rota do livro à direita,
   // nunca fechar um card que já estava aberto por engano de um segundo clique.
   abrirColaborador(nome: string): void {
-    if (this.colaboradorSelecionado() === nome) return;
-    this.colaboradorSelecionado.set(nome);
-    this.carregarJornada(nome);
+    // Zera antes de setar: signal de string só dispara o effect de scroll
+    // quando o VALOR muda — clicar duas vezes seguidas no mesmo ícone do
+    // mapa (ex.: usuário rolou a lista pra outro lugar entre os cliques)
+    // escreveria o mesmo nome de novo e o effect não reagiria. O null no
+    // meio garante duas mudanças reais (null->nome), sempre rola de novo.
+    this.colaboradorFocado.set(null);
+    if (this.colaboradorSelecionado() !== nome) {
+      this.colaboradorSelecionado.set(nome);
+      this.carregarJornada(nome);
+    }
+    this.colaboradorFocado.set(nome);
   }
 
   // Sem cache (diferente de regimeSucessivoPorUc) — recarrega toda vez que

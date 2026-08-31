@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, ElementRef, QueryList, ViewChildren, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -28,7 +28,19 @@ export class ListaColaboradores {
   // um só de cada vez, sempre fechada de novo ao trocar de colaborador.
   jornadaExpandida = signal(false);
 
-  constructor(public colaboradoresService: ColaboradoresService) {}
+  // Marcadas com #linhaColaborador no template (uma por colaborador) —
+  // usadas pra rolar até o colaborador focado (clique no ícone dele no
+  // mapa, ver mapa-bases.ts). Mesmo padrão de #linhaUc em livro-detalhe.ts.
+  @ViewChildren('linhaColaborador') private linhas!: QueryList<ElementRef<HTMLElement>>;
+
+  constructor(public colaboradoresService: ColaboradoresService) {
+    effect(() => {
+      const nome = this.colaboradoresService.colaboradorFocado();
+      if (!nome || !this.linhas) return;
+      const linha = this.linhas.find(ref => ref.nativeElement.dataset['colaborador'] === nome);
+      linha?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
 
   selecionar(nome: string): void {
     this.jornadaExpandida.set(false);

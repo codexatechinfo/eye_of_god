@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-31T23:15:00.000Z",
+  "atualizado_em": "2026-08-31T23:35:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "206a257",
+  "commit": "f85b30b",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -901,6 +901,13 @@
       "skill": "/projeto-novo",
       "evento": "Clique no icone do colaborador no mapa passou a abrir tambem o card dele na lista lateral esquerda",
       "detalhe": "Usuario pediu: clicar no icone do colaborador no mapa ja abria a rota/timeline do livro a direita (abrirLivro) - deveria abrir tambem o card do colaborador na lista da esquerda (destaque + jornada expandida), mesma reacao de clicar nele direto na lista. selecionarColaborador(nome) (usado pelo clique na lista) alterna - fecha se ja selecionado, comportamento certo pra clique manual repetido mas errado pro clique no mapa (que deve sempre abrir, nunca fechar um card que ja estava aberto por coincidencia). Novo metodo abrirColaborador(nome) em colaboradores.service.ts, identico mas sem alternancia, chamado logo depois de abrirLivro no listener de clique do marcador (mapa-bases.ts). Sem scroll automatico ate o card (nao foi pedido, lista tem paginacao/scroll proprio de ate ~360 colaboradores). ng build --configuration development limpo. Ver Adendo 3 da ADR 0022."
+    },
+    {
+      "data": "2026-08-31T23:35:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Corrigido: clique no icone do colaborador no mapa nao parecia fazer nada - faltava rolar a lista ate ele",
+      "detalhe": "Usuario testou o Adendo 3 e reportou cliquei no colaborador e nao fez nada. Sem login disponivel, perguntado onde clicou pra nao investigar as cegas: confirmado que foi no icone do mapa, nao na lista. O Adendo 3 tinha decidido deliberadamente nao adicionar scroll (nao foi pedido) - so que sem ele, colaboradorSelecionado/destaque de fato mudam mas ficam fora da area visivel numa lista de ~360 nomes ordenada por pontuacao de destaque (nao alfabetica, o colaborador clicado no mapa raramente esta entre os primeiros visiveis), o que pareceu nao fez nada pra quem clicou. Corrigido com o mesmo padrao ja usado pra UC clicada no mapa (ucFocada em livro-detalhe.ts): novo signal colaboradorFocado (setado so por abrirColaborador, nunca pelo clique direto na lista - clicar na propria linha nao deveria rolar a tela pra ela mesma), consumido por um effect novo em lista-colaboradores.ts (ViewChildren('linhaColaborador') + scrollIntoView smooth/center, casando por data-colaborador no li). abrirColaborador zera colaboradorFocado antes de setar de novo - sem isso, clicar duas vezes seguidas no mesmo icone do mapa escreveria o mesmo nome de novo e o effect nao reagiria (signal de string so dispara em mudanca de valor). ng build --configuration development limpo. Ver Adendo 4 da ADR 0022."
     }
   ]
 }

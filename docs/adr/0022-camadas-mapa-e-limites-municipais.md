@@ -210,3 +210,21 @@ automaticamente até ele (não foi pedido; lista tem paginação/scroll próprio
 colaboradores).
 
 `ng build --configuration development` limpo.
+
+## Adendo 4 — Sem o scroll, o card abria fora da área visível (imperceptível pra quem clicou)
+
+Usuário testou o Adendo 3 e reportou "cliquei no colaborador e não fez nada". Sem login
+disponível, não dava pra reproduzir direto — perguntado onde exatamente clicou: no ícone do
+mapa (não na lista). O Adendo 3 documentou explicitamente que não adicionava scroll "por não ter
+sido pedido" — só que sem ele, `colaboradorSelecionado`/destaque de fato mudam, mas ficam fora
+da área visível numa lista de ~360 nomes (a lista é ordenada por pontuação de destaque, não
+alfabética — o colaborador clicado no mapa raramente está entre os primeiros visíveis), o que
+pareceu "não fez nada" pra quem clicou. Corrigido com o mesmo padrão já usado pra UC clicada no
+mapa (`ucFocada` em `livro-detalhe.ts`): novo signal `colaboradorFocado` (setado só por
+`abrirColaborador`, nunca pelo clique direto na lista — clicar na própria linha não deveria rolar
+a tela pra ela mesma), consumido por um `effect()` novo em `lista-colaboradores.ts`
+(`@ViewChildren('linhaColaborador')` + `scrollIntoView({ behavior: 'smooth', block: 'center' })`,
+casando por `data-colaborador` no `<li>`). `abrirColaborador` zera `colaboradorFocado` antes de
+setar de novo — sem isso, clicar duas vezes seguidas no mesmo ícone do mapa (ex.: usuário rolou
+a lista pra outro lugar no meio) escreveria o mesmo nome de novo e o `effect` não reagiria
+(signal de string só dispara em mudança de valor). `ng build --configuration development` limpo.

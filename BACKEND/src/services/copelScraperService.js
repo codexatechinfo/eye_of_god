@@ -17,6 +17,57 @@ const URL_ACOMPANHAMENTO = 'https://www.copel.com/lis/acompanhamentoAction.do#';
 const TIMEOUT_CICLO_MIN = Math.max(5, parseInt(process.env.COPEL_TIMEOUT_CICLO_MIN || '45', 10));
 const TIMEOUT_CICLO_MS = TIMEOUT_CICLO_MIN * 60 * 1000;
 
+// slowMo adaptativo ENTRE ciclos — não dentro de um ciclo, porque o
+// Playwright não deixa trocar `slowMo` depois que o browser já foi lançado
+// (`chromium.launch()` fixa o valor pro browser inteiro). Duas tentativas
+// anteriores de reduzir o atraso (slowMo=0 puro, depois um espaçamento
+// cirúrgico só no disparo de abertura de livro) foram testadas ao vivo e
+// revertidas — as duas fizeram a taxa de "sessão perdida" disparar (ver
+// Adendos desta ADR). Em vez de adivinhar um valor fixo, cada ciclo agora
+// MEDE sua própria taxa de falha (sessão perdida + falha ao abrir OS,
+// contando toda tentativa, inclusive retentativas) e ajusta o slowMo do
+// PRÓXIMO ciclo: sobe quando a taxa está alta (portal mais instável hoje),
+// desce quando está baixa (portal mais estável) — sem precisar de ajuste
+// manual no .env. Começa no único valor com resultado bom já comprovado ao
+// vivo (100ms). Estado em memória do processo (não persiste em disco/banco
+// — reinício do servidor volta pro valor inicial, que é seguro por
+// definição).
+const SLOWMO_MIN_MS = 30;
+const SLOWMO_MAX_MS = 500;
+const SLOWMO_INICIAL_MS = Math.max(SLOWMO_MIN_MS, parseInt(process.env.COPEL_SLOWMO_INICIAL_MS || '100', 10));
+// Acima disso, sobe o atraso pro próximo ciclo; abaixo disso, desce.
+const TAXA_FALHA_ALTA = 0.15;
+const TAXA_FALHA_BAIXA = 0.05;
+let slowMoAdaptativoMs = SLOWMO_INICIAL_MS;
+
+// Chamado no fim de cada ciclo, depois que os workers terminam/o timeout
+// vence — ajusta `slowMoAdaptativoMs` pro PRÓXIMO ciclo usar. Amostra
+// pequena demais (ex.: ciclo sem nenhum livro pra processar) não ajusta
+// nada, pra não reagir a ruído estatístico.
+function ajustarSlowMoAdaptativo(estatisticas) {
+  const total = estatisticas.sucessos + estatisticas.falhas;
+  if (total < 10) return;
+
+  const taxaFalha = estatisticas.falhas / total;
+  const anterior = slowMoAdaptativoMs;
+
+  if (taxaFalha > TAXA_FALHA_ALTA) {
+    slowMoAdaptativoMs = Math.min(SLOWMO_MAX_MS, Math.round(slowMoAdaptativoMs * 1.5));
+  } else if (taxaFalha < TAXA_FALHA_BAIXA) {
+    slowMoAdaptativoMs = Math.max(SLOWMO_MIN_MS, Math.round(slowMoAdaptativoMs * 0.8));
+  }
+
+  const percentual = (taxaFalha * 100).toFixed(1);
+  if (slowMoAdaptativoMs !== anterior) {
+    log(
+      `[Coleta Acomp] 🎚️ slowMo adaptativo ajustado: ${anterior}ms → ${slowMoAdaptativoMs}ms ` +
+        `(taxa de falha do ciclo: ${percentual}%, ${estatisticas.falhas}/${total} tentativas) — vale a partir do PRÓXIMO ciclo.`,
+    );
+  } else {
+    log(`[Coleta Acomp] 🎚️ slowMo adaptativo mantido em ${slowMoAdaptativoMs}ms (taxa de falha do ciclo: ${percentual}%, ${estatisticas.falhas}/${total} tentativas).`);
+  }
+}
+
 async function salvarDiagnostico(page, motivo) {
   try {
     if (!fs.existsSync(DIR_DIAGNOSTICO)) fs.mkdirSync(DIR_DIAGNOSTICO, { recursive: true });
@@ -485,9 +536,14 @@ async function processarLivro({ page, alvo, registros, rotulo, estadoDiagnostico
 // esse tipo de falha também é retentado até o limite, já que o mecanismo
 // de retry passou a existir de qualquer forma pra cobrir sessão perdida —
 // mais resiliente a timeouts transitórios sob carga, sem custo extra.
+//
+// `estatisticasCiclo` (objeto compartilhado entre workers, `{sucessos,
+// falhas}`) conta TODA tentativa de abrir livro neste ciclo — usado só no
+// fim do ciclo por ajustarSlowMoAdaptativo, não influencia nenhuma decisão
+// dentro do worker em si.
 const MAX_TENTATIVAS_PROCESSAR_LIVRO = 5;
 
-async function worker(page, rotulo, filaLivros, registros, tentativasPorLivro) {
+async function worker(page, rotulo, filaLivros, registros, tentativasPorLivro, estatisticasCiclo) {
   const estadoDiagnostico = { osSalvo: false, etapaSalvo: false };
   let processados = 0;
 
@@ -503,6 +559,16 @@ async function worker(page, rotulo, filaLivros, registros, tentativasPorLivro) {
         `[Coleta Acomp]${rotulo} ❌ Livro '${alvo.livro}' (etapa ${alvo.etapa}) falhou de forma inesperada: ${erro.message}`,
       );
       resultado = 'erro_inesperado';
+    }
+
+    // Conta TODA tentativa (inclusive retentativa), não só o resultado
+    // final por livro — é a mesma métrica usada pra medir a taxa de
+    // colisão de sessão ao vivo (ver ajustarSlowMoAdaptativo, topo do
+    // arquivo): cada tentativa é uma chance de colidir com outra aba.
+    if (resultado === 'ok') {
+      estatisticasCiclo.sucessos++;
+    } else {
+      estatisticasCiclo.falhas++;
     }
 
     if (resultado === 'ok') {
@@ -546,12 +612,13 @@ async function coletarDadosAcompanhamento() {
   // não em toda ação → mesmo resultado ruim (~1:1 perdas/sucessos num
   // ciclo real de ~6min, 54 perdas contra 51 sucessos) — ou seja, a
   // colisão de sessão não está concentrada só nesse instante específico,
-  // é mais ampla do que a hipótese assumia. Sem mais hipótese testável sem
-  // gastar outro ciclo ao vivo inteiro, mantido o único valor realmente
-  // validado (100ms em toda ação) — o pedido explícito do usuário prioriza
-  // não perder dado sobre ganhar velocidade.
+  // é mais ampla do que a hipótese assumia. Terceira tentativa: em vez de
+  // um valor fixo (adivinhado ou travado no último bom), `slowMoAdaptativoMs`
+  // (topo do arquivo) — ajustado ciclo a ciclo pela taxa de falha real
+  // observada, começando no valor comprovado (100ms). Não muda DENTRO do
+  // ciclo (Playwright não permite), só entre um ciclo e o próximo.
   const headless = process.env.COPEL_HEADLESS !== 'false';
-  const browser = await chromium.launch({ headless, slowMo: headless ? 100 : 300 });
+  const browser = await chromium.launch({ headless, slowMo: headless ? slowMoAdaptativoMs : 300 });
   // Um `browserContext` explícito, compartilhado por TODAS as abas — é o
   // que faz elas dividirem a mesma sessão (cookies), sem precisar logar de
   // novo em cada uma. `browser.newPage()` direto criaria um context NOVO E
@@ -674,8 +741,12 @@ async function coletarDadosAcompanhamento() {
 
     const registros = [];
     const tentativasPorLivro = new Map();
+    // Sucessos/falhas de TODA tentativa de abrir livro neste ciclo (não só
+    // o resultado final por livro) — usado por ajustarSlowMoAdaptativo no
+    // fim do ciclo, pra decidir o slowMo do PRÓXIMO ciclo.
+    const estatisticasCiclo = { sucessos: 0, falhas: 0 };
     const trabalho = Promise.all(
-      paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaLivros, registros, tentativasPorLivro)),
+      paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaLivros, registros, tentativasPorLivro, estatisticasCiclo)),
     );
     // Se algum worker escapar do try/catch interno (não deveria, mas é
     // "só" uma rede de segurança) DEPOIS do timeout já ter vencido a corrida
@@ -699,6 +770,8 @@ async function coletarDadosAcompanhamento() {
     // no meio de uma operação numa dessas páginas — fechar aqui e o browser
     // inteiro logo depois (finally) é o que realmente interrompe ele.
     await Promise.all(paginas.slice(1).map(p => p.close().catch(() => {})));
+
+    ajustarSlowMoAdaptativo(estatisticasCiclo);
 
     log('[Coleta Acomp] ✅ Extração concluída.');
     return registros;

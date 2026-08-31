@@ -688,3 +688,66 @@ requisições por livro sem risco — não resolve o gargalo principal, mas é u
 já aplicado.
 
 `node --check` confirma sintaxe válida. `npm test` (12 testes) continua passando.
+
+## Adendo — slowMo adaptativo entre ciclos (inspirado no AutoThrottle do Scrapy/Scrapling)
+
+Usuário perguntou sobre usar a lib Python [Scrapling](https://github.com/d4vinci/Scrapling).
+Investigado via WebFetch: por baixo dos panos, o modo de automação de browser dela roda em cima
+do próprio Playwright — não é um motor diferente. O recurso de "múltiplas sessões" dela gerencia
+sessões do lado do CLIENTE, não cria sessões novas VÁLIDAS no servidor Copel a partir de uma
+única conta — não ataca a causa raiz (sessão única por conta, ver Adendos anteriores). O único
+conceito genuinamente aproveitável foi o `AutoThrottle` — atraso que se ajusta sozinho conforme a
+taxa de erro observada, em vez de um valor fixo adivinhado.
+
+### Por que não dá pra simplesmente "trocar o slowMo dinamicamente"
+
+O Playwright fixa `slowMo` no momento de `chromium.launch()` — não existe API pra mudar esse
+valor com o browser já rodando. Então a adaptação não pode acontecer DENTRO de um ciclo (como as
+duas tentativas anteriores, que mexiam durante a execução); só pode valer a partir do PRÓXIMO
+ciclo, medindo o desempenho do ciclo atual.
+
+### Implementação
+
+`ajustarSlowMoAdaptativo(estatisticas)`: cada ciclo conta toda TENTATIVA de abrir livro (não só
+o resultado final por livro — inclui retentativas, é a mesma métrica usada ao vivo pra medir
+colisão de sessão) em `estatisticasCiclo = {sucessos, falhas}`, compartilhado entre os workers.
+No fim do ciclo, calcula a taxa de falha e ajusta `slowMoAdaptativoMs` (variável de módulo, em
+memória — não persiste em disco/banco, reinício do processo volta pro valor inicial):
+
+- Taxa de falha > 15% → sobe 50% (`× 1.5`, teto 500ms) — reage rápido a piora, evita continuar
+  batendo cabeça com um valor baixo demais.
+- Taxa de falha < 5% → desce 20% (`× 0.8`, piso 30ms) — reduz devagar, não afoba de volta pro
+  problema.
+- Entre 5% e 15% → mantém como está.
+- Amostra menor que 10 tentativas no ciclo → não ajusta nada (evita reagir a ruído estatístico
+  de um ciclo com poucos livros).
+
+Sobe mais rápido do que desce de propósito — o custo de um ciclo ruim (muito retrabalho) é maior
+que o custo de manter um atraso um pouco alto demais por mais um ciclo.
+
+Testado isoladamente (fora do scraper, só a fórmula) com os números reais desta sessão: um ciclo
+ruim como o do teste do espaçamento cirúrgico (54 falhas/51 sucessos, 51,4%) sobe de 100ms pra
+150ms; um ciclo bom como o histórico com `slowMo:100` (3% de falha) desce de volta gradualmente;
+ciclos minúsculos/vazios corretamente não disparam ajuste nenhum.
+
+Começa em `COPEL_SLOWMO_INICIAL_MS` (novo, default 100 — o único valor com resultado bom já
+comprovado ao vivo), então o PRIMEIRO ciclo depois de subir o servidor se comporta exatamente
+igual ao que já está validado — a adaptação só entra em ação a partir do segundo ciclo em diante.
+
+### Fora de escopo, por decisão consciente
+
+- Persistência do valor adaptativo entre reinícios do processo (arquivo/banco) — não implementado,
+  reinício volta pro valor inicial seguro por definição; não parecia valer a complexidade extra
+  pra um serviço de longa duração que não reinicia com frequência.
+- Ajustar OUTRAS variáveis adaptativamente (paralelismo, teto de tentativa) — só o slowMo, que é
+  a única alavanca já com evidência real (histórico desta ADR) de afetar a taxa de colisão.
+
+### Verificação
+
+`node --check` confirma sintaxe válida. `npm test` (12 testes) continua passando. Fórmula de
+ajuste testada isoladamente com números sintéticos e reais (ver acima). **Não validado ao vivo
+em múltiplos ciclos ainda** — como o primeiro ciclo depois de subir se comporta idêntico ao
+`slowMo:100` já comprovado, o risco de regressão é baixo; a adaptação em si (efeito real do
+ajuste entre ciclo 1 e ciclo 2) só se confirma observando pelo menos 2 ciclos completos ao vivo
+(~90min+), fica pro usuário decidir se quer esse teste agora ou deixar rodando em produção
+normal e acompanhar pelos logs (`🎚️`) nos próximos dias.

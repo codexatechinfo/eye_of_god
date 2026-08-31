@@ -75,8 +75,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   livro aberto, extração continua correta). Tentativa de espaçamento cirúrgico só no disparo de
   abertura de livro (em vez de atrasar toda ação) testada ao vivo e **revertida** — mesma taxa
   ruim de sessão perdida do `slowMo` zerado, a colisão de sessão não está concentrada nesse
-  instante específico. `slowMo` de 100ms em headless permanece o único valor com resultado bom
-  comprovado ao vivo. Ver últimos Adendos da
+  instante específico. `slowMo` passou a ser **adaptativo entre ciclos** (não dá pra mudar
+  dentro de um ciclo, o Playwright fixa isso no lançamento do browser): cada ciclo mede sua
+  própria taxa de falha (sessão perdida + falha ao abrir OS, toda tentativa) e ajusta o valor do
+  PRÓXIMO ciclo — sobe 50% se a taxa passar de 15%, desce 20% se ficar abaixo de 5%, começando
+  no valor comprovado (100ms, `COPEL_SLOWMO_INICIAL_MS`). Ideia inspirada no `AutoThrottle` do
+  Scrapy/Scrapling, adaptada pro nosso caso (Playwright não permite trocar `slowMo` em tempo de
+  execução, então o ajuste vale só a partir do ciclo seguinte). Ver últimos Adendos da
   [ADR 0020](docs/adr/0020-paralelizacao-scraper-acompanhamento.md).
 
 - Scraper de Acompanhamento (`copelScraperService.js`): fila de trabalho compartilhada entre

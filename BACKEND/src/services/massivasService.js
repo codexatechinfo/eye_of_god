@@ -112,6 +112,22 @@ const PRAZO_CONTR_SQL = `
 // pelo mesmo motivo do PRAZO_RELEITURA_SQL (comparado direto com ele).
 const IMPORT_TS_CONTR_SQL = `to_timestamp(c.data_import || ' ' || c.hora_import, 'DD/MM/YYYY HH24:MI:SS')::timestamp`;
 
+// contarFonteContr/obterFaixasDias/detalheContr fazem DISTINCT ON sobre uma
+// subquery de dedup (contrDedupSql) e depois LEFT JOIN com cidades_localidades
+// (657 linhas) e calendario_leitura (74 linhas) — tabelas minúsculas. O
+// planner do Postgres não consegue estimar direito a cardinalidade de saída
+// de um DISTINCT ON sobre subquery (chuta ~1 linha) e escolhe Nested Loop
+// pros dois LEFT JOIN, mesmo quando a saída real do dedup é de milhares de
+// linhas (~13 mil no lote mais recente, medido ao vivo) — um Nested Loop de
+// 13 mil × (657+74) é o que travava a query por 8-11 MINUTOS (confirmado ao
+// vivo, viraram pilha de sessões travadas no banco). `SET LOCAL` (só vale
+// pra transação da requisição atual, criada por anexarContextoTenant) força
+// Hash Join, que não depende dessa estimativa errada pra ser rápido —
+// mesma query caiu pra ~600ms depois de testado ao vivo. Ver ADR 0023.
+async function desligarNestedLoop(db) {
+  await db.query('SET LOCAL enable_nestloop = off');
+}
+
 async function obterUltimoBatchMassiva(db) {
   const { rows } = await db.query(`
     SELECT dt_import, hr_import
@@ -563,6 +579,7 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
 }
 
 async function obterResumo(db, filtros) {
+  await desligarNestedLoop(db);
   const fontes = fontesAtivas(filtros.tipoServico);
   const [ultimoBatchMassiva, ultimoBatchLeitura] = await Promise.all([
     fontes.massiva ? obterUltimoBatchMassiva(db) : null,
@@ -701,6 +718,7 @@ async function obterOpcoesFiltro(db, filtros = {}) {
 }
 
 async function obterDetalhe(db, filtros) {
+  await desligarNestedLoop(db);
   const fontes = fontesAtivas(filtros.tipoServico);
   const [ultimoBatchMassiva, ultimoBatchLeitura] = await Promise.all([
     fontes.massiva ? obterUltimoBatchMassiva(db) : null,

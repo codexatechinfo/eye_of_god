@@ -5,6 +5,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Corrigido
+
+- Aba Monitoramento de Livros presa em "Carregando..." indefinidamente. Causa: consulta de
+  resumo/detalhe (`contr_execucao_leitura`, 871 mil linhas) sem índice em `(data_import,
+  hora_import)` e uma estimativa de cardinalidade errada do Postgres (`DISTINCT ON` sobre
+  subquery, chutava 1 linha quando a saída real era 13 mil) que fazia o otimizador escolher
+  Nested Loop em vez de Hash Join nos `JOIN`s com tabelas pequenas — de 8-11 minutos por
+  requisição para 1.5-6s. Ver [ADR 0023](docs/adr/0023-timeout-monitoramento-livros.md).
+
 ### Adicionado
 
 - Aba Trilho: painel "Camadas" no mapa com 5 toggles ativos (Pontos coletados, Setor planejado,

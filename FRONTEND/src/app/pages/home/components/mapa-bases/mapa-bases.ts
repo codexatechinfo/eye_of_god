@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, effect } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, effect, signal } from '@angular/core';
 import * as L from 'leaflet';
 import {
   ColaboradoresService,
@@ -7,6 +7,7 @@ import {
   LivroAtividade,
   LivroSelecionado,
   mapaPrimeiraUcPorCodigo,
+  MunicipioLimite,
   ordenarPorSequencia,
   TimelineUcItem,
 } from '../../../../services/colaboradores.service';
@@ -107,6 +108,45 @@ function tooltipDoPonto(item: TimelineUcItem): string {
   return `${sequencia}UC ${item.uc}${endereco}${codigo}`;
 }
 
+// Andrew's monotone chain — casco convexo dos pontos válidos do livro
+// (camada "Setor planejado"). Não reaproveita o filtro truthy-string
+// (item.latitude && item.longitude) usado em pontosLivro/rotaLivro logo
+// abaixo: o hull é sensível a qualquer coordenada que vire NaN depois de
+// Number(...) (comparação <, > com NaN é sempre false, sem lançar erro —
+// corrompe o polígono inteiro em silêncio), por isso quem chama esta função
+// já filtra com Number.isFinite antes. Devolve [] se sobrarem menos de 3
+// pontos distintos (não dá pra formar polígono).
+function cascoConvexo(pontos: L.LatLngTuple[]): L.LatLngTuple[] {
+  const unicos = Array.from(new Map(pontos.map(p => [`${p[0]},${p[1]}`, p])).values());
+  if (unicos.length < 3) return [];
+  unicos.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+
+  const cruz = (o: L.LatLngTuple, a: L.LatLngTuple, b: L.LatLngTuple) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
+  const inferior: L.LatLngTuple[] = [];
+  for (const p of unicos) {
+    while (inferior.length >= 2 && cruz(inferior[inferior.length - 2], inferior[inferior.length - 1], p) <= 0) {
+      inferior.pop();
+    }
+    inferior.push(p);
+  }
+
+  const superior: L.LatLngTuple[] = [];
+  for (let i = unicos.length - 1; i >= 0; i--) {
+    const p = unicos[i];
+    while (superior.length >= 2 && cruz(superior[superior.length - 2], superior[superior.length - 1], p) <= 0) {
+      superior.pop();
+    }
+    superior.push(p);
+  }
+
+  inferior.pop();
+  superior.pop();
+  const hull = inferior.concat(superior);
+  return hull.length >= 3 ? hull : [];
+}
+
 @Component({
   selector: 'app-mapa-bases',
   imports: [],
@@ -133,6 +173,32 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   private pontosLivro = new Map<string, L.CircleMarker>();
   private linhasDesvio: L.Polyline[] = [];
   private livroComBoundsAplicado: string | null = null;
+  private poligonoSetorPlanejado?: L.Polygon;
+  private limitesMunicipaisRenderizados = false;
+
+  // Grupos do painel "CAMADAS" — cada checkbox só liga/desliga o grupo
+  // inteiro (mapa.addLayer/removeLayer), nunca decide SE algo é desenhado.
+  // Os métodos de atualização (atualizarRotaLivro, atualizarMarcadoresColaboradores)
+  // continuam rodando sempre, mesmo com o grupo fora do mapa — colocar um
+  // "if (!camadaLigada()) return" ali reintroduziria o flicker/estado
+  // obsoleto que a ADR 0021 Adendo 5/6 já resolveu (o grupo voltaria visível
+  // com dado velho até o próximo ciclo de 60s). Ver ADR 0022.
+  private grupoPontos = L.layerGroup(); // camada 2: pontos coletados
+  private grupoSequencia = L.layerGroup(); // camada 7: rota planejada + desvios
+  private grupoAgentes = L.layerGroup(); // camada 6: demais agentes
+  private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo do livro
+  private grupoLimitesMunicipais = L.layerGroup(); // camada 5: contorno IBGE
+
+  // Ligadas por padrão (preserva o comportamento atual, sempre visível até
+  // hoje); as duas camadas novas nascem desligadas (opt-in, ninguém pediu
+  // que aparecessem por padrão e "Limites municipais" custa um fetch de 399
+  // polígonos). "Rastro executado" e "Paradas e gaps" não têm signal — os
+  // checkboxes deles ficam desabilitados no template (funcionalidade futura).
+  camadaPontos = signal(true);
+  camadaSequencia = signal(true);
+  camadaAgentes = signal(true);
+  camadaSetorPlanejado = signal(false);
+  camadaLimitesMunicipais = signal(false);
 
   constructor(public colaboradoresService: ColaboradoresService) {
     effect(() => {
@@ -160,6 +226,47 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       if (!alvo || !this.mapa) return;
       this.mapa.flyTo([alvo.lat, alvo.lng], ZOOM_FOCO, { duration: 0.6 });
     });
+
+    // Painel "CAMADAS": cada effect só decide se o GRUPO está no mapa — a
+    // criação/atualização do conteúdo do grupo roda em outro lugar, sempre
+    // (ver comentário dos campos grupoX acima).
+    effect(() => this.alternarGrupo(this.grupoPontos, this.camadaPontos()));
+    effect(() => this.alternarGrupo(this.grupoSequencia, this.camadaSequencia()));
+    effect(() => this.alternarGrupo(this.grupoAgentes, this.camadaAgentes()));
+    effect(() => this.alternarGrupo(this.grupoSetorPlanejado, this.camadaSetorPlanejado()));
+    effect(() => {
+      const ligado = this.camadaLimitesMunicipais();
+      this.alternarGrupo(this.grupoLimitesMunicipais, ligado);
+      if (ligado) this.colaboradoresService.carregarLimitesMunicipais();
+    });
+    // Renderiza os polígonos assim que o fetch (sob demanda, acima) chegar —
+    // só uma vez (limitesMunicipaisRenderizados), independente de quantas
+    // vezes o toggle for ligado/desligado depois.
+    effect(() => {
+      const dados = this.colaboradoresService.limitesMunicipais();
+      if (!dados || this.limitesMunicipaisRenderizados) return;
+      this.limitesMunicipaisRenderizados = true;
+      this.renderizarLimitesMunicipais(dados);
+    });
+  }
+
+  private alternarGrupo(grupo: L.LayerGroup, ligado: boolean): void {
+    if (!this.mapa) return;
+    if (ligado) {
+      this.mapa.addLayer(grupo);
+    } else {
+      this.mapa.removeLayer(grupo);
+    }
+  }
+
+  private renderizarLimitesMunicipais(municipios: MunicipioLimite[]): void {
+    for (const municipio of municipios) {
+      L.geoJSON(municipio.geometry as GeoJSON.Geometry, {
+        style: { color: '#0ea5e9', weight: 1, fillOpacity: 0.02 },
+      })
+        .bindTooltip(municipio.nome)
+        .addTo(this.grupoLimitesMunicipais);
+    }
   }
 
   ngAfterViewInit(): void {
@@ -214,6 +321,15 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       )
       .addTo(this.mapa);
 
+    // Os effects de toggle (constructor) já rodaram antes do mapa existir —
+    // reaplica o estado inicial de cada grupo agora que this.mapa está pronto
+    // (mesmo motivo do aplicarZoomRegional explícito logo abaixo).
+    this.alternarGrupo(this.grupoPontos, this.camadaPontos());
+    this.alternarGrupo(this.grupoSequencia, this.camadaSequencia());
+    this.alternarGrupo(this.grupoAgentes, this.camadaAgentes());
+    this.alternarGrupo(this.grupoSetorPlanejado, this.camadaSetorPlanejado());
+    this.alternarGrupo(this.grupoLimitesMunicipais, this.camadaLimitesMunicipais());
+
     this.atualizarMarcadoresColaboradores();
     this.aplicarZoomRegional(this.colaboradoresService.filtroRegional());
 
@@ -246,7 +362,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     if (!this.mapa) return;
 
     for (const marcador of this.marcadoresColaboradores.values()) {
-      this.mapa.removeLayer(marcador);
+      this.grupoAgentes.removeLayer(marcador);
     }
     this.marcadoresColaboradores.clear();
 
@@ -262,7 +378,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
 
       const ehMoto = colaborador.cargo === 'LEITURISTA MOTOCICLISTA' || colaborador.cargo === 'MONITOR';
       const marcador = L.marker([lat, lng], { icon: ehMoto ? ICONE_MOTO : ICONE_PEDESTRE })
-        .addTo(this.mapa)
+        .addTo(this.grupoAgentes)
         .bindTooltip(`${colaborador.colaborador} - última leitura em ${loc.data_import} ${loc.hora_import}`, {
           direction: 'top',
           offset: [0, -14],
@@ -309,12 +425,14 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     if (!this.mapa) return;
 
     if (!selecionado) {
-      if (this.rotaLivro) this.mapa.removeLayer(this.rotaLivro);
+      if (this.rotaLivro) this.grupoSequencia.removeLayer(this.rotaLivro);
       this.rotaLivro = undefined;
-      for (const ponto of this.pontosLivro.values()) this.mapa.removeLayer(ponto);
+      for (const ponto of this.pontosLivro.values()) this.grupoPontos.removeLayer(ponto);
       this.pontosLivro.clear();
-      for (const linha of this.linhasDesvio) this.mapa.removeLayer(linha);
+      for (const linha of this.linhasDesvio) this.grupoSequencia.removeLayer(linha);
       this.linhasDesvio = [];
+      if (this.poligonoSetorPlanejado) this.grupoSetorPlanejado.removeLayer(this.poligonoSetorPlanejado);
+      this.poligonoSetorPlanejado = undefined;
       this.livroComBoundsAplicado = null;
       return;
     }
@@ -325,7 +443,29 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     if (this.rotaLivro) {
       this.rotaLivro.setLatLngs(pontosRota);
     } else if (pontosRota.length) {
-      this.rotaLivro = L.polyline(pontosRota, { color: '#94a3b8', weight: 2, opacity: 0.7, dashArray: '2 6' }).addTo(this.mapa);
+      this.rotaLivro = L.polyline(pontosRota, { color: '#94a3b8', weight: 2, opacity: 0.7, dashArray: '2 6' }).addTo(
+        this.grupoSequencia,
+      );
+    }
+
+    // Setor planejado (casco convexo de TODAS as instalações do livro, não só
+    // as ordenadas/com sequência) — filtro próprio com Number.isFinite, mais
+    // estrito que o truthy-string acima (ver comentário de cascoConvexo).
+    const pontosParaHull: L.LatLngTuple[] = atuais
+      .map((item): L.LatLngTuple => [Number(item.latitude), Number(item.longitude)])
+      .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+    const hull = cascoConvexo(pontosParaHull);
+    if (hull.length >= 3) {
+      if (this.poligonoSetorPlanejado) {
+        this.poligonoSetorPlanejado.setLatLngs(hull);
+      } else {
+        this.poligonoSetorPlanejado = L.polygon(hull, { color: '#8b5cf6', weight: 2, fillOpacity: 0.08 }).addTo(
+          this.grupoSetorPlanejado,
+        );
+      }
+    } else if (this.poligonoSetorPlanejado) {
+      this.grupoSetorPlanejado.removeLayer(this.poligonoSetorPlanejado);
+      this.poligonoSetorPlanejado = undefined;
     }
 
     if (pontosRota.length && this.rotaLivro && this.livroComBoundsAplicado !== selecionado.livro.livro) {
@@ -350,7 +490,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         existente.setTooltipContent(tooltipDoPonto(item));
       } else {
         const ponto = L.circleMarker(latLng, { radius: 5, color: '#fff', weight: 1, fillColor: cor, fillOpacity: 0.95 })
-          .addTo(this.mapa)
+          .addTo(this.grupoPontos)
           .bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
         // Clicar no ponto foca E expande a UC na timeline do painel (item 3
         // do pedido) — os dois juntos, sem precisar de um segundo clique na
@@ -374,7 +514,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
     for (const [uc, ponto] of this.pontosLivro) {
       if (!vistos.has(uc)) {
-        this.mapa.removeLayer(ponto);
+        this.grupoPontos.removeLayer(ponto);
         this.pontosLivro.delete(uc);
       }
     }
@@ -386,7 +526,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     // planejada: traça uma linha marcando esse trecho. Recriado inteiro a
     // cada ciclo (não atualizado em cima da instância) — o número de desvios
     // é tipicamente pequeno, não justifica a complexidade de diffar.
-    for (const linha of this.linhasDesvio) this.mapa.removeLayer(linha);
+    for (const linha of this.linhasDesvio) this.grupoSequencia.removeLayer(linha);
     this.linhasDesvio = [];
 
     for (let i = 1; i < timeline.length; i++) {
@@ -405,7 +545,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
           [Number(atual.latitude), Number(atual.longitude)],
         ],
         { color: '#dc2626', weight: 2.5, opacity: 0.85, dashArray: '6 4' },
-      ).addTo(this.mapa);
+      ).addTo(this.grupoSequencia);
       this.linhasDesvio.push(linha);
     }
   }

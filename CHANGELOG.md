@@ -7,6 +7,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Aba Trilho: painel "Camadas" no mapa com 5 toggles ativos (Pontos coletados, Setor planejado,
+  Limites municipais, Demais agentes, Sequência planejada) e 2 desabilitados pra funcionalidade
+  futura (Rastro executado, Paradas e gaps). "Setor planejado" desenha o casco convexo das
+  instalações do livro aberto; "Limites municipais" desenha o contorno real dos 399 municípios
+  do Paraná, importado do IBGE (nova tabela `municipios_limites`, novo endpoint `GET
+  /municipios/limites`, script `BACKEND/scripts/importarLimitesMunicipais.js`). Ver [ADR
+  0022](docs/adr/0022-camadas-mapa-e-limites-municipais.md).
+
 - Aba Trilho: mapa mostra sempre um ícone por colaborador (moto para motoqueiro/monitor, pessoa
   a pé para pedestre) na posição da última UC que ele realizou (qualquer dia) — os círculos de
   contagem por regional foram removidos. Clicar no ícone abre o livro da UC que gerou aquela

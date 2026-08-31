@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-08-27T17:14:53.528Z",
+  "atualizado_em": "2026-08-31T16:15:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "3bd1a71",
+  "commit": "18b957c",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -152,10 +152,10 @@
   ],
   "operacional": {
     "tabelas_sem_rls": 0,
-    "tabelas_negocio": 16,
+    "tabelas_negocio": 17,
     "indice_tenant": {
-      "ok": 16,
-      "total": 16
+      "ok": 17,
+      "total": 17
     },
     "cobertura_testes": null
   },
@@ -866,6 +866,13 @@
       "skill": "/projeto-novo",
       "evento": "slowMo do scraper de Acompanhamento virou adaptativo entre ciclos, inspirado no AutoThrottle do Scrapy/Scrapling",
       "detalhe": "Usuario perguntou sobre usar a lib Python Scrapling (github.com/d4vinci/Scrapling). Investigado via WebFetch: o modo de automacao de browser dela roda em cima do proprio Playwright por baixo dos panos (nao e motor diferente); o recurso de multiplas sessoes gerencia sessao do lado do CLIENTE, nao cria sessao nova VALIDA no servidor Copel a partir de uma conta so - nao ataca a causa raiz (sessao unica por conta). Unico conceito aproveitavel: o AutoThrottle (atraso que se ajusta sozinho pela taxa de erro, em vez de valor fixo). Implementado adaptado pro nosso caso: Playwright fixa slowMo no momento de chromium.launch(), sem API pra mudar com o browser ja rodando - entao a adaptacao so pode valer a partir do PROXIMO ciclo, nao dentro do ciclo atual (diferente das duas tentativas anteriores que mexiam durante a execucao). Nova funcao ajustarSlowMoAdaptativo(estatisticas): cada ciclo conta toda TENTATIVA de abrir livro (nao so resultado final - inclui retentativas, mesma metrica usada ao vivo pra medir colisao de sessao) em estatisticasCiclo={sucessos,falhas} compartilhado entre workers; no fim do ciclo calcula a taxa de falha e ajusta slowMoAdaptativoMs (variavel de modulo, em memoria, nao persiste em disco/banco): taxa>15% sobe 50% (teto 500ms), taxa<5% desce 20% (piso 30ms), entre 5-15% mantem, amostra menor que 10 tentativas nao ajusta (evita reagir a ruido). Sobe mais rapido do que desce de proposito - custo de um ciclo ruim e maior que custo de manter atraso alto por mais um ciclo. Comeca em COPEL_SLOWMO_INICIAL_MS (novo, default 100 - unico valor com resultado bom comprovado ao vivo), entao o PRIMEIRO ciclo depois de subir o servidor se comporta identico ao ja validado; adaptacao so entra em acao a partir do segundo ciclo. Testado isoladamente (formula pura, fora do scraper) com numeros reais desta sessao: ciclo ruim (54 falhas/51 sucessos, 51.4%) sobe de 100 pra 150ms; ciclo bom (3% falha) desce gradualmente; amostras pequenas/vazias corretamente nao ajustam. node --check confirma sintaxe valida, npm test (12 testes) continua passando. NAO validado ao vivo em multiplos ciclos ainda - como o primeiro ciclo se comporta identico ao ja comprovado, risco de regressao e baixo; o efeito real da adaptacao (ciclo 1 vs ciclo 2) so se confirma observando pelo menos 2 ciclos completos ao vivo (~90min+), fica pro usuario decidir se quer esse teste agora ou acompanhar pelos logs (emoji de ajuste) em producao normal. Ver ultimo Adendo da ADR 0020."
+    },
+    {
+      "data": "2026-08-31T16:15:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Painel de camadas no mapa (5 toggles ativos + 2 desabilitados), casco convexo do livro e contorno real dos municipios do IBGE",
+      "detalhe": "Usuario enviou print de um painel CAMADAS com 7 checkboxes e pediu toggle independente por camada. 5 ja tinham dado pronto so sem toggle (pontos coletados, demais agentes, sequencia planejada) ou eram novas (setor planejado, limites municipais); 2 ficaram desabilitadas no template pra funcionalidade futura (rastro executado via GPS, paradas e gaps). Perguntado sobre o escopo de setor planejado e limites municipais, usuario escolheu construir os dois agora (nao deixar desabilitado). Agente Plan revisou o desenho por escrito antes de codar e achou 13 pontos reais, todos incorporados: ST_SetSRID obrigatorio (sem ele o import falhava com SRID 0 contra a coluna geometry(Polygon,4326)), conexao unica (nao Pool) pro set_config de RLS nao se perder no meio do import, ST_IsValid apos import, SAVEPOINT por linha, idempotencia via ON CONFLICT, filtro Number.isFinite proprio pro casco convexo (mais estrito que o truthy-string ja usado em pontosLivro/rotaLivro - NaN corrompe o hull em silencio sem lancar erro), guarda de menos de 3 pontos, linhasDesvio decidido explicitamente pro grupo de sequencia planejada (nao paradas e gaps), e o cuidado de NAO gatar atualizarRotaLivro/atualizarMarcadoresColaboradores atras do toggle (reintroduziria o flicker que a ADR 0021 Adendo 5/6 ja resolveu). mapa-bases.ts refatorado pra 5 L.layerGroup (pontos/sequencia/agentes/setorPlanejado/limitesMunicipais), cada checkbox so liga/desliga o grupo inteiro. Nova tabela municipios_limites (empresa_id+RLS+geometry Polygon 4326+GIST, mesma policy de coordenadas_ucs_mineradas) aplicada direto via docker exec supabase-db psql (sem framework de migration neste projeto). Script BACKEND/scripts/importarLimitesMunicipais.js baixa a malha do IBGE (399 municipios do Parana, todos Polygon, confirmado ao vivo - nenhum MultiPolygon na malha atual) e faz upsert idempotente; rodado 2x, 399 linhas nas duas vezes, 0 falha, 0 geometria invalida. Novo endpoint GET /municipios/limites, fetch sob demanda no frontend (so no primeiro toggle, cacheado depois - 399 poligonos nao vale pagar em todo load), renderizado com L.geoJSON direto (GeoJSON ja vem [lng,lat], sem inverter como o resto do arquivo faz pra tuples Leaflet). Trade-off documentado na ADR: municipios_limites segue o precedente da ADR 0009 (toda tabela tem empresa_id/RLS, sem excecao) mesmo o dado do IBGE sendo identico pra qualquer empresa - decisao consciente por consistencia, custo e reimportar por empresa quando uma 2a existir. node --check e ng build --configuration development limpos, npm test (12 testes) continua passando, municipiosService.listarLimites chamado direto contra o banco confirma GeoJSON valido. Sem login disponivel nesta sessao (nao digita senha em nome do usuario) - sem verificacao visual dos 5 toggles no navegador, usuario decidiu pular essa etapa e testar quando abrir a aplicacao. Ver ADR 0022."
     }
   ]
 }

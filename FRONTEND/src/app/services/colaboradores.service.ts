@@ -290,6 +290,19 @@ interface JornadaResponse extends JornadaColaborador {
   sucesso: boolean;
 }
 
+// Contorno de um município (ADR 0022) — geometry já em GeoJSON puro
+// ([lng, lat]), pronto pra L.geoJSON() sem reordenar nada.
+export interface MunicipioLimite {
+  codigo_ibge: string;
+  nome: string;
+  geometry: { type: 'Polygon'; coordinates: number[][][] };
+}
+
+interface LimitesMunicipaisResponse {
+  sucesso: boolean;
+  municipios: MunicipioLimite[];
+}
+
 interface LocalizacoesResponse {
   sucesso: boolean;
   localizacoes: LocalizacaoColaborador[];
@@ -411,6 +424,12 @@ export class ColaboradoresService {
   // Posição de cada colaborador no mapa (última UC realizada, qualquer dia)
   // — buscada uma vez só (não muda a cada minuto como atividadeHoje).
   localizacoes = signal<LocalizacaoColaborador[]>([]);
+
+  // Contorno dos 399 municípios (camada "Limites municipais" do mapa, ADR
+  // 0022) — null até o primeiro toggle da camada (fetch sob demanda, não no
+  // carregamento do mapa: são 399 polígonos, não vale pagar esse custo pra
+  // quem nunca liga a camada). [] depois de buscado e vazio.
+  limitesMunicipais = signal<MunicipioLimite[] | null>(null);
 
   // UC com o card de detalhe expandido na timeline (accordion, uma por vez)
   // — signal no service (não local ao componente) porque tanto um clique na
@@ -551,6 +570,16 @@ export class ColaboradoresService {
     this.http.get<LocalizacoesResponse>(`${this.apiUrl}/colaboradores/localizacoes`).subscribe({
       next: resposta => this.localizacoes.set(resposta.localizacoes),
       error: () => {},
+    });
+  }
+
+  // Fetch único, cacheado em memória (signal já preenchido = não refaz a
+  // chamada) — ver comentário do signal `limitesMunicipais`.
+  carregarLimitesMunicipais(): void {
+    if (this.limitesMunicipais() !== null) return;
+    this.http.get<LimitesMunicipaisResponse>(`${this.apiUrl}/municipios/limites`).subscribe({
+      next: resposta => this.limitesMunicipais.set(resposta.municipios),
+      error: () => this.limitesMunicipais.set([]),
     });
   }
 

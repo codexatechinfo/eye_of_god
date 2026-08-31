@@ -1,1 +1,65 @@
-<div #mapaEl class="w-full h-full"></div>
+<div class="relative w-full h-full">
+  <div #mapaEl class="w-full h-full"></div>
+
+  <!-- Painel "CAMADAS" — cada checkbox liga/desliga um L.layerGroup no mapa
+       (ver comentário dos campos grupoX em mapa-bases.ts). topright: o
+       controle de tiles (Ruas/Satélite/...) já ocupa o topleft. -->
+  <div class="absolute top-2.5 right-2.5 z-[1000] bg-white rounded-md shadow-md text-sm text-slate-700 w-48 overflow-hidden">
+    <div class="px-3 py-2 font-semibold border-b border-slate-200 bg-slate-50">Camadas</div>
+    <ul class="py-1">
+      <li class="flex items-center gap-2 px-3 py-1.5 opacity-50 cursor-not-allowed" title="Ainda não implementado">
+        <input type="checkbox" disabled class="cursor-not-allowed" />
+        <span>Rastro executado</span>
+      </li>
+      <li class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
+        <input
+          type="checkbox"
+          id="camada-pontos"
+          [checked]="camadaPontos()"
+          (change)="camadaPontos.set($any($event.target).checked)"
+        />
+        <label for="camada-pontos" class="cursor-pointer select-none">Pontos coletados</label>
+      </li>
+      <li class="flex items-center gap-2 px-3 py-1.5 opacity-50 cursor-not-allowed" title="Ainda não implementado">
+        <input type="checkbox" disabled class="cursor-not-allowed" />
+        <span>Paradas e gaps</span>
+      </li>
+      <li class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
+        <input
+          type="checkbox"
+          id="camada-setor"
+          [checked]="camadaSetorPlanejado()"
+          (change)="camadaSetorPlanejado.set($any($event.target).checked)"
+        />
+        <label for="camada-setor" class="cursor-pointer select-none">Setor planejado</label>
+      </li>
+      <li class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
+        <input
+          type="checkbox"
+          id="camada-municipios"
+          [checked]="camadaLimitesMunicipais()"
+          (change)="camadaLimitesMunicipais.set($any($event.target).checked)"
+        />
+        <label for="camada-municipios" class="cursor-pointer select-none">Limites municipais</label>
+      </li>
+      <li class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
+        <input
+          type="checkbox"
+          id="camada-agentes"
+          [checked]="camadaAgentes()"
+          (change)="camadaAgentes.set($any($event.target).checked)"
+        />
+        <label for="camada-agentes" class="cursor-pointer select-none">Demais agentes</label>
+      </li>
+      <li class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
+        <input
+          type="checkbox"
+          id="camada-sequencia"
+          [checked]="camadaSequencia()"
+          (change)="camadaSequencia.set($any($event.target).checked)"
+        />
+        <label for="camada-sequencia" class="cursor-pointer select-none">Sequência planejada</label>
+      </li>
+    </ul>
+  </div>
+</div>

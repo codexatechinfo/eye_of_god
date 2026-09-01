@@ -246,7 +246,7 @@ export class MassivasService implements OnDestroy {
         this.carregando.set(false);
       },
       error: () => {
-        this.erro.set('Não foi possível carregar os dados de massivas.');
+        this.erro.set(`Não foi possível carregar os dados de ${this.escopo === 'massiva' ? 'massivas' : 'livros'}.`);
         this.carregando.set(false);
       },
     });
@@ -262,7 +262,7 @@ export class MassivasService implements OnDestroy {
         this.carregandoDetalhe.set(false);
       },
       error: () => {
-        this.erroDetalhe.set('Não foi possível carregar a tabela de massivas.');
+        this.erroDetalhe.set(`Não foi possível carregar a tabela de ${this.escopo === 'massiva' ? 'massivas' : 'livros'}.`);
         this.carregandoDetalhe.set(false);
       },
     });

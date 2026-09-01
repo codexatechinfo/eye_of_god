@@ -69,9 +69,23 @@ const ETAPA_URBANA_CONTR_SQL = `${ETAPA_NUM_CONTR_SQL} BETWEEN 1 AND 19`;
 // data_prevista_limite, que na prática já é o mesmo prazo de
 // calendario_leitura.prazo_leitura pra linhas de leitura (conferido contra o
 // banco: etapa 18/mês 2026-08 bate 26/08/2026 nos dois lugares).
+// `cal.mes_ref ~ '^\d{4}-\d{2}-\d{2}$'` é defesa contra formato malformado —
+// achado ao vivo: uma importação de planilha gravou 37 linhas de
+// calendario_leitura (etapa 01-38, aparentando ser o lote de um mês novo)
+// com mes_ref = "31/07/2026" (formato DD/MM/YYYY, igual toda outra coluna de
+// data do schema) em vez do "YYYY-MM-DD" que esta coluna especificamente
+// exige — `to_date(cal.mes_ref, 'YYYY-MM-DD')` sem essa guarda lançava
+// "date/time field value out of range" e derrubava a aba Monitoramento de
+// Livros inteira (usuário reportou com print). Mesmo padrão de defesa já
+// usado em buscarEventosLeitura/obterJornadaColaborador (ADR 0025) — sem o
+// filtro, uma única linha malformada quebra a consulta inteira; com ele, só
+// essa linha específica de calendario_leitura fica sem match no LEFT JOIN
+// (prazo/faixa de dias saem null pro livro daquela etapa, resto continua
+// funcionando).
 function joinCalendarioContr() {
   return `LEFT JOIN calendario_leitura cal
     ON cal.etapa::int = ${ETAPA_NUM_CONTR_SQL}
+    AND cal.mes_ref ~ '^\\d{4}-\\d{2}-\\d{2}$'
     AND to_date(cal.mes_ref, 'YYYY-MM-DD') = date_trunc('month', to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY'))`;
 }
 
@@ -199,8 +213,13 @@ function condicaoSqlPrazoContr(tipo) {
   return null;
 }
 
+// Mesma guarda de formato de cal.mes_ref que joinCalendarioContr (achado ao
+// vivo na mesma investigação — calendario_leitura é a mesma tabela nos dois
+// casos, o dado malformado quebraria aqui também).
 function joinCalendario(aliasTabela) {
-  return `LEFT JOIN calendario_leitura cal ON cal.etapa = ${aliasTabela}.etapa AND to_date(cal.mes_ref, 'YYYY-MM-DD') = to_date(${aliasTabela}.mes_ref, 'YYYY/MM/DD')`;
+  return `LEFT JOIN calendario_leitura cal ON cal.etapa = ${aliasTabela}.etapa
+    AND cal.mes_ref ~ '^\\d{4}-\\d{2}-\\d{2}$'
+    AND to_date(cal.mes_ref, 'YYYY-MM-DD') = to_date(${aliasTabela}.mes_ref, 'YYYY/MM/DD')`;
 }
 
 function construirCondicoes({ regional, livro, etapa, colaborador, temLeiturista, prazo, condicaoPrazo }) {

@@ -7,6 +7,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Aba "Monitoramento de Livros" quebrando com "Não foi possível carregar os dados de massivas"
+  (mensagem errada — nem estava na aba Massivas) e a consulta de fato falhando por trás: 37
+  linhas de `calendario_leitura` com data em formato errado (`31/07/2026` em vez de
+  `2026-07-31`) faziam o `to_date(...)` estourar e derrubar a aba inteira, não só essa linha.
+  Mensagem agora reflete a aba certa; consulta agora ignora linha de calendário com data
+  malformada em vez de quebrar tudo. Ver Adendo 1 da [ADR
+  0023](docs/adr/0023-timeout-monitoramento-livros.md).
+
 - Mapa (aba Trilho) mostrava marcador e rota de colaborador sem nenhuma atividade no dia
   filtrado — o marcador usava sempre a última posição conhecida de qualquer dia, sem checar se
   havia serviço no dia selecionado no calendário. Agora só aparece quem tem atividade no dia

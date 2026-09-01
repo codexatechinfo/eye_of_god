@@ -650,3 +650,40 @@ comportamento certo pra UC sem coordenada. Único ajuste pedido: `title` no bot�
 ("Sem coordenada cadastrada pra essa UC") pra não parecer quebrado sem explicação.
 
 `ng build --configuration development` limpo.
+
+## Adendo 11 — marcador do colaborador no mapa aparecia sem atividade no dia filtrado
+
+Usuário reportou com print: card do colaborador (`EDENILSON JOSE DE AZEVEDO`) na lista da
+esquerda mostrando "Nenhuma atividade registrada hoje", enquanto o mapa mostrava um marcador e
+uma rota desenhada pra ele. "Se não tem serviço no dia atual filtrado então o colaborador nem
+deve aparecer no mapa".
+
+**Causa raiz**: `atualizarMarcadoresColaboradores` (`mapa-bases.ts`) desenha um marcador por
+colaborador usando `colaboradoresService.localizacoes()` — a ÚLTIMA posição conhecida, **sem
+filtro de data nenhum** (backend: `obterUltimaUcRealizadaPorColaborador`, `DISTINCT ON
+(colaborador) ORDER BY id DESC`, sempre a leitura mais recente de toda a história). O gate
+existente (`porNome.get(loc.colaborador)`) só checava se o colaborador estava no ROSTER ativo
+(`colaboradoresService.colaboradores()`, `/colaboradores/ativos` — também sem filtro de data),
+não se ele tinha atividade no DIA FILTRADO. Resultado: colaborador sem serviço hoje, mas com
+posição conhecida de qualquer dia anterior, ganhava marcador igual a quem estava trabalhando
+agora — clicável, abrindo a rota do último livro dele (de um dia qualquer) como se fosse atual.
+
+Esse comportamento já era intencional em parte (comentário original: "posição conhecida,
+qualquer dia" — decisão de mostrar a ÚLTIMA posição mesmo sem atividade hoje, pensada pra não
+sumir o colaborador do mapa por uma lacuna de sincronismo). O usuário decidiu que isso está
+errado: sem atividade no dia filtrado, nem deveria aparecer.
+
+**Correção**: acrescentado o mesmo gate que a lista da esquerda já usa pra decidir "Nenhuma
+atividade registrada hoje" (`colaboradoresService.atividadeDe(nome)`, que lê `atividadeHoje()`
+— já escopado pela data selecionada no calendário, `filtroData`) — sem entrada em
+`atividadeHoje` pro dia filtrado, `continue` no loop, sem marcador. Como o clique no marcador é
+o único caminho pra abrir a rota do livro sem passar por "atividade hoje" (clicar o card na
+lista não abre rota sozinho, só expande o card — ver `selecionarColaborador` vs
+`abrirColaborador`), remover o marcador também remove o único jeito de abrir a rota "antiga"
+por engano.
+
+Verificação: `ng build --configuration development` limpo. Não verificado visualmente no
+navegador (sem credencial de login disponível nesta sessão) — confirmado por leitura de código
+(mesmo gate `atividadeDe()` já usado e testado na lista da esquerda) e pelo rastreio completo do
+fluxo de clique (marcador → `abrirLivro`/`abrirColaborador`, único caminho que desenha a rota a
+partir do mapa).

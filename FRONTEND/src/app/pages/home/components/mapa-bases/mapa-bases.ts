@@ -521,6 +521,15 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // seleção foram removidos). Sempre limpa tudo primeiro: mais simples que
   // diffar, e o volume (algumas centenas no máximo) não justifica a
   // complexidade de atualizar em cima da instância existente.
+  //
+  // Exige atividade NO DIA FILTRADO (atividadeDe, mesmo gate que a lista da
+  // esquerda usa pra decidir "Nenhuma atividade registrada hoje") — a
+  // posição em si (`localizacoes()`) vem sempre da última UC realizada
+  // alguma vez, sem filtro de data (ver obterUltimaUcRealizadaPorColaborador
+  // no backend); sem esse gate, um colaborador sem serviço no dia
+  // selecionado aparecia no mapa com a rota/posição de um dia qualquer
+  // anterior — usuário reportou com print: card da esquerda mostrando "sem
+  // atividade hoje" e o mesmo colaborador com rota desenhada no mapa.
   private atualizarMarcadoresColaboradores(): void {
     if (!this.mapa) return;
 
@@ -535,6 +544,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     for (const loc of this.colaboradoresService.localizacoes()) {
       const colaborador = porNome.get(loc.colaborador);
       if (!colaborador) continue;
+      if (!this.colaboradoresService.atividadeDe(loc.colaborador)) continue;
 
       const lat = Number(loc.latitude);
       const lng = Number(loc.longitude);

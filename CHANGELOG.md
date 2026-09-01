@@ -7,6 +7,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Mapa (aba Trilho) mostrava marcador e rota de colaborador sem nenhuma atividade no dia
+  filtrado — o marcador usava sempre a última posição conhecida de qualquer dia, sem checar se
+  havia serviço no dia selecionado no calendário. Agora só aparece quem tem atividade no dia
+  filtrado. Ver Adendo 11 da [ADR
+  0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
+
 - Barra lateral (aba Trilho) e painel de detalhe do mesmo livro podiam mostrar números
   diferentes de "realizadas" (ex.: "39/50" na barra vs. "40 realizadas/48 a realizar" no painel)
   — eram duas fontes com escopos diferentes: a barra sempre escopada ao dia selecionado, o

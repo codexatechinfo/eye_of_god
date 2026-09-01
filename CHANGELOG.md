@@ -7,6 +7,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Importação por planilha de `contr_execucao_leitura`: o modelo (`importacaoConfig.js`) nunca
+  tinha sido atualizado desde a reestruturação de colunas da ADR 0018 — ainda listava 8
+  colunas removidas há tempos (`tipo_oss`, `numero_os`...) e não tinha nenhuma das colunas
+  atuais (`uc`, `colaborador`, `codigo`...); uma planilha só falharia tarde, na hora de
+  gravar. Achado ao auditar todas as tabelas do banco contra o modelo de importação/exportação
+  (pedido do usuário). Corrigido: colunas e chave de upsert reescritas pro schema real,
+  testado de ida e volta contra o banco. As outras 12 tabelas do modelo já batiam com o schema
+  real. Ver Adendo 23 da [ADR
+  0018](docs/adr/0018-restruturacao-colunas-contr-execucao-leitura.md).
+
 - Aba "Monitoramento de Livros" quebrando com "Não foi possível carregar os dados de massivas"
   (mensagem errada — nem estava na aba Massivas) e a consulta de fato falhando por trás: 37
   linhas de `calendario_leitura` com data em formato errado (`31/07/2026` em vez de

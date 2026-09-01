@@ -60,16 +60,31 @@ const CONFIG_IMPORTACAO = {
       'hr_import', 'mes_ref',
     ],
   },
+  // Reestruturada na ADR 0018 (colunas antigas removidas, novas colunas por
+  // UC adicionadas) — este config nunca tinha sido atualizado pra
+  // acompanhar, achado só ao auditar o config inteiro contra o schema real
+  // (2026-09-01): listava 8 colunas que não existem mais (`tipo_oss`,
+  // `subtipo_os`, `numero_os`, `data_ultima_atualizacao`,
+  // `qtd_digitados_nao_digitados`, `qtd_com_leitura_sem_leitura`,
+  // `percentual_sem_leitura`, `qtd_fora_de_faixa_foto`) e nem tinha as 8
+  // colunas atuais (`uc`, `colaborador`, `codigo`, `equipamento`,
+  // `tipo_especificacao`, `faturamento`, `leitura_atual`, `smart`). Uma
+  // importação por planilha teria aceitado cabeçalho com coluna morta (erro
+  // só na hora do INSERT) e não tinha como preencher UC/colaborador/código.
+  // `chave` também reescrita: a original dependia de `numero_os`/
+  // `qtd_digitados_nao_digitados`, ambas removidas — agora usa
+  // `livro+uc+data_import+hora_import`, mesma composição que já identifica
+  // uma linha de forma única em outras consultas desta tabela (ver
+  // `contrDedupSql`, `monitoramentoService.js`).
   contr_execucao_leitura: {
     modo: 'upsert',
     temEmpresa: true,
-    chave: ['numero_os', 'data_recebimento', 'hora_recebimento', 'qtd_digitados_nao_digitados'],
+    chave: ['livro', 'uc', 'data_import', 'hora_import'],
     colunas: [
-      'etapa', 'tipo_oss', 'subtipo_os', 'numero_os', 'localidade', 'livro',
-      'empreiteira', 'data_recebimento', 'hora_recebimento', 'data_prevista_limite',
-      'data_ultima_atualizacao', 'qtd_digitados_nao_digitados',
-      'qtd_com_leitura_sem_leitura', 'percentual_sem_leitura', 'qtd_fora_de_faixa_foto',
-      'situacao', 'data_import', 'hora_import',
+      'etapa', 'localidade', 'livro', 'empreiteira', 'data_recebimento',
+      'hora_recebimento', 'data_prevista_limite', 'situacao', 'data_import',
+      'hora_import', 'uc', 'colaborador', 'codigo', 'equipamento',
+      'tipo_especificacao', 'faturamento', 'leitura_atual', 'smart',
     ],
   },
   // Ver ADR 0009 — deixou de ser compartilhada: cada empresa pode ter seu

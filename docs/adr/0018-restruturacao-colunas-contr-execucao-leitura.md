@@ -1196,3 +1196,51 @@ reportada. `npm test` (12 testes) continua passando.
   schema novo corretamente, incluindo o fix do bug `bigint`-como-string. UC individual
   (estado atual e timeline de realização) disponível via `/massivas/livro-ucs`, consumida nos
   4 pedidos de verificação do usuário.
+
+## Adendo 23 — `importacaoConfig.js` nunca tinha acompanhado esta reestruturação
+
+Usuário pediu, depois de apagar `control_empreiteiras` numa sessão anterior (ADR 0004 Adendo
+1), pra auditar TODAS as tabelas do banco contra a aba de Importação e corrigir o que
+estivesse desatualizado. Script de auditoria (comparando `information_schema.columns` de cada
+tabela contra o `colunas`/`chave` de cada entrada em `CONFIG_IMPORTACAO`) achou uma única
+divergência real, mas séria: a entrada `contr_execucao_leitura` nunca tinha sido atualizada
+desde a reestruturação **desta própria ADR** (0018) — ainda listava as 8 colunas removidas
+(`tipo_oss`, `subtipo_os`, `numero_os`, `data_ultima_atualizacao`,
+`qtd_digitados_nao_digitados`, `qtd_com_leitura_sem_leitura`, `percentual_sem_leitura`,
+`qtd_fora_de_faixa_foto`) e não tinha nenhuma das 8 colunas atuais (`uc`, `colaborador`,
+`codigo`, `equipamento`, `tipo_especificacao`, `faturamento`, `leitura_atual`, e `smart` do
+Adendo acima). A `chave` de upsert também dependia de duas colunas removidas (`numero_os`,
+`qtd_digitados_nao_digitados`), deixando o upsert quebrado mesmo se alguém corrigisse só as
+`colunas`.
+
+**Impacto real**: uma planilha de importação pra esta tabela com cabeçalho batendo no config
+antigo seria ACEITA na validação do cabeçalho (`extrairLinhas`) e só falharia depois, na hora
+do `INSERT` (`column "tipo_oss" of relation "contr_execucao_leitura" does not exist"`) — erro
+tardio e confuso. E não havia como preencher `uc`/`colaborador`/`codigo` (as colunas que
+realmente importam pra essa tabela hoje) via planilha, mesmo que a coluna existisse no banco.
+
+**Correção**: `colunas` reescrita com o schema atual (18 colunas: as 10 originais mantidas +
+as 7 novas da ADR 0018 + `smart`); `chave` trocada pra `livro+uc+data_import+hora_import` —
+mesma composição já usada em `contrDedupSql` (`monitoramentoService.js`) pra identificar uma
+linha de forma única (uma linha por UC por lote de scrape). As demais 12 tabelas do config
+batiam exatamente com o schema real, nenhuma outra mudança necessária. Tabelas fora do config
+(`audit_log`, `empresas`, `municipios_limites`, `spatial_ref_sys`, `tenant_features`, `users`)
+confirmadas como exclusão intencional: as 4 primeiras/RBAC nunca devem aceitar upload de
+planilha (segurança — importar `users` por arquivo seria criar conta por spreadsheet);
+`municipios_limites` tem importação própria e deliberadamente separada (script
+`importarLimitesMunicipais.js`, ver ADR 0022) por vir de GeoJSON do IBGE, não de planilha do
+usuário; `spatial_ref_sys` é tabela de sistema do PostGIS.
+
+### Verificação
+
+- Script de auditoria (`information_schema.columns` de cada tabela × `colunas`/`chave` de
+  cada entrada) rodado antes e depois — confirma zero divergência remanescente em qualquer
+  tabela do config
+- Teste de ida e volta real contra o banco: monta um `.xlsx` em memória (ExcelJS) com o
+  cabeçalho novo, chama `importarArquivo('contr_execucao_leitura', ...)` — grava a linha
+  corretamente (`uc`/`colaborador`/`codigo`/`smart` conferidos de volta no banco); reimporta a
+  MESMA linha — upsert substitui em vez de duplicar (1 linha, não 2), provando que a chave
+  nova funciona
+- `gerarExemploTodasTabelas` testado depois da mudança — continua gerando o `.xlsx` de exemplo
+  normalmente (13 tabelas no modelo)
+- `npm test` (12/12), `node --check` no config alterado

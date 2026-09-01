@@ -75,3 +75,84 @@ importado via `importarArquivo()` dentro de uma transação com `ROLLBACK` (mesm
 0021 Adendo 3 — não grava nada de verdade), linha confirmada gravada corretamente dentro da
 transação, e confirmado que o `ROLLBACK` não deixou rastro (`SELECT count(*)` = 0 depois).
 `npm test` (12/12) continua passando.
+
+## Adendo 2 — Import em massa de 3,5 milhões de linhas (4 CSV + 1 xlsx)
+
+Usuário forneceu 4 arquivos CSV (~230MB, ~230MB, ~230MB, ~80MB — export do Excel dividido
+exatamente no teto de 1.048.576 linhas por aba) mais um `.xlsx` de 132 linhas, pedindo pra
+importar tudo em `base_dados_leitura`, um por vez.
+
+### Por que não pelo pipeline padrão (`importarArquivo`/aba Importação)
+
+`extrairLinhas` (`importacaoService.js`) é `ExcelJS`-only (não lê CSV) e materializa a planilha
+inteira na memória via `Workbook.xlsx.load` — inviável tanto pelo formato (CSV) quanto pela
+escala (3,5 milhões de linhas não cabem num único `INSERT` com bind parametrizado, e o próprio
+motor já teto a 300 linhas por lote justamente por causa de um bug do driver `pg` com muitos
+parâmetros — ver comentário de `LOTE_MAX_LINHAS`). Verificado antes de escrever qualquer código:
+`awk -F';'` confirmou que TODAS as ~3,5 milhões de linhas têm exatamente 23 campos (sem
+delimitador escapado/aspas — split por `;` é seguro aqui, diferente de CSV RFC4180 genérico).
+
+### Índice novo antes de importar
+
+`base_dados_leitura` replicava os índices de `control_empreiteiras` (`empresa_id`, `livro`,
+`mes_ref_livro`), mas nenhum na tupla de chave do upsert
+(`data_da_leitura, hora_da_leitura, nome_do_usuario, unidade_consumidora`). Como o import faz um
+`DELETE` por essa tupla a cada arquivo, e a tabela cresce de 0 pra 3,5 milhões de linhas ao
+longo do processo, rodar sem esse índice repetiria exatamente o bug da ADR 0023 (planner sem
+índice bom = varredura completa, cada vez mais lenta conforme a tabela cresce). Criado
+`idx_base_dados_leitura_chave (empresa_id, data_da_leitura, hora_da_leitura, nome_do_usuario,
+unidade_consumidora)` via `CREATE INDEX CONCURRENTLY` antes de importar qualquer linha.
+
+### Script descartável, não commitado
+
+`BACKEND/_temp_importar_base_dados_leitura.js` (escrito, rodado, apagado ao final — nunca
+entrou no repositório, mesmo padrão do script de investigação de rede da ADR 0020). Replica
+manualmente a MESMA semântica de `importarArquivo()` (upsert = `DELETE` de todas as chaves do
+arquivo inteiro, uma vez só, seguido de `INSERT` em lotes de 300 com `SAVEPOINT` por lote —
+nunca `DELETE` por lote pequeno: a mesma leitura gera 2 linhas com a MESMA chave quando a
+`especificacao` varia, CON e GTP, confirmado nos dados reais — um `DELETE` escopado a um lote
+menor apagaria uma dessas linhas ao processar o lote seguinte que contém a outra, perdendo dado
+real). CSV lido via `readline`/stream (não carrega o arquivo de 230MB inteiro em uma string);
+xlsx lido com a mesma lógica de conversão de célula de `extrairLinhas` (Date → string pt-BR,
+resultado de fórmula), mas tolerante a coluna desconhecida (o `.xlsx` tinha uma coluna `id`
+extra de export que não existe em `base_dados_leitura` — `extrairLinhas` real rejeitaria isso de
+propósito, mas aqui é arquivo do próprio usuário já inspecionado, não upload de terceiro).
+
+### Dois problemas reais encontrados e corrigidos ao vivo
+
+1. **Estouro de memória no 2º arquivo** (`FATAL ERROR: Ineffective mark-compacts near heap
+   limit`, heap de 4GB). O 1º arquivo (1.048.575 linhas) já tinha *commitado* com sucesso antes
+   do crash — confirmado com `SELECT count(*)` batendo exato depois, nada corrompido (o processo
+   morre, a conexão cai, o Postgres desfaz a transação em aberto sozinho). Corrigido subindo o
+   teto pra 12GB (`--max-old-space-size=12288`, máquina tem 34GB) e liberando o array de ~1
+   milhão de objetos entre arquivos (`linhas.length = 0` + `global.gc()` explícito via
+   `--expose-gc`) — sem isso a memória do arquivo anterior não era coletada a tempo do próximo.
+   Script reiniciado pulando o 1º arquivo (já importado), sem reprocessar.
+
+2. **Lentidão severa no 2º arquivo depois do reinício** (60 mil linhas em 10min, contra 1 milhão
+   em ~2min antes). Investigado via `pg_stat_activity`: sessões repetidas presas em `SELECT
+   set_config($1, $2, true)` — a mesma query que `abrirContextoTenant` roda. A causa real, só
+   descoberta depois: `nodemon` (rodando o servidor real desde muito antes desta sessão) observa
+   `watching path(s): *.*` — **o diretório `BACKEND` inteiro**, sem allowlist — e o script
+   descartável tinha sido criado ali dentro. Cada criação/edição do `_temp_importar_...js`
+   disparava um reinício do servidor real, derrubando o job de coleta (Copel) no meio de um
+   ciclo — o que corresponde exatamente ao padrão de sessão travada observado. Achado colateral:
+   nas primeiras vezes que vi essas sessões travadas, tomei elas por órfãs de teste e as encerrei
+   com `pg_terminate_backend` — em retrospecto, é mais provável que fossem consequência dos
+   reinícios do nodemon, não órfãs de verdade; registrado aqui para não repetir esse diagnóstico
+   errado numa próxima vez (checar `nodemon` observando a pasta ANTES de suspeitar de sessão
+   órfã, quando o padrão for "sessões presas aparecem em pares, se repetem com PIDs novos").
+   Perguntado ao usuário como prosseguir — escolheu pausar o servidor até o import terminar.
+   Servidor parado (`Stop-Process` nos PIDs do `nodemon`/`node src/server.js`), import concluiu
+   os 2 arquivos restantes de ~1 milhão de linhas em ~103s cada (sem contenção), script apagado,
+   servidor religado (`preview_start`) — ciclo de coleta reiniciou sozinho, login novo na Copel,
+   comportamento já conhecido e esperado (ADR 0019/0020, "próximo ciclo cobre o resto").
+
+### Resultado final
+
+**3.511.075 linhas** (1.048.575 × 3 + 365.218 + 132), 0 lotes com falha em nenhum
+dos 5 arquivos. `SELECT count(*)` bate exato com a soma dos logs de cada arquivo. Amostra
+conferida: pares CON/GTP da mesma UC/data/hora preservados (não deduplicados incorretamente),
+`mes_ref_livro` uniforme em `2026-08-01` nas 3,5 milhões de linhas. `npm test` (12/12) voltou a
+passar depois do servidor religado, mais rápido que antes (índices novos ajudando também nas
+tabelas já existentes usadas pela suíte).

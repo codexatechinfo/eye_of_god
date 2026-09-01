@@ -730,3 +730,52 @@ Verificado ao vivo contra o banco: `obterUltimaUcRealizadaPorColaborador(db, '01
 esconde todo mundo). `npm test` (12/12), `node --check`, `ng build --configuration development`
 limpos. Novamente não verificado visualmente no navegador (mesma limitação do Adendo 11, sem
 credencial de login).
+
+## Adendo 13 — reescrita sobre `base_dados_leitura`, e achado de importação diária travada
+
+Usuário trouxe o MESMO print do Adendo 12 (`NELSON MACHADO GONCALVES`) de novo, com uma
+correção de princípio arquitetural: "a posição do ponto tem que ser baseada na última execução
+de hoje... a extração do MS [`contr_execucao_leitura`, o export do scraper] é apenas pra
+identificar as situações do livro e quais as reais UCs que foram a campo, o resto todo é
+construído em cima de `base_dados_leitura`".
+
+O Adendo 12 tinha filtrado `obterUltimaUcRealizadaPorColaborador` por
+`contr_execucao_leitura.data_import` — resolvia o sintoma reportado, mas continuava presa ao
+instante do CICLO DE RASPAGEM (`hora_import`), não ao da leitura real, quebrando a mesma regra
+que motivou a ADR 0025 inteira (deslocamento/km/jornada/impedimentos já reconstruídos sobre
+`base_dados_leitura` por esse motivo). Reescrita a função inteira: `SELECT DISTINCT ON
+(nome_do_usuario) ... FROM base_dados_leitura ... WHERE data_da_leitura = $1` (exato, não
+`<=`), `JOIN coordenadas_ucs_mineradas` (mesmo padrão de pular pra leitura anterior COM
+coordenada, agora só dentro do mesmo dia real de leitura, não do ciclo de raspagem).
+`contr_execucao_leitura` deixou de ser tocado por esta função — passa a valer 100% a regra do
+usuário. `livro` (sem zero à esquerda em `base_dados_leitura`) reformatado com `LPAD(...,6,'0')`
+pra continuar batendo com `atividadeDe(colaborador)?.livros` no clique do marcador (confirmado
+ao vivo: 100% das linhas de `contr_execucao_leitura` têm exatamente 6 caracteres, `LPAD` seguro).
+
+**Achado crítico ao testar, antes de considerar pronto**: `obterUltimaUcRealizadaPorColaborador
+(db, '01/09/2026')` (hoje) devolveu **zero linhas**. Investigado: `base_dados_leitura` não tem
+NENHUM registro de `data_da_leitura = '01/09/2026'`, e a contagem por dia dos últimos dias
+mostra queda abrupta — `28/08`: 47.675, `29/08`: 2.582, `30/08`: 167, `31/08`: 132, `01/09`: 0 —
+contra ~150 mil/dia em dias anteriores (`24/08`-`27/08`). Isso indica a importação diária dessa
+tabela (ADR 0024, prevista como "carga contínua") parece **travada ou degradada** há alguns
+dias, não é só "hoje ainda não rodou". Trazido ao usuário antes de prosseguir: reescrever
+100% sobre `base_dados_leitura` (como pedido) deixaria o mapa vazio o dia inteiro enquanto essa
+importação não corre. Apresentadas 3 opções — investigar a importação primeiro, implementar
+mesmo assim aceitando o vazio, ou manter um fallback pra `contr_execucao_leitura` quando
+`base_dados_leitura` não tiver dado do dia. Usuário escolheu **implementar mesmo assim,
+aceitando o vazio** — confirma o princípio (nunca mostrar posição/livro de um instante que não
+é o real) mesmo com o custo de o mapa ficar sem marcador nenhum enquanto a importação diária
+estiver atrasada. A investigação de por que a importação caiu fica como item separado, não
+resolvido aqui.
+
+### Verificação
+
+- `npm test` (12/12), `node --check` limpos
+- `obterUltimaUcRealizadaPorColaborador(db, '01/09/2026')`: 0 linhas (sem dado do dia em
+  `base_dados_leitura`, comportamento aceito pelo usuário)
+- `obterUltimaUcRealizadaPorColaborador(db, '28/08/2026')`: 173 linhas, `livro` sempre com 6
+  dígitos (`/^\d{6}$/`), NELSON MACHADO GONCALVES presente
+- Consulta rápida (~20-25ms) — já coberta pelo índice `idx_base_dados_leitura_usuario_data
+  (empresa_id, nome_do_usuario, data_da_leitura)`, criado na ADR 0025, sem índice novo
+- Não verificado visualmente no navegador (mesma limitação dos Adendos 11/12, sem credencial de
+  login)

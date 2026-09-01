@@ -766,42 +766,56 @@ async function obterSuspensoesHoje(db, dataConsultaIso) {
   return porColaborador;
 }
 
-// Última UC que cada colaborador realizou, em QUALQUER dia (não só hoje) —
-// usado pra posicionar o ícone dele no mapa (aba Trilho) mesmo sem
-// atividade hoje. `data_import`/`hora_import` vêm junto pra dar pro
-// frontend mostrar "última leitura em DD/MM" — sem isso, um colaborador
-// cuja última UC com coordenada é de meses atrás apareceria no mapa
-// exatamente igual a alguém ativo agora.
+// Última UC que cada colaborador realizou NO DIA `dataBr` — usada pra
+// posicionar o ícone dele no mapa (aba Trilho). Sem UC realizada naquele
+// dia, o colaborador não aparece na resposta (frontend não desenha
+// marcador nenhum pra ele).
+//
+// Reescrita sobre `base_dados_leitura` (ADR 0024/0025), não
+// `contr_execucao_leitura` — mesmo princípio das outras funções desta
+// família (obterJornadaColaborador acima, buscarEventosLeitura em
+// massivasService.js): `contr_execucao_leitura` (o export do MS/scraper)
+// serve só pra saber a SITUAÇÃO do livro (Pendente/Atribuída/Em Execução) e
+// quais UCs são as reais atribuídas a campo — QUALQUER coisa que dependa de
+// QUANDO algo aconteceu de verdade (posição no mapa incluído) é construída
+// em cima de `base_dados_leitura`, que tem `data_da_leitura`/
+// `hora_da_leitura` reais por UC. Uma versão anterior desta função filtrava
+// por `contr_execucao_leitura.data_import = $1` (ver Adendo 12 da ADR
+// 0021) — resolvia o sintoma (posição de dias atrás) mas continuava presa
+// ao instante do CICLO DE RASPAGEM, não ao da leitura real; reescrita
+// direto sobre a fonte certa em vez de remendar o filtro de novo.
 //
 // O JOIN com coordenadas_ucs_mineradas (ADR 0021) fica DENTRO do
 // DISTINCT ON de propósito (não é um LEFT JOIN nem um filtro aplicado
 // depois): isso faz o ORDER BY ... LIMIT 1 implícito do DISTINCT ON
-// escolher, pra cada colaborador, a linha de maior id dentre as que TÊM
-// coordenada — ou seja, já pula automaticamente pra UC anterior COM
-// COORDENADA, DENTRO DO MESMO DIA (`data_import = $1`), se a mais recente
-// não tiver match (só ~4% das UCs não têm). Colaborador só fica de fora se
-// NENHUMA UC que ele realizou NAQUELE DIA tiver coordenada — bem raro. Se
-// reescrever isso um dia, manter o JOIN dentro do DISTINCT ON, não mover
-// pra depois (perde esse fallback automático).
+// escolher, pra cada colaborador, a leitura mais recente do dia dentre as
+// que TÊM coordenada — pula automaticamente pra uma leitura anterior DO
+// MESMO DIA se a mais recente não tiver match (só ~4% das UCs não têm).
+// Colaborador só fica de fora se NENHUMA leitura dele naquele dia tiver
+// coordenada, ou se ele não leu nada naquele dia — nos dois casos, correto
+// sumir do mapa (não cair pra outro dia).
 //
-// `dataBr` ("DD/MM/YYYY") filtra pro dia selecionado no calendário da barra
-// — antes esta consulta não tinha filtro de data nenhum (sempre a última
-// UC realizada em QUALQUER dia), então um colaborador sem nenhuma
-// atividade hoje aparecia no mapa com a posição/rota de dias atrás.
-// Usuário reportou com print: marcador de NELSON MACHADO GONCALVES restando
-// "última leitura em 28/08" apesar de ele ter atividade só de hoje na
-// lista da esquerda, e o clique abrindo o livro DAQUELE dia antigo, não o
-// de hoje — o fallback acima (que pula UC sem coordenada) estava pulando
-// pra um dia inteiro diferente, não só pra outra UC do mesmo dia.
+// `livro` vem de `base_dados_leitura` sem zero à esquerda (`livro::int`,
+// ver ADR 0025 — formato diverge de `contr_execucao_leitura`); reformatado
+// aqui de volta pro padrão de 6 dígitos (confirmado ao vivo: 100% das
+// linhas de `contr_execucao_leitura` têm exatamente 6 caracteres) porque o
+// clique no marcador (`mapa-bases.ts`) casa esse valor contra
+// `atividadeDe(colaborador)?.livros`, que vem de `listarAtividadeHoje`
+// (formato `contr_execucao_leitura`, COM zero à esquerda).
 async function obterUltimaUcRealizadaPorColaborador(db, dataBr) {
   const { rows } = await db.query(
     `
-    SELECT DISTINCT ON (c.colaborador)
-      c.colaborador, c.uc, c.livro, c.data_import, c.hora_import, m.latitude, m.longitude
-    FROM contr_execucao_leitura c
-    JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = c.uc
-    WHERE c.colaborador IS NOT NULL AND c.codigo IS NOT NULL AND c.data_import = $1
-    ORDER BY c.colaborador, c.id DESC
+    SELECT DISTINCT ON (b.nome_do_usuario)
+      b.nome_do_usuario AS colaborador, b.unidade_consumidora AS uc,
+      LPAD(b.livro::text, 6, '0') AS livro,
+      b.data_da_leitura AS data_import, b.hora_da_leitura AS hora_import,
+      m.latitude, m.longitude
+    FROM base_dados_leitura b
+    JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = b.unidade_consumidora
+    WHERE b.nome_do_usuario IS NOT NULL
+      AND b.data_da_leitura = $1
+      AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+    ORDER BY b.nome_do_usuario, b.hora_da_leitura DESC, (b.especificacao = 'CON') DESC
     `,
     [dataBr],
   );

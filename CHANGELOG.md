@@ -10,10 +10,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 - Mapa (aba Trilho) mostrava marcador e rota de colaborador sem nenhuma atividade no dia
   filtrado — o marcador usava sempre a última posição conhecida de qualquer dia, sem checar se
   havia serviço no dia selecionado no calendário. Agora só aparece quem tem atividade no dia
-  filtrado. Causa raiz mais profunda achada em seguida: a própria consulta de posição
-  (`/colaboradores/localizacoes`) nunca teve filtro de data — mesmo com atividade hoje, um
-  colaborador cujas UCs de hoje não tivessem coordenada cadastrada caía de volta pra uma UC de
-  dias atrás. Corrigido na fonte. Ver Adendos 11 e 12 da [ADR
+  filtrado. A consulta de posição (`/colaboradores/localizacoes`) foi reescrita sobre
+  `base_dados_leitura` (data/hora reais da leitura, não o ciclo de raspagem do scraper) —
+  mesmo princípio da ADR 0025. Achado no caminho: a importação diária de `base_dados_leitura`
+  parece travada ou degradada há alguns dias (quase zero linhas desde 29/08) — enquanto isso,
+  o mapa fica sem marcador nenhum (decisão deliberada: nunca mostrar posição de um instante
+  que não é o real). Ver Adendos 11, 12 e 13 da [ADR
   0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md).
 
 - Barra lateral (aba Trilho) e painel de detalhe do mesmo livro podiam mostrar números

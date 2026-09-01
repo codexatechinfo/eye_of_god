@@ -110,7 +110,7 @@ const CONFIG_IMPORTACAO = {
     colunas: [
       'mes_ref', 'regional', 'municipio', 'local', 'etapa', 'livro', 'ultimo_executor',
       'primeira', 'ultima', 'prazo_calendario', 'dias_iniciais', 'dias_finais',
-      'tempo_de_execucao', 'volume_de_leituras', 'calendario_mes_seguinte',
+      'tempo_de_execucao', 'volume_de_leituras',
     ],
   },
   suspensao: {

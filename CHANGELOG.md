@@ -88,6 +88,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   Contrato de API (`/massivas/...`) e texto visível ao usuário não mudaram. Ver [ADR
   0026](docs/adr/0026-rename-massivas-para-monitoramento.md).
 
+### Removido
+
+- Coluna `calendario_mes_seguinte` de `prazo_reg_livros` — não usada em nenhuma consulta do
+  app, só ocupava espaço no allowlist de importação. Removida do allowlist também, pra uma
+  planilha futura com essa coluna ser rejeitada de forma clara em vez de falhar tentando
+  gravar numa coluna que não existe mais. Ver Adendo 6 da [ADR
+  0015](docs/adr/0015-percentual-execucao-e-prazo-regulatorio-por-livro.md).
+
 ### Adicionado
 
 - Nova tabela `base_dados_leitura` (empresa_id + RLS, `id` autoincremento), réplica exata da

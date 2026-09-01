@@ -267,3 +267,25 @@ Angular continuam passando.
   barra+% (43% em âmbar, batendo com 111/(111+145)); aba Massivas com "Progresso" mas sem
   "Prazo regulatório".
 - Suíte de isolamento de tenant (12 testes) e build do Angular continuam passando.
+
+## Adendo 6 — coluna `calendario_mes_seguinte` removida de `prazo_reg_livros`
+
+Usuário pediu pra remover a coluna `calendario_mes_seguinte` de `prazo_reg_livros`. Confirmado
+antes de apagar: nenhuma consulta do app lê essa coluna (só `mes_ref`, `etapa`, `livro`,
+`dias_finais`, `prazo_calendario` são usados, em `monitoramentoService.js`/
+`atividadeColaboradoresService.js`), nenhum índice nem policy de RLS depende dela — só
+aparecia no allowlist de colunas aceitas pela importação de planilha
+(`importacaoConfig.js`). `ALTER TABLE prazo_reg_livros DROP COLUMN calendario_mes_seguinte`
+executado (13.880 linhas na tabela, todas com valor preenchido nessa coluna, mas isso não
+impede o drop). `calendario_mes_seguinte` removido do array `colunas` de `prazo_reg_livros`
+em `importacaoConfig.js` — sem isso, uma importação futura com essa coluna na planilha
+continuaria sendo aceita pelo allowlist e falharia tentando gravar numa coluna que não existe
+mais; agora é rejeitada de forma clara ("Coluna... não existe nessa tabela") na validação do
+cabeçalho, antes de tentar inserir.
+
+### Verificação
+
+- `node --check` no arquivo de config alterado, `npm test` (12/12)
+- `listarAtividadeHoje`/`obterResumo` (que fazem `JOIN`/consulta em `prazo_reg_livros`)
+  testados direto contra o banco depois do `DROP COLUMN` — continuam funcionando normalmente
+- `information_schema.columns` confirmando a coluna removida (16 colunas restantes)

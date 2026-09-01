@@ -1093,6 +1093,15 @@ async function obterEventosPorLivrosAteData(db, livros, dataBr) {
   // existindo). Com o array de inteiros direto como parâmetro, o planner
   // sabe exatamente quais valores buscar e usa o índice de verdade.
   const livrosInt = [...new Set(livros.map(l => Number(l)).filter(Number.isFinite))];
+  // work_mem padrão do servidor (4MB) força os dois DISTINCT ON abaixo (até
+  // 1,3 milhão de linhas do lado de contr_execucao_leitura) a fazer sort
+  // externo em disco — medido ao vivo com EXPLAIN (ANALYZE, BUFFERS): ~2,5s
+  // a mais por causa do spill. SET LOCAL vale só para esta transação (cada
+  // requisição já roda dentro de uma, via abrirContextoTenant) e não exige
+  // privilégio de superusuário — ALTER SYSTEM (mudança global, permanente)
+  // tentado primeiro, mas o papel de conexão da aplicação não tem esse
+  // privilégio no Supabase self-hosted (só supabase_admin tem).
+  await db.query("SET LOCAL work_mem = '160MB'");
   const { rows } = await db.query(
     `
     WITH roster AS (

@@ -179,3 +179,81 @@ hoje (sem UC de data futura possível, o filtro seria no-op ali).
   `obterEventosPorLivrosAteData` soma ~6s (59 mil linhas, ~700 livros de uma vez). Aceitável
   pro polling de 60s deste endpoint, mas cresce com o volume de `base_dados_leitura` — watch-item
   pra revisitar se a tabela crescer muito mais
+
+## Adendo 2 — Continuando o ajuste de performance de `obterEventosPorLivrosAteData` (2026-09-01)
+
+Retomado o watch-item do Adendo 1. `EXPLAIN (ANALYZE, BUFFERS)` ao vivo (444 livros ativos,
+82 mil linhas de retorno) achou a causa real do tempo: **`work_mem` no padrão do servidor
+(4MB)** forçava os dois `DISTINCT ON` da consulta (um sobre até 1,3 milhão de linhas de
+`contr_execucao_leitura`, outro sobre ~135 mil linhas pós-filtro de `base_dados_leitura`) a
+fazer sort externo em disco (`Sort Method: external merge`) em vez de em memória — sozinho isso
+somava ~2,5s ao tempo total. `effective_cache_size` também estava em 128MB (config padrão do
+`docker-compose` do Supabase self-hosted), subestimando quanto dado cabe em cache e enviesando o
+planner contra índices.
+
+**Achado de acesso**: o papel `postgres` (usado pela aplicação e por `psql` normalmente) NÃO é
+superusuário real neste Supabase self-hosted — `ALTER SYSTEM SET work_mem = ...` devolveu
+`permission denied to set parameter`. O superusuário de verdade é `supabase_admin`
+(credencial em `POSTGRES_PASSWORD`/`POSTGRES_USER` do ambiente do container). Conectado como
+`supabase_admin`, aplicado globalmente e sem restart (`work_mem`/`effective_cache_size` são
+parâmetros de contexto `user`, só precisam de `pg_reload_conf()`, diferente de `shared_buffers`
+que é `postmaster` e exigiria reiniciar o container — não feito, container tem o job de coleta
+24/7 rodando e uma reinicialização derrubaria as conexões em andamento; fica como opção futura,
+só com confirmação explícita antes por causa desse risco):
+
+```sql
+-- executado como supabase_admin, não como postgres
+ALTER SYSTEM SET work_mem = '64MB';              -- era 4MB (default)
+ALTER SYSTEM SET effective_cache_size = '4GB';   -- era 128MB (config file)
+SELECT pg_reload_conf();
+```
+
+Mesmo com o novo default global, o sort do lado `contr_execucao_leitura` (até 1,3 milhão de
+linhas, ~38MB) ainda passava de 64MB de working set com overhead de tupla e continuava
+espalhando pra disco — mas SÓ nesta função (chamada com até ~700 livros de uma vez; o resto do
+sistema usa `work_mem` bem menor por consulta). Em vez de subir o default global mais alto
+(risco: `work_mem` multiplica por operação de sort/hash × até 100 conexões simultâneas),
+`obterEventosPorLivrosAteData` ganhou `SET LOCAL work_mem = '160MB'` logo antes da consulta —
+vale só para a transação da requisição atual (cada requisição já roda dentro de uma via
+`abrirContextoTenant`), reverte sozinho no commit/rollback, e não exige privilégio nenhum (é
+`SET`, não `ALTER SYSTEM` — contexto `user`, qualquer papel pode ajustar pra própria sessão).
+
+**Índice novo tentado, não ajudou o caso de lote**: criado
+`idx_contr_execucao_leitura_livro_uc_id (livro, uc, id DESC)` — mesma ordem do `DISTINCT ON`,
+pra eliminar o sort com um Index Scan já ordenado. Funciona bem pra 1 livro só (útil pro painel,
+`obterUcsDoLivro`/`consultarUcsBrutasDoLivro`), mas com ~444 valores no `livro = ANY(...)` da
+consulta em lote o planner continua preferindo Bitmap Heap Scan (não ordenado) + sort — a
+quantidade de livros ultrapassa o ponto onde ler o índice em ordem por-valor deixa de compensar.
+Mantido mesmo assim: não atrapalha e ajuda o caso de livro único, além de já ser coberto pelo
+`idx_contr_execucao_leitura_empresa_livro` existente pra filtragem, não pra ordenação.
+
+**O que resta, não implementado**: o `Parallel Seq Scan` sobre as 3,5 milhões de linhas de
+`base_dados_leitura` (~2,2-4,5s, variável — parece haver contenção real do job de coleta 24/7
+concorrente) continua sendo o maior custo isolado e não tem solução simples sem (a) aumentar
+`shared_buffers` (precisa reiniciar o container) ou (b) uma camada de cache/materialização —
+essa consulta inteira é recomputada do zero a cada poll de 60s da barra lateral, mesmo
+`base_dados_leitura` sendo alimentada por import em lote diário (não muda a cada minuto).
+Nenhuma das duas opções foi implementada nesta sessão — envolvem decisão de risco/tradeoff do
+usuário (restart do container / staleness de cache), não só execução mecânica.
+
+Achado colateral (fora de escopo desta consulta, mas sistêmico): `listarAtividadeHoje` usa
+`Promise.all([db.query(...), ...])` com o MESMO client de conexão (`req.db`, uma transação por
+requisição) pra "paralelizar" 3 consultas — mas um client `pg` só processa uma consulta por vez
+por conexão; o driver enfileira e serializa (confirmado pelo aviso de depreciação visto nos
+logs: "Calling client.query() when the client is already executing a query is deprecated").
+Na prática o tempo dessas 3 consultas SOMA em vez de rodar em paralelo. Esse padrão se repete em
+outras funções (ex.: `obterUcsDoLivro`). Não corrigido aqui — mudar exigiria repensar conexões
+por sub-consulta dentro de uma mesma transação/contexto de tenant, escopo maior que esta
+função específica.
+
+### Verificação
+
+- `npm test` (12/12), `node --check` limpos
+- `EXPLAIN (ANALYZE, BUFFERS)` confirmando os dois sorts saindo de `external merge Disk` pra
+  `quicksort Memory` com `work_mem` maior
+- Latência de `obterEventosPorLivrosAteData` (444 livros): variou de ~5,6s a ~8,6s entre
+  execuções nesta sessão (baseline antes desta mudança: ~6-8s) — melhora real mas parcial;
+  variância alta atribuída a I/O do WSL2/Docker e possível contenção com o job de coleta
+  concorrente, não medida de forma isolada
+- Latência do painel (`obterUcsDoLivro`, livro único): ~2,2-2,3s, sem mudança perceptível (já
+  era dominado pelo mesmo tipo de I/O de base, não por sort)

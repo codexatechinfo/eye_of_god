@@ -42,6 +42,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   Nested Loop em vez de Hash Join nos `JOIN`s com tabelas pequenas — de 8-11 minutos por
   requisição para 1.5-6s. Ver [ADR 0023](docs/adr/0023-timeout-monitoramento-livros.md).
 
+### Alterado
+
+- Performance da barra lateral (aba Trilho): `work_mem` do Postgres estava no padrão de 4MB,
+  forçando consultas com `DISTINCT ON` sobre centenas de milhares de linhas a espalhar sort pra
+  disco. Aumentado globalmente pra 64MB (`effective_cache_size` também, de 128MB pra 4GB — sem
+  reiniciar o banco) e a consulta mais pesada (`obterEventosPorLivrosAteData`) ganhou um limite
+  próprio maior (160MB) só pra sua transação. Melhora real mas parcial — o maior custo restante
+  (varredura de `base_dados_leitura`, 3,5 milhões de linhas) segue sem solução simples. Ver
+  Adendo 2 da [ADR 0025](docs/adr/0025-timeline-deslocamento-jornada-base-dados-leitura.md).
+
 ### Adicionado
 
 - Nova tabela `base_dados_leitura` (empresa_id + RLS, `id` autoincremento), réplica exata da

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { resumo, opcoesFiltro, detalhe, historicoLivro, ucsLivro, regimeSucessivo } = require('../controllers/massivasController');
+const { resumo, opcoesFiltro, detalhe, historicoLivro, ucsLivro, regimeSucessivo } = require('../controllers/monitoramentoController');
 
 router.get('/resumo', resumo);
 router.get('/opcoes-filtro', opcoesFiltro);

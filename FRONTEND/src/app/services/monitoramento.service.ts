@@ -2,32 +2,32 @@ import { Injectable, OnDestroy, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 
-export interface ContagemMassivas {
+export interface ContagemMonitoramento {
   livros: number;
   leituras: number;
 }
 
 export interface FaixasDias {
-  menor27: ContagemMassivas;
-  igual33: ContagemMassivas;
-  maior34: ContagemMassivas;
+  menor27: ContagemMonitoramento;
+  igual33: ContagemMonitoramento;
+  maior34: ContagemMonitoramento;
 }
 
-export interface ResumoMassivas {
+export interface ResumoMonitoramento {
   sucesso: boolean;
   dataImport: string | null;
   horaImport: string | null;
-  pendentes: ContagemMassivas;
-  atribuidas: ContagemMassivas;
-  emExecucao: ContagemMassivas;
-  total: ContagemMassivas;
-  noPrazo: ContagemMassivas;
-  prazoFinal: ContagemMassivas;
-  atrasadas: ContagemMassivas;
+  pendentes: ContagemMonitoramento;
+  atribuidas: ContagemMonitoramento;
+  emExecucao: ContagemMonitoramento;
+  total: ContagemMonitoramento;
+  noPrazo: ContagemMonitoramento;
+  prazoFinal: ContagemMonitoramento;
+  atrasadas: ContagemMonitoramento;
   faixasDias: FaixasDias;
 }
 
-export interface OpcoesFiltroMassivas {
+export interface OpcoesFiltroMonitoramento {
   sucesso: boolean;
   regionais: string[];
   etapas: string[];
@@ -54,26 +54,26 @@ export interface DetalheLinha {
   data_recebimento: string | null;
 }
 
-export interface DetalheMassivas {
+export interface DetalheMonitoramento {
   sucesso: boolean;
   dataImport: string | null;
   horaImport: string | null;
   linhas: DetalheLinha[];
 }
 
-export type StatusMassivas = 'todos' | 'pendentes' | 'atribuidas' | 'emExecucao';
-export type VisualizacaoMassivas = 'livros' | 'leituras';
-export type PrazoMassivas = '' | 'noPrazo' | 'final' | 'atrasada';
+export type StatusMonitoramento = 'todos' | 'pendentes' | 'atribuidas' | 'emExecucao';
+export type VisualizacaoMonitoramento = 'livros' | 'leituras';
+export type PrazoMonitoramento = '' | 'noPrazo' | 'final' | 'atrasada';
 export type TipoServico = 'todos' | 'leitura' | 'releitura' | 'massiva' | 'leiturarelitura';
 // Filtro clicável das faixas de dias (aba Monitoramento de Livros — ver ADR
 // 0012 Adendo 4). Só faz efeito lá; na aba Massivas o backend ignora porque
 // o join com prazo_reg_livros usa o livro de contr_execucao_leitura.
-export type FaixaDiasMassivas = '' | 'menor27' | 'igual33' | 'maior34';
+export type FaixaDiasMonitoramento = '' | 'menor27' | 'igual33' | 'maior34';
 
 // Escopo fixo da aba: "massiva" é a aba Massivas (só massiva, sem opção de
 // trocar); "leiturarelitura" é a aba Monitoramento de Livros (leitura e
 // releitura, nunca massiva — tem aba própria). Ver ADR 0010.
-export type EscopoMassivas = 'massiva' | 'leiturarelitura';
+export type EscopoMonitoramento = 'massiva' | 'leiturarelitura';
 
 export interface HistoricoLivroEvento {
   status: string;
@@ -90,7 +90,7 @@ export interface HistoricoLivroEvento {
   mudancaColaborador: boolean;
 }
 
-export interface HistoricoLivroMassivas {
+export interface HistoricoLivroMonitoramento {
   sucesso: boolean;
   livro: string;
   eventos: HistoricoLivroEvento[];
@@ -98,7 +98,7 @@ export interface HistoricoLivroMassivas {
 
 // Uma linha de UC como vem de GET /massivas/livro-ucs — mesmo shape usado
 // tanto em "atuais" (estado atual de cada UC) quanto em "timeline" (quando
-// cada UC virou realizada). Ver massivasService.js#obterUcsDoLivro.
+// cada UC virou realizada). Ver monitoramentoService.js#obterUcsDoLivro.
 export interface UcLivro {
   uc: string;
   codigo: string | null;
@@ -112,25 +112,25 @@ export interface UcLivro {
   hora_import: string | null;
 }
 
-export interface UcsLivroMassivas {
+export interface UcsLivroMonitoramento {
   sucesso: boolean;
   livro: string;
   atuais: UcLivro[];
   timeline: UcLivro[];
 }
 
-// Sem providedIn: 'root' de propósito — cada <app-massivas-view> (aba
+// Sem providedIn: 'root' de propósito — cada <app-monitoramento-view> (aba
 // Massivas e aba Monitoramento de Livros) precisa da sua própria instância
 // com filtro próprio, não uma só compartilhada entre as duas abas. Ver
-// providers: [MassivasService] em massivas-view.ts.
+// providers: [MonitoramentoService] em monitoramento-view.ts.
 @Injectable()
-export class MassivasService implements OnDestroy {
+export class MonitoramentoService implements OnDestroy {
   private apiUrl = environment.apiUrl;
 
   // Setado uma vez por iniciar() e nunca mudado depois — é pra onde
   // limparFiltros()/onTipoServicoChange() voltam o filtro de tipo, nunca
   // pro genérico 'todos' (que incluiria massiva na aba de leitura/releitura).
-  private escopo: EscopoMassivas = 'leiturarelitura';
+  private escopo: EscopoMonitoramento = 'leiturarelitura';
 
   regionais = signal<string[]>([]);
   etapas = signal<string[]>([]);
@@ -139,14 +139,14 @@ export class MassivasService implements OnDestroy {
   filtroLivro = signal('');
   filtroEtapa = signal('');
   filtroColaborador = signal('');
-  filtroStatus = signal<StatusMassivas>('todos');
-  filtroPrazo = signal<PrazoMassivas>('');
-  filtroFaixaDias = signal<FaixaDiasMassivas>('');
+  filtroStatus = signal<StatusMonitoramento>('todos');
+  filtroPrazo = signal<PrazoMonitoramento>('');
+  filtroFaixaDias = signal<FaixaDiasMonitoramento>('');
   filtroTipoServico = signal<TipoServico>('leiturarelitura');
 
-  visualizacao = signal<VisualizacaoMassivas>('livros');
+  visualizacao = signal<VisualizacaoMonitoramento>('livros');
 
-  resumo = signal<ResumoMassivas | null>(null);
+  resumo = signal<ResumoMonitoramento | null>(null);
   carregando = signal(true);
   erro = signal<string | null>(null);
 
@@ -157,7 +157,7 @@ export class MassivasService implements OnDestroy {
   // Paginação da tabela "Detalhe por livro" — client-side (o detalhe inteiro
   // já vem numa única resposta). Fica no service (não no componente) pra
   // resetar de forma centralizada em buscarTudo(), e porque cada aba já tem
-  // sua própria instância de MassivasService (ADR 0010), então a página fica
+  // sua própria instância de MonitoramentoService (ADR 0010), então a página fica
   // isolada por aba do mesmo jeito que os outros filtros já ficam.
   paginaAtual = signal(1);
   itensPorPagina = signal(50);
@@ -189,7 +189,7 @@ export class MassivasService implements OnDestroy {
   // (nunca muda depois). Antes disso o service não busca nada sozinho — o
   // fetch automático no constructor rodava antes do @Input() estar
   // disponível, então sempre pegava o valor padrão errado pra aba.
-  iniciar(escopo: EscopoMassivas): void {
+  iniciar(escopo: EscopoMonitoramento): void {
     this.escopo = escopo;
     this.filtroTipoServico.set(escopo);
     this.carregarOpcoesFiltro();
@@ -209,7 +209,7 @@ export class MassivasService implements OnDestroy {
     let params = new HttpParams();
     if (this.filtroTipoServico() !== 'todos') params = params.set('tipoServico', this.filtroTipoServico());
 
-    this.http.get<OpcoesFiltroMassivas>(`${this.apiUrl}/massivas/opcoes-filtro`, { params }).subscribe({
+    this.http.get<OpcoesFiltroMonitoramento>(`${this.apiUrl}/massivas/opcoes-filtro`, { params }).subscribe({
       next: resposta => {
         this.regionais.set(resposta.regionais);
         this.etapas.set(resposta.etapas);
@@ -240,7 +240,7 @@ export class MassivasService implements OnDestroy {
     this.carregando.set(true);
     this.erro.set(null);
 
-    this.http.get<ResumoMassivas>(`${this.apiUrl}/massivas/resumo`, { params: this.montarParams() }).subscribe({
+    this.http.get<ResumoMonitoramento>(`${this.apiUrl}/massivas/resumo`, { params: this.montarParams() }).subscribe({
       next: resposta => {
         this.resumo.set(resposta);
         this.carregando.set(false);
@@ -256,7 +256,7 @@ export class MassivasService implements OnDestroy {
     this.carregandoDetalhe.set(true);
     this.erroDetalhe.set(null);
 
-    this.http.get<DetalheMassivas>(`${this.apiUrl}/massivas/detalhe`, { params: this.montarParams() }).subscribe({
+    this.http.get<DetalheMonitoramento>(`${this.apiUrl}/massivas/detalhe`, { params: this.montarParams() }).subscribe({
       next: resposta => {
         this.detalhe.set(resposta.linhas);
         this.carregandoDetalhe.set(false);
@@ -310,7 +310,7 @@ export class MassivasService implements OnDestroy {
       this.historicoLivro.set([]);
 
       this.http
-        .get<HistoricoLivroMassivas>(`${this.apiUrl}/massivas/historico-livro`, { params: new HttpParams().set('livro', livro) })
+        .get<HistoricoLivroMonitoramento>(`${this.apiUrl}/massivas/historico-livro`, { params: new HttpParams().set('livro', livro) })
         .subscribe({
           next: resposta => {
             this.cacheHistorico.set(livro, resposta.eventos);
@@ -333,7 +333,7 @@ export class MassivasService implements OnDestroy {
     this.ucsLivro.set([]);
 
     this.http
-      .get<UcsLivroMassivas>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
+      .get<UcsLivroMonitoramento>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
       .subscribe({
         next: resposta => {
           this.ucsLivro.set(resposta.atuais);

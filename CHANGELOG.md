@@ -80,6 +80,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   (vazamento entre tenants) — corrigido antes de considerar pronto. Ver Adendo 3 da [ADR
   0025](docs/adr/0025-timeline-deslocamento-jornada-base-dados-leitura.md).
 
+- Arquivos de código renomeados de `massivas*` pra `monitoramento*` (`massivasController.js`,
+  `massivasRoutes.js`, `massivasService.js`, `massivas.service.ts`, `massivas-view/*` e os
+  tipos/classes correspondentes) — a maior parte do conteúdo real desses arquivos é sobre
+  leitura/releitura de livros, não sobre as tabelas de staging de massiva; o nome antigo podia
+  confundir. Arquivos genuinamente sobre massiva (`coletaMassivas*`, `copelMassivas*`) mantidos.
+  Contrato de API (`/massivas/...`) e texto visível ao usuário não mudaram. Ver [ADR
+  0026](docs/adr/0026-rename-massivas-para-monitoramento.md).
+
 ### Adicionado
 
 - Nova tabela `base_dados_leitura` (empresa_id + RLS, `id` autoincremento), réplica exata da

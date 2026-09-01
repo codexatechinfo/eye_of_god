@@ -124,7 +124,7 @@ export function percentualExecucao(atividade: AtividadeColaborador | undefined |
 }
 
 // Livro com prazo regulatório extremo (mesmos limiares de destaque da
-// tabela de detalhe — ver corPrazoRegulatorio em massivas-view.ts):
+// tabela de detalhe — ver corPrazoRegulatorio em monitoramento-view.ts):
 // >33 dias em QUALQUER status (já estourou o prazo, crítico não importa o
 // que esteja acontecendo com o livro) ou <27 dias mas só em livro já "Em
 // Execução" (livro sendo trabalhado que ainda nem chegou nos 27 dias
@@ -199,7 +199,7 @@ export interface LivroSelecionado {
 
 // Uma UC realizada, no ponto em que virou realizada — mesmo shape de
 // GET /massivas/livro-ucs (campo "timeline"). Ver
-// massivasService.js#listarTimelineUcsRealizadasDoLivro.
+// monitoramentoService.js#listarTimelineUcsRealizadasDoLivro.
 export interface TimelineUcItem {
   uc: string;
   codigo: string | null;
@@ -225,7 +225,7 @@ export interface TimelineUcItem {
   // (sequencia) — não é a ordem cronológica. null quando não há UC
   // realizada anterior (primeira da rota) ou falta coordenada de algum dos
   // dois lados. Só calculado em `atuais`, nunca em `timeline`. Ver
-  // massivasService.js#anexarSegmentosDeslocamento.
+  // monitoramentoService.js#anexarSegmentosDeslocamento.
   intervalo_anterior_segundos: number | null;
   distancia_anterior_metros: number | null;
   velocidade_m_por_min: number | null;
@@ -255,7 +255,7 @@ export interface LocalizacaoColaborador {
 }
 
 // N° de meses consecutivos em que uma UC recebeu o MESMO código de
-// impedimento (ver massivasService.js#obterRegimeSucessivo). Buscado sob
+// impedimento (ver monitoramentoService.js#obterRegimeSucessivo). Buscado sob
 // demanda, só quando o card da UC é expandido.
 export interface RegimeSucessivo {
   uc: string;
@@ -708,7 +708,7 @@ export class ColaboradoresService {
 
   // mostrarCarregando: false nas atualizações automáticas em segundo plano
   // (evita apagar a lista e piscar "Carregando..." a cada 60s com o painel
-  // já aberto — mesmo cuidado do resetarPagina em MassivasService.buscarTudo).
+  // já aberto — mesmo cuidado do resetarPagina em MonitoramentoService.buscarTudo).
   private buscarUcsLivro(livro: string, mostrarCarregando: boolean): void {
     this.erroTimelineLivro.set(null);
     if (mostrarCarregando) {

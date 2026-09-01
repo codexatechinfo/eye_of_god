@@ -3,42 +3,42 @@
   <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-3 mb-5">
     <div class="flex flex-wrap items-center gap-2">
       <select
-        [ngModel]="massivasService.filtroRegional()"
-        (ngModelChange)="massivasService.filtroRegional.set($event); massivasService.buscarTudo()"
+        [ngModel]="monitoramentoService.filtroRegional()"
+        (ngModelChange)="monitoramentoService.filtroRegional.set($event); monitoramentoService.buscarTudo()"
         class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       >
         <option value="">Regional · todas</option>
-        <option *ngFor="let regional of massivasService.regionais()" [value]="regional">{{ regional }}</option>
+        <option *ngFor="let regional of monitoramentoService.regionais()" [value]="regional">{{ regional }}</option>
       </select>
 
       <input
         type="text"
-        [ngModel]="massivasService.filtroLivro()"
-        (ngModelChange)="massivasService.filtroLivro.set($event); massivasService.buscarComDebounce()"
+        [ngModel]="monitoramentoService.filtroLivro()"
+        (ngModelChange)="monitoramentoService.filtroLivro.set($event); monitoramentoService.buscarComDebounce()"
         placeholder="Buscar livro..."
         class="text-xs border border-slate-200 rounded-md px-2 py-1.5 w-32 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       />
 
       <select
-        [ngModel]="massivasService.filtroEtapa()"
-        (ngModelChange)="massivasService.filtroEtapa.set($event); massivasService.buscarTudo()"
+        [ngModel]="monitoramentoService.filtroEtapa()"
+        (ngModelChange)="monitoramentoService.filtroEtapa.set($event); monitoramentoService.buscarTudo()"
         class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       >
         <option value="">Etapa · todas</option>
-        <option *ngFor="let etapa of massivasService.etapas()" [value]="etapa">Etapa {{ etapa }}</option>
+        <option *ngFor="let etapa of monitoramentoService.etapas()" [value]="etapa">Etapa {{ etapa }}</option>
       </select>
 
       <input
         type="text"
-        [ngModel]="massivasService.filtroColaborador()"
-        (ngModelChange)="massivasService.filtroColaborador.set($event); massivasService.buscarComDebounce()"
+        [ngModel]="monitoramentoService.filtroColaborador()"
+        (ngModelChange)="monitoramentoService.filtroColaborador.set($event); monitoramentoService.buscarComDebounce()"
         placeholder="Buscar colaborador..."
         class="text-xs border border-slate-200 rounded-md px-2 py-1.5 w-44 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       />
 
       <select
-        [ngModel]="massivasService.filtroStatus()"
-        (ngModelChange)="massivasService.filtroStatus.set($event); onStatusChange()"
+        [ngModel]="monitoramentoService.filtroStatus()"
+        (ngModelChange)="monitoramentoService.filtroStatus.set($event); onStatusChange()"
         class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       >
         <option value="todos">Status · todos</option>
@@ -51,8 +51,8 @@
            seletor (só existe uma fonte, igual antes da ADR 0006). -->
       <select
         *ngIf="escopo === 'leiturarelitura'"
-        [ngModel]="massivasService.filtroTipoServico()"
-        (ngModelChange)="massivasService.filtroTipoServico.set($event); massivasService.onTipoServicoChange()"
+        [ngModel]="monitoramentoService.filtroTipoServico()"
+        (ngModelChange)="monitoramentoService.filtroTipoServico.set($event); monitoramentoService.onTipoServicoChange()"
         class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       >
         <option value="leiturarelitura">Tipo · todos</option>
@@ -67,8 +67,8 @@
            sozinhos, sem estado duplicado. -->
       <select
         *ngIf="escopo === 'leiturarelitura'"
-        [ngModel]="massivasService.filtroFaixaDias()"
-        (ngModelChange)="massivasService.filtroFaixaDias.set($event); massivasService.buscarTudo()"
+        [ngModel]="monitoramentoService.filtroFaixaDias()"
+        (ngModelChange)="monitoramentoService.filtroFaixaDias.set($event); monitoramentoService.buscarTudo()"
         class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
       >
         <option value="">Prazo regulatório · todos</option>
@@ -78,7 +78,7 @@
       </select>
 
       <button
-        (click)="massivasService.limparFiltros()"
+        (click)="monitoramentoService.limparFiltros()"
         class="text-xs font-medium text-slate-400 hover:text-blue-600 cursor-pointer px-1 transition-colors"
       >
         Limpar
@@ -89,7 +89,7 @@
   <div class="flex justify-end mb-3">
     <button
       type="button"
-      (click)="massivasService.alternarVisualizacao()"
+      (click)="monitoramentoService.alternarVisualizacao()"
       class="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-blue-600 bg-white border border-slate-200 hover:border-blue-300 rounded-full px-3 py-1.5 transition-colors cursor-pointer"
       title="Alternar entre contagem de livros e de leituras"
     >
@@ -99,13 +99,13 @@
         <polyline points="7 23 3 19 7 15" />
         <path d="M21 13v2a4 4 0 0 1-4 4H3" />
       </svg>
-      {{ massivasService.visualizacao() === 'livros' ? 'Livros' : 'Leituras' }}
+      {{ monitoramentoService.visualizacao() === 'livros' ? 'Livros' : 'Leituras' }}
     </button>
   </div>
 
-  <div class="text-center text-slate-400 text-sm py-10" *ngIf="massivasService.carregando()">Carregando...</div>
-  <div class="text-center text-red-500 text-sm py-10" *ngIf="massivasService.erro() && !massivasService.carregando()">
-    {{ massivasService.erro() }}
+  <div class="text-center text-slate-400 text-sm py-10" *ngIf="monitoramentoService.carregando()">Carregando...</div>
+  <div class="text-center text-red-500 text-sm py-10" *ngIf="monitoramentoService.erro() && !monitoramentoService.carregando()">
+    {{ monitoramentoService.erro() }}
   </div>
 
   <!-- Barra de resumo operacional — mesmo visual nas duas abas (Agentes em
@@ -114,7 +114,7 @@
        mudam por escopo. Tudo numa linha só (quebra em telas estreitas via
        flex-wrap), atualiza sozinha a cada 60s e reage ao toggle
        Livros/Leituras. -->
-  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 mb-6" *ngIf="!massivasService.carregando() && !massivasService.erro()">
+  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 mb-6" *ngIf="!monitoramentoService.carregando() && !monitoramentoService.erro()">
     <div class="flex flex-wrap items-stretch gap-x-8 gap-y-4">
       <div>
         <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Agentes em campo</div>
@@ -154,7 +154,7 @@
 
       <!-- Aba Massivas: os 7 contadores clássicos (Pendentes/Atribuídas/Em
            Execução/Total/No Prazo/Prazo Final/Atraso), mesma fonte de
-           sempre (massivasService.resumo()), só que no visual novo. -->
+           sempre (monitoramentoService.resumo()), só que no visual novo. -->
       <ng-container *ngIf="escopo === 'massiva'">
         <button type="button" (click)="selecionarStatus('pendentes')" class="flex items-center gap-2.5 cursor-pointer text-left transition-opacity" [style.opacity]="cardEmDestaque('pendentes') ? 1 : 0.4">
           <span class="w-1 self-stretch rounded-full bg-amber-400 shrink-0"></span>
@@ -282,23 +282,23 @@
   <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
     <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
       <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wide">Detalhe por livro</h3>
-      <span class="text-[11px] text-slate-400" *ngIf="!massivasService.carregandoDetalhe()">
+      <span class="text-[11px] text-slate-400" *ngIf="!monitoramentoService.carregandoDetalhe()">
         {{ intervaloExibido() }}
       </span>
     </div>
 
-    <div class="text-center text-slate-400 text-sm py-10" *ngIf="massivasService.carregandoDetalhe()">Carregando tabela...</div>
-    <div class="text-center text-red-500 text-sm py-10" *ngIf="massivasService.erroDetalhe() && !massivasService.carregandoDetalhe()">
-      {{ massivasService.erroDetalhe() }}
+    <div class="text-center text-slate-400 text-sm py-10" *ngIf="monitoramentoService.carregandoDetalhe()">Carregando tabela...</div>
+    <div class="text-center text-red-500 text-sm py-10" *ngIf="monitoramentoService.erroDetalhe() && !monitoramentoService.carregandoDetalhe()">
+      {{ monitoramentoService.erroDetalhe() }}
     </div>
     <div
       class="text-center text-slate-400 text-sm py-10"
-      *ngIf="!massivasService.carregandoDetalhe() && !massivasService.erroDetalhe() && !massivasService.detalhe().length"
+      *ngIf="!monitoramentoService.carregandoDetalhe() && !monitoramentoService.erroDetalhe() && !monitoramentoService.detalhe().length"
     >
       Nenhum registro encontrado.
     </div>
 
-    <div class="overflow-x-auto max-h-[560px] overflow-y-auto" *ngIf="!massivasService.carregandoDetalhe() && !massivasService.erroDetalhe() && massivasService.detalhe().length">
+    <div class="overflow-x-auto max-h-[560px] overflow-y-auto" *ngIf="!monitoramentoService.carregandoDetalhe() && !monitoramentoService.erroDetalhe() && monitoramentoService.detalhe().length">
       <table class="w-full text-xs">
         <thead class="sticky top-0 bg-slate-50 z-10">
           <tr class="text-left text-slate-500 border-b border-slate-200">
@@ -422,7 +422,7 @@
     <!-- Paginação — client-side, o detalhe inteiro já veio numa resposta só. -->
     <div
       class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-t border-slate-100"
-      *ngIf="!massivasService.carregandoDetalhe() && !massivasService.erroDetalhe() && massivasService.detalhe().length"
+      *ngIf="!monitoramentoService.carregandoDetalhe() && !monitoramentoService.erroDetalhe() && monitoramentoService.detalhe().length"
     >
       <div class="flex items-center gap-2 text-[11px] text-slate-500">
         <span>Linhas por página (máx. 250)</span>
@@ -430,7 +430,7 @@
           type="number"
           min="1"
           max="250"
-          [value]="massivasService.itensPorPagina()"
+          [value]="monitoramentoService.itensPorPagina()"
           (change)="alterarItensPorPagina($any($event.target).value, $any($event.target))"
           class="text-xs border border-slate-200 rounded-md px-1.5 py-1 w-16 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
         />
@@ -440,7 +440,7 @@
           (click)="alterarItensPorPagina(opcao)"
           class="text-[10.5px] font-medium px-1.5 py-0.5 rounded border cursor-pointer transition-colors"
           [ngClass]="
-            massivasService.itensPorPagina() === opcao
+            monitoramentoService.itensPorPagina() === opcao
               ? 'bg-blue-50 text-blue-600 border-blue-200'
               : 'text-slate-400 border-slate-200 hover:border-blue-300 hover:text-blue-600'
           "
@@ -491,9 +491,9 @@
 
   <!-- Popup de histórico do livro -->
   <div
-    *ngIf="massivasService.livroSelecionado() as livro"
+    *ngIf="monitoramentoService.livroSelecionado() as livro"
     class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
-    (click)="massivasService.fecharHistoricoLivro()"
+    (click)="monitoramentoService.fecharHistoricoLivro()"
   >
     <div
       class="w-full max-w-2xl max-h-[80vh] flex flex-col rounded-xl bg-white shadow-xl overflow-hidden"
@@ -506,7 +506,7 @@
         </div>
         <button
           type="button"
-          (click)="massivasService.fecharHistoricoLivro()"
+          (click)="monitoramentoService.fecharHistoricoLivro()"
           class="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -517,19 +517,19 @@
       </div>
 
       <div class="overflow-y-auto px-5 py-4">
-        <div class="text-center text-slate-400 text-sm py-10" *ngIf="massivasService.carregandoHistorico()">Carregando histórico...</div>
-        <div class="text-center text-red-500 text-sm py-10" *ngIf="massivasService.erroHistorico() && !massivasService.carregandoHistorico()">
-          {{ massivasService.erroHistorico() }}
+        <div class="text-center text-slate-400 text-sm py-10" *ngIf="monitoramentoService.carregandoHistorico()">Carregando histórico...</div>
+        <div class="text-center text-red-500 text-sm py-10" *ngIf="monitoramentoService.erroHistorico() && !monitoramentoService.carregandoHistorico()">
+          {{ monitoramentoService.erroHistorico() }}
         </div>
         <div
           class="text-center text-slate-400 text-sm py-10"
-          *ngIf="!massivasService.carregandoHistorico() && !massivasService.erroHistorico() && !massivasService.historicoLivro().length"
+          *ngIf="!monitoramentoService.carregandoHistorico() && !monitoramentoService.erroHistorico() && !monitoramentoService.historicoLivro().length"
         >
           Nenhum histórico encontrado para este livro.
         </div>
 
-        <ol class="relative border-l-2 border-slate-100 ml-2" *ngIf="!massivasService.carregandoHistorico() && massivasService.historicoLivro().length">
-          <li class="mb-5 ml-4" *ngFor="let evento of massivasService.historicoLivro()">
+        <ol class="relative border-l-2 border-slate-100 ml-2" *ngIf="!monitoramentoService.carregandoHistorico() && monitoramentoService.historicoLivro().length">
+          <li class="mb-5 ml-4" *ngFor="let evento of monitoramentoService.historicoLivro()">
             <div class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1.5 bg-slate-300"></div>
             <div class="flex flex-wrap items-center gap-1.5 mb-1">
               <span class="text-[11px] font-semibold text-slate-400 tabular-nums">{{ evento.dataImport }} {{ evento.horaImport }}</span>
@@ -555,18 +555,18 @@
 
         <div class="mt-5 pt-4 border-t border-slate-100">
           <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">UCs do livro</h4>
-          <div class="text-center text-slate-400 text-sm py-6" *ngIf="massivasService.carregandoUcsLivro()">Carregando UCs...</div>
-          <div class="text-center text-red-500 text-sm py-6" *ngIf="massivasService.erroUcsLivro() && !massivasService.carregandoUcsLivro()">
-            {{ massivasService.erroUcsLivro() }}
+          <div class="text-center text-slate-400 text-sm py-6" *ngIf="monitoramentoService.carregandoUcsLivro()">Carregando UCs...</div>
+          <div class="text-center text-red-500 text-sm py-6" *ngIf="monitoramentoService.erroUcsLivro() && !monitoramentoService.carregandoUcsLivro()">
+            {{ monitoramentoService.erroUcsLivro() }}
           </div>
           <div
             class="text-center text-slate-400 text-sm py-6"
-            *ngIf="!massivasService.carregandoUcsLivro() && !massivasService.erroUcsLivro() && !massivasService.ucsLivro().length"
+            *ngIf="!monitoramentoService.carregandoUcsLivro() && !monitoramentoService.erroUcsLivro() && !monitoramentoService.ucsLivro().length"
           >
             Nenhuma UC encontrada para este livro.
           </div>
 
-          <div class="overflow-x-auto" *ngIf="!massivasService.carregandoUcsLivro() && massivasService.ucsLivro().length">
+          <div class="overflow-x-auto" *ngIf="!monitoramentoService.carregandoUcsLivro() && monitoramentoService.ucsLivro().length">
             <table class="w-full text-[11px]">
               <thead>
                 <tr class="text-left text-slate-400 uppercase tracking-wide text-[9.5px]">
@@ -578,7 +578,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr class="border-t border-slate-50" *ngFor="let uc of massivasService.ucsLivro()">
+                <tr class="border-t border-slate-50" *ngFor="let uc of monitoramentoService.ucsLivro()">
                   <td class="py-1 pr-2 font-semibold text-slate-700 tabular-nums">{{ uc.uc }}</td>
                   <td class="py-1 pr-2 tabular-nums" [class.text-emerald-600]="uc.codigo" [class.text-red-500]="!uc.codigo">
                     {{ uc.codigo || 'Não realizada' }}

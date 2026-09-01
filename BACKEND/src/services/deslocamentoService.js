@@ -1,6 +1,6 @@
 // Distância (Haversine) e classificação de intervalo (deslocamento vs
 // pausa) entre duas leituras consecutivas de UC — usado pela timeline do
-// painel de livro (massivasService.js#obterUcsDoLivro), pela jornada do
+// painel de livro (monitoramentoService.js#obterUcsDoLivro), pela jornada do
 // colaborador (atividadeColaboradoresService.js#obterJornadaColaborador) e
 // pelos cards "Km percorrido" (livro e colaborador). Uma fórmula só, pra não
 // divergir entre os dois lugares que precisam dela.
@@ -9,7 +9,7 @@ const RAIO_TERRA_METROS = 6371000;
 // Confirmado com o usuário: acima desse limite o intervalo entre duas
 // leituras deixa de ser "deslocamento normal" e vira "ocioso/pausa" — 5min
 // pra etapa urbana (01-19), 15min pra rural (21-38), mesma faixa já usada
-// em ETAPA_URBANA_CONTR_SQL (massivasService.js).
+// em ETAPA_URBANA_CONTR_SQL (monitoramentoService.js).
 const LIMITE_URBANO_SEGUNDOS = 5 * 60;
 const LIMITE_RURAL_SEGUNDOS = 15 * 60;
 

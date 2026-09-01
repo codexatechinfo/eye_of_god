@@ -1,5 +1,5 @@
 const { calcularSegmento } = require('./deslocamentoService');
-const { obterEventosPorLivrosAteData, extrairCodigoDeMensagem, ehImpedimentoReal } = require('./massivasService');
+const { obterEventosPorLivrosAteData, extrairCodigoDeMensagem, ehImpedimentoReal } = require('./monitoramentoService');
 
 const QTD_REGEX = /^(\d+)\/(\d+)$/;
 const LIMITE_PARADO_MINUTOS = 20;
@@ -45,7 +45,7 @@ function isoParaDataBr(iso) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : null;
 }
 
-// Mesma regra de massivasService.js (condicaoTipoServico/TIPO_SERVICO_CONTR_SQL,
+// Mesma regra de monitoramentoService.js (condicaoTipoServico/TIPO_SERVICO_CONTR_SQL,
 // ADR 0012 Adendo 8): sem data_recebimento ainda, não dá pra saber se vai
 // virar leitura ou releitura; recebido antes do prazo é leitura, recebido no
 // prazo ou depois já é releitura (usuário confirmou: data_recebimento >=
@@ -59,7 +59,7 @@ function classificarTipoServico(dataRecebimento, dataPrevistaLimite) {
 }
 
 // "Dias do prazo regulatório" por livro — mesma fonte/fórmula de
-// obterFaixasDias/EFETIVO_PRAZO_REG_SQL em massivasService.js (ADR 0012
+// obterFaixasDias/EFETIVO_PRAZO_REG_SQL em monitoramentoService.js (ADR 0012
 // Adendo 4), só que calculada aqui em JS em vez de SQL: como "hoje" (o valor
 // de data_import) é constante pra toda a consulta de listarAtividadeHoje, um
 // mapa livro->efetivo buscado uma vez só é mais simples e mais barato que
@@ -73,7 +73,7 @@ function classificarTipoServico(dataRecebimento, dataPrevistaLimite) {
 // livro bate (o mesmo livro pode ter sido leitura antes e virar releitura
 // depois); massiva nunca teve essa correspondência. Quem chama este mapa
 // (listarAtividadeHoje) precisa checar tipoServico === 'leitura' e etapa
-// urbana antes de usar o valor — ver massivasService.js pro mesmo filtro em
+// urbana antes de usar o valor — ver monitoramentoService.js pro mesmo filtro em
 // SQL.
 // dataConsultaIso ("YYYY-MM-DD"): mês de referência do prazo regulatório é
 // o da data CONSULTADA, não necessariamente o mês corrente — importa ao
@@ -109,12 +109,12 @@ function calcularDiasPrazoRegulatorio(hoje, prazoCalendario, diasFinais) {
 
 // Só atribuidas_im/em_execucao_im têm leiturista (pendentes_im não tem
 // ninguém atribuído ainda, então não entra aqui — ver TABELAS_MASSIVA em
-// massivasService.js). Pega o batch mais recente de cada tabela DENTRO da
+// monitoramentoService.js). Pega o batch mais recente de cada tabela DENTRO da
 // data pedida (não o mais recente de sempre) — pra consulta de data
 // passada refletir a massiva daquele dia, não a de hoje.
 //
 // Cada tabela pode ter mais de uma linha por (leiturista, livro) — o mesmo
-// padrão de sub-lote visto em massivasService.contarFonteMassiva/detalheMassiva
+// padrão de sub-lote visto em monitoramentoService.contarFonteMassiva/detalheMassiva
 // — então dedup igual lá: dentro da mesma categoria fica com a linha de
 // menor quantidade restante (mais avançada); entre categorias, "Em Execução"
 // vence "Atribuída".
@@ -333,7 +333,7 @@ async function listarAtividadeHoje(db, dataIso) {
         -- o SUM(...) abaixo conta a UC duplicada mais de uma vez, inflando
         -- digitados/nao_digitados/impedimentos em relação ao painel de
         -- detalhe do livro (que já deduplica por UC — ver
-        -- listarUcsAtuaisDoLivro em massivasService.js). id (bigserial,
+        -- listarUcsAtuaisDoLivro em monitoramentoService.js). id (bigserial,
         -- estritamente cronológico) desempata de forma determinística —
         -- hora_import só tem granularidade de segundo e não distingue
         -- duplicatas do mesmo lote.
@@ -521,7 +521,7 @@ async function listarAtividadeHoje(db, dataIso) {
 
   // Unifica as contagens de progresso de cada livro (digitados/naoDigitados/
   // impedimentos) com o que o painel de detalhe do mesmo livro mostra
-  // (obterUcsDoLivro, massivasService.js) — antes, a barra usava só o
+  // (obterUcsDoLivro, monitoramentoService.js) — antes, a barra usava só o
   // snapshot de HOJE (`contr_execucao_leitura.data_import = hoje`) enquanto
   // o painel usava o roster completo enriquecido por base_dados_leitura, e
   // os dois podiam divergir pro mesmo livro (usuário reportou com print).
@@ -774,7 +774,7 @@ async function obterSuspensoesHoje(db, dataConsultaIso) {
 // Reescrita sobre `base_dados_leitura` (ADR 0024/0025), não
 // `contr_execucao_leitura` — mesmo princípio das outras funções desta
 // família (obterJornadaColaborador acima, buscarEventosLeitura em
-// massivasService.js): `contr_execucao_leitura` (o export do MS/scraper)
+// monitoramentoService.js): `contr_execucao_leitura` (o export do MS/scraper)
 // serve só pra saber a SITUAÇÃO do livro (Pendente/Atribuída/Em Execução) e
 // quais UCs são as reais atribuídas a campo — QUALQUER coisa que dependa de
 // QUANDO algo aconteceu de verdade (posição no mapa incluído) é construída
@@ -855,7 +855,7 @@ async function obterUltimaUcRealizadaPorColaborador(db, dataBr) {
 // devolve null quando falta coordenada de um dos lados).
 // Reescrita pra base_dados_leitura (ADR 0024/0025) em vez de
 // contr_execucao_leitura — data_da_leitura/hora_da_leitura são o instante
-// REAL da leitura, não o ciclo de raspagem (ver massivasService.js#
+// REAL da leitura, não o ciclo de raspagem (ver monitoramentoService.js#
 // buscarEventosLeitura pro mesmo raciocínio aplicado à timeline do livro).
 // `nome_do_usuario` já vem limpo (sem o regex SITUACAO_COM_COLABORADOR que
 // contr_execucao_leitura.situacao exigia).
@@ -893,7 +893,7 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
         AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
         AND NOT EXISTS (SELECT 1 FROM ja_realizado_antes j WHERE j.livro = b.livro AND j.unidade_consumidora = b.unidade_consumidora)
       -- CON antes de GTP quando o par cai no mesmo instante (mesmo padrão
-      -- de escolherPorUc em massivasService.js).
+      -- de escolherPorUc em monitoramentoService.js).
       ORDER BY b.livro, b.unidade_consumidora, b.hora_da_leitura ASC, (b.especificacao = 'CON') DESC
     )
     SELECT pr.uc, pr.livro, pr.etapa, pr.data_import, pr.hora_import, m.latitude, m.longitude

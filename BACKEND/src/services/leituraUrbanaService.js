@@ -1,4 +1,4 @@
-const { contrDedupSql } = require('./massivasService');
+const { contrDedupSql } = require('./monitoramentoService');
 
 const FILTRO_LEITURA = `
   c.data_recebimento IS NOT NULL
@@ -44,7 +44,7 @@ async function calcularLeituraUrbana(db) {
       -- copelImportService.js). Já dentro de um GROUP BY de verdade
       -- (linha abaixo), então SUM() agrega direto, sem precisar de window
       -- function (comparar com CONTR_REALIZADO_LIVRO_SQL em
-      -- massivasService.js, usada só onde não há GROUP BY real).
+      -- monitoramentoService.js, usada só onde não há GROUP BY real).
       SUM(CASE WHEN c.codigo IS NOT NULL THEN 1 ELSE 0 END)::int AS digitados,
       SUM(CASE WHEN c.codigo IS NULL THEN 1 ELSE 0 END)::int AS nao_digitados,
       -- colaborador já vem separado da coluna própria (populada no

@@ -8,7 +8,7 @@ import { FiltrosColaboradores } from './components/filtros-colaboradores/filtros
 import { ListaColaboradores } from './components/lista-colaboradores/lista-colaboradores';
 import { LivroDetalhe } from './components/livro-detalhe/livro-detalhe';
 import { MapaBases } from './components/mapa-bases/mapa-bases';
-import { MassivasView } from './components/massivas-view/massivas-view';
+import { MonitoramentoView } from './components/monitoramento-view/monitoramento-view';
 import { ImportacaoView } from './components/importacao-view/importacao-view';
 
 type StatusColeta = 'coletando' | 'parada' | 'offline' | null;
@@ -31,7 +31,7 @@ interface StatusColetaResponse {
 
 @Component({
   selector: 'app-home',
-  imports: [CommonModule, FiltrosColaboradores, ListaColaboradores, LivroDetalhe, MapaBases, MassivasView, ImportacaoView],
+  imports: [CommonModule, FiltrosColaboradores, ListaColaboradores, LivroDetalhe, MapaBases, MonitoramentoView, ImportacaoView],
   templateUrl: './home.html',
   styleUrl: './home.css',
 })
@@ -40,7 +40,7 @@ export class Home implements OnInit, OnDestroy {
   ultimoImport = signal<{ dataImport: string; horaImport: string } | null>(null);
   abaAtiva = signal<Aba>('monitoramento');
 
-  // Controla a criação (lazy) de app-massivas-view — depois de aberta uma
+  // Controla a criação (lazy) de app-monitoramento-view — depois de aberta uma
   // vez, [hidden] no template mantém a instância viva (e o filtro dela
   // junto) em vez de destruir ao trocar de aba. Ver home.html.
   jaAbriuLivros = signal(false);

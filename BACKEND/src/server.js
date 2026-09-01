@@ -9,7 +9,7 @@ const authRoutes = require('./routes/authRoutes');
 const usuariosRoutes = require('./routes/usuariosRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const colaboradoresRoutes = require('./routes/colaboradoresRoutes');
-const massivasRoutes = require('./routes/massivasRoutes');
+const monitoramentoRoutes = require('./routes/monitoramentoRoutes');
 const importacaoRoutes = require('./routes/importacaoRoutes');
 const empresasRoutes = require('./routes/empresasRoutes');
 const municipiosRoutes = require('./routes/municipiosRoutes');
@@ -35,7 +35,11 @@ app.use('/coleta', coletaRoutes);
 app.use('/coleta/massivas', coletaMassivasRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/colaboradores', colaboradoresRoutes);
-app.use('/massivas', massivasRoutes);
+// Prefixo '/massivas' mantido de propósito (contrato de API já em uso pelo
+// frontend/HTTP, não é o mesmo escopo do rename dos arquivos de código —
+// ver monitoramentoService.js) — rotas servem tanto a aba Massivas quanto
+// Monitoramento de Livros.
+app.use('/massivas', monitoramentoRoutes);
 app.use('/importacao', importacaoRoutes);
 app.use('/empresas', empresasRoutes);
 app.use('/municipios', municipiosRoutes);

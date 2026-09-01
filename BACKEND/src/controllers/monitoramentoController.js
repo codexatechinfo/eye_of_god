@@ -5,7 +5,7 @@ const {
   obterHistoricoLivro,
   obterUcsDoLivro,
   obterRegimeSucessivo,
-} = require('../services/massivasService');
+} = require('../services/monitoramentoService');
 
 // "YYYY-MM-DD" -> "DD/MM/YYYY" (mesmo formato de contr_execucao_leitura.data_import).
 function isoParaDataBr(iso) {

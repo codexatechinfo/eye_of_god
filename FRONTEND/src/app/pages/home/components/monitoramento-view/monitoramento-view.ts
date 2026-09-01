@@ -1,7 +1,7 @@
 import { Component, Input, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DetalheLinha, EscopoMassivas, MassivasService, StatusMassivas } from '../../../../services/massivas.service';
+import { DetalheLinha, EscopoMonitoramento, MonitoramentoService, StatusMonitoramento } from '../../../../services/monitoramento.service';
 import { ColaboradoresService } from '../../../../services/colaboradores.service';
 
 type CorLinha = 'verde' | 'amarelo' | 'vermelho';
@@ -28,31 +28,31 @@ type DirecaoOrdenacao = 'asc' | 'desc';
 const LIMITE_COMUNICACAO_MINUTOS = 30;
 
 @Component({
-  selector: 'app-massivas-view',
+  selector: 'app-monitoramento-view',
   imports: [CommonModule, FormsModule],
-  templateUrl: './massivas-view.html',
-  styleUrl: './massivas-view.css',
+  templateUrl: './monitoramento-view.html',
+  styleUrl: './monitoramento-view.css',
   // Instância própria por aba — a de Massivas e a de Monitoramento de
-  // Livros não podem compartilhar filtro (ver massivas.service.ts).
-  providers: [MassivasService],
+  // Livros não podem compartilhar filtro (ver monitoramento.service.ts).
+  providers: [MonitoramentoService],
 })
-export class MassivasView implements OnInit {
+export class MonitoramentoView implements OnInit {
   // 'massiva': aba Massivas, comportamento de antes da ADR 0006 (só
   // massiva, sem seletor de tipo). 'leiturarelitura': aba Monitoramento de
   // Livros, só leitura/releitura — nunca massiva, que agora tem aba própria.
-  @Input() escopo: EscopoMassivas = 'leiturarelitura';
+  @Input() escopo: EscopoMonitoramento = 'leiturarelitura';
 
   // ColaboradoresService é singleton (providedIn: 'root', ao contrário de
-  // MassivasService) — é a mesma instância que a aba Trilho usa, de
+  // MonitoramentoService) — é a mesma instância que a aba Trilho usa, de
   // propósito: "agentes em campo" é uma métrica global de colaborador, não
   // depende de qual aba de massiva/livros está aberta.
   constructor(
-    public massivasService: MassivasService,
+    public monitoramentoService: MonitoramentoService,
     public colaboradoresService: ColaboradoresService,
   ) {}
 
   ngOnInit(): void {
-    this.massivasService.iniciar(this.escopo);
+    this.monitoramentoService.iniciar(this.escopo);
   }
 
   // Barra de resumo (anexo2) — "em campo" é qualquer colaborador (incluindo
@@ -239,7 +239,7 @@ export class MassivasView implements OnInit {
   }
 
   linhasOrdenadas(): DetalheLinha[] {
-    const linhas = this.massivasService.detalhe();
+    const linhas = this.monitoramentoService.detalhe();
     const coluna = this.colunaOrdenacao();
 
     // Sem coluna escolhida pelo usuário (clique num cabeçalho): ordena pelos
@@ -274,23 +274,23 @@ export class MassivasView implements OnInit {
   readonly MAX_ITENS_POR_PAGINA = 250;
 
   totalPaginas(): number {
-    return Math.max(1, Math.ceil(this.linhasOrdenadas().length / this.massivasService.itensPorPagina()));
+    return Math.max(1, Math.ceil(this.linhasOrdenadas().length / this.monitoramentoService.itensPorPagina()));
   }
 
   // Corrige sozinho quando um filtro reduz o resultado e a página guardada
   // ficou além do novo total (em vez de mostrar uma página vazia).
   paginaEfetiva(): number {
-    return Math.min(Math.max(1, this.massivasService.paginaAtual()), this.totalPaginas());
+    return Math.min(Math.max(1, this.monitoramentoService.paginaAtual()), this.totalPaginas());
   }
 
   linhasPaginadas(): DetalheLinha[] {
-    const porPagina = this.massivasService.itensPorPagina();
+    const porPagina = this.monitoramentoService.itensPorPagina();
     const inicio = (this.paginaEfetiva() - 1) * porPagina;
     return this.linhasOrdenadas().slice(inicio, inicio + porPagina);
   }
 
   irParaPagina(pagina: number): void {
-    this.massivasService.paginaAtual.set(Math.min(Math.max(1, pagina), this.totalPaginas()));
+    this.monitoramentoService.paginaAtual.set(Math.min(Math.max(1, pagina), this.totalPaginas()));
   }
 
   // `input` opcional: quando o valor digitado é inválido/fora do teto e o
@@ -301,66 +301,66 @@ export class MassivasView implements OnInit {
   // válido de verdade, independente de o signal ter mudado ou não.
   alterarItensPorPagina(qtd: number | string, input?: HTMLInputElement): void {
     const numero = Math.trunc(Number(qtd));
-    const limitado = Number.isFinite(numero) && numero > 0 ? Math.min(numero, this.MAX_ITENS_POR_PAGINA) : this.massivasService.itensPorPagina();
-    this.massivasService.itensPorPagina.set(limitado);
-    this.massivasService.paginaAtual.set(1);
+    const limitado = Number.isFinite(numero) && numero > 0 ? Math.min(numero, this.MAX_ITENS_POR_PAGINA) : this.monitoramentoService.itensPorPagina();
+    this.monitoramentoService.itensPorPagina.set(limitado);
+    this.monitoramentoService.paginaAtual.set(1);
     if (input) input.value = String(limitado);
   }
 
   intervaloExibido(): string {
     const total = this.linhasOrdenadas().length;
     if (!total) return '0 registros';
-    const porPagina = this.massivasService.itensPorPagina();
+    const porPagina = this.monitoramentoService.itensPorPagina();
     const inicio = (this.paginaEfetiva() - 1) * porPagina + 1;
     const fim = Math.min(inicio + porPagina - 1, total);
     return `${inicio}–${fim} de ${total} registro${total === 1 ? '' : 's'}`;
   }
 
   valorCard(status: 'pendentes' | 'atribuidas' | 'emExecucao' | 'total' | 'noPrazo' | 'prazoFinal' | 'atrasadas'): number {
-    const resumo = this.massivasService.resumo();
+    const resumo = this.monitoramentoService.resumo();
     if (!resumo) return 0;
     const contagem = resumo[status];
-    return this.massivasService.visualizacao() === 'livros' ? contagem.livros : contagem.leituras;
+    return this.monitoramentoService.visualizacao() === 'livros' ? contagem.livros : contagem.leituras;
   }
 
   // Mesmo padrão do valorCard, pras faixas de dias (prazo_reg_livros) — o
   // toggle Livros/Leituras vale aqui também.
   valorFaixa(faixa: 'menor27' | 'igual33' | 'maior34'): number {
-    const contagem = this.massivasService.resumo()?.faixasDias[faixa];
+    const contagem = this.monitoramentoService.resumo()?.faixasDias[faixa];
     if (!contagem) return 0;
-    return this.massivasService.visualizacao() === 'livros' ? contagem.livros : contagem.leituras;
+    return this.monitoramentoService.visualizacao() === 'livros' ? contagem.livros : contagem.leituras;
   }
 
-  cardEmDestaque(status: StatusMassivas): boolean {
-    const filtro = this.massivasService.filtroStatus();
+  cardEmDestaque(status: StatusMonitoramento): boolean {
+    const filtro = this.monitoramentoService.filtroStatus();
     return filtro === 'todos' || filtro === status;
   }
 
-  selecionarStatus(status: StatusMassivas): void {
-    this.massivasService.filtroPrazo.set('');
-    this.massivasService.filtroStatus.set(this.massivasService.filtroStatus() === status ? 'todos' : status);
-    this.massivasService.buscarTudo();
+  selecionarStatus(status: StatusMonitoramento): void {
+    this.monitoramentoService.filtroPrazo.set('');
+    this.monitoramentoService.filtroStatus.set(this.monitoramentoService.filtroStatus() === status ? 'todos' : status);
+    this.monitoramentoService.buscarTudo();
   }
 
   // Só usado pelo card "Total massivas" (aba Massivas, visual clássico).
   totalCardEmDestaque(): boolean {
-    return this.massivasService.filtroStatus() === 'todos' && !this.massivasService.filtroPrazo();
+    return this.monitoramentoService.filtroStatus() === 'todos' && !this.monitoramentoService.filtroPrazo();
   }
 
   selecionarTotal(): void {
-    this.massivasService.filtroStatus.set('todos');
-    this.massivasService.filtroPrazo.set('');
-    this.massivasService.buscarTudo();
+    this.monitoramentoService.filtroStatus.set('todos');
+    this.monitoramentoService.filtroPrazo.set('');
+    this.monitoramentoService.buscarTudo();
   }
 
   prazoCardEmDestaque(prazo: 'noPrazo' | 'final' | 'atrasada'): boolean {
-    const filtroPrazo = this.massivasService.filtroPrazo();
+    const filtroPrazo = this.monitoramentoService.filtroPrazo();
     return !filtroPrazo || filtroPrazo === prazo;
   }
 
   selecionarPrazo(prazo: 'noPrazo' | 'final' | 'atrasada'): void {
-    this.massivasService.filtroPrazo.set(this.massivasService.filtroPrazo() === prazo ? '' : prazo);
-    this.massivasService.buscarTudo();
+    this.monitoramentoService.filtroPrazo.set(this.monitoramentoService.filtroPrazo() === prazo ? '' : prazo);
+    this.monitoramentoService.buscarTudo();
   }
 
   // Filtro clicável das faixas <27/33/34+ dias (aba Monitoramento de Livros
@@ -368,21 +368,21 @@ export class MassivasView implements OnInit {
   // prazo_reg_livros, não contr_execucao_leitura), então não zera os outros
   // filtros ao selecionar — só alterna o próprio.
   faixaEmDestaque(faixa: 'menor27' | 'igual33' | 'maior34'): boolean {
-    const filtro = this.massivasService.filtroFaixaDias();
+    const filtro = this.monitoramentoService.filtroFaixaDias();
     return !filtro || filtro === faixa;
   }
 
   selecionarFaixa(faixa: 'menor27' | 'igual33' | 'maior34'): void {
-    this.massivasService.filtroFaixaDias.set(this.massivasService.filtroFaixaDias() === faixa ? '' : faixa);
-    this.massivasService.buscarTudo();
+    this.monitoramentoService.filtroFaixaDias.set(this.monitoramentoService.filtroFaixaDias() === faixa ? '' : faixa);
+    this.monitoramentoService.buscarTudo();
   }
 
   abrirHistorico(livro: string): void {
-    this.massivasService.abrirHistoricoLivro(livro);
+    this.monitoramentoService.abrirHistoricoLivro(livro);
   }
 
   onStatusChange(): void {
-    this.massivasService.buscarTudo();
+    this.monitoramentoService.buscarTudo();
   }
 
   // Comparação por DIA, não por hora — de propósito. A tabela mistura massiva
@@ -395,7 +395,7 @@ export class MassivasView implements OnInit {
   // cards (backend, condicaoSqlPrazoContr); aqui, cor da linha e "dias em
   // atraso" ficam em dia inteiro pros dois tipos de fonte, consistente.
   private hojeUtcMs(): number | null {
-    const hoje = this.massivasService.resumo()?.dataImport;
+    const hoje = this.monitoramentoService.resumo()?.dataImport;
     if (!hoje) return null;
     const [d, m, a] = hoje.split('/').map(Number);
     return Date.UTC(a, m - 1, d);

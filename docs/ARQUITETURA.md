@@ -26,7 +26,7 @@ classDiagram
     +dashboardRoutes
     +coletaRoutes
     +colaboradoresRoutes
-    +massivasRoutes
+    +monitoramentoRoutes
   }
   class authMiddleware {
     +autenticarToken()
@@ -144,8 +144,9 @@ sequenceDiagram
   diferente. Não existe mais tabela de negócio sem dono.
 - [ADR 0010](adr/0010-aba-massivas-dedicada.md) — aba "Massivas" separada de novo (só
   massiva, sem filtro de tipo); "Monitoramento de Livros" restrita a leitura/releitura.
-  `MassivasService` deixou de ser singleton (`providedIn: 'root'`) — cada aba tem sua
-  própria instância via `providers` no componente, pra não vazar filtro entre elas.
+  `MonitoramentoService` (renomeado de `MassivasService`, ver ADR 0026) deixou de ser
+  singleton (`providedIn: 'root'`) — cada aba tem sua própria instância via `providers` no
+  componente, pra não vazar filtro entre elas.
 - [ADR 0011](adr/0011-prazo-real-leitura-releitura.md) — prazo de leitura vem de
   `calendario_leitura.prazo_leitura` por etapa (01–19 urbana, 21–38 rural); prazo de
   releitura é `data_recebimento` + 24h/48h. De quebra, corrigido um bug de fuso horário do

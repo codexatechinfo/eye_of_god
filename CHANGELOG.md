@@ -52,6 +52,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   (varredura de `base_dados_leitura`, 3,5 milhões de linhas) segue sem solução simples. Ver
   Adendo 2 da [ADR 0025](docs/adr/0025-timeline-deslocamento-jornada-base-dados-leitura.md).
 
+- Barra lateral: `obterEventosPorLivrosAteData` (a consulta mais pesada, chamada a cada poll de
+  60s) ganhou cache em memória com TTL de 3 minutos — `base_dados_leitura` só recebe carga em
+  lote diário, não muda minuto a minuto. Reduz o poll subsequente de ~10s pra ~4s. Achado e
+  corrigido no caminho: a primeira versão da chave de cache não considerava a empresa, o que
+  faria duas empresas diferentes pedindo o mesmo livro/data compartilharem cache uma da outra
+  (vazamento entre tenants) — corrigido antes de considerar pronto. Ver Adendo 3 da [ADR
+  0025](docs/adr/0025-timeline-deslocamento-jornada-base-dados-leitura.md).
+
 ### Adicionado
 
 - Nova tabela `base_dados_leitura` (empresa_id + RLS, `id` autoincremento), réplica exata da

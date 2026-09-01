@@ -257,3 +257,50 @@ função específica.
   concorrente, não medida de forma isolada
 - Latência do painel (`obterUcsDoLivro`, livro único): ~2,2-2,3s, sem mudança perceptível (já
   era dominado pelo mesmo tipo de I/O de base, não por sort)
+
+## Adendo 3 — Cache com TTL pra `obterEventosPorLivrosAteData` (2026-09-01)
+
+Continuação direta do "o que resta" do Adendo 2. Apresentadas ao usuário as duas opções reais
+pro maior custo restante (`Parallel Seq Scan` de 3,5 milhões de linhas de `base_dados_leitura`,
+recomputado do zero a cada poll de 60s da barra): aumentar `shared_buffers` (exige reiniciar o
+container, risco pro job de coleta 24/7) ou uma camada de cache com TTL curto (sem risco de
+restart, mas introduz alguns minutos de defasagem — decisão de comportamento, não só técnica).
+Usuário escolheu o cache.
+
+**Desenho**: `Map` em memória do próprio processo Node, dentro de `massivasService.js`
+(`cacheEventosPorLivros`), guardando o resultado INTEIRO de `obterEventosPorLivrosAteData`
+(roster + eventos já combinados) por `CACHE_EVENTOS_TTL_MS = 3 minutos`. Chave = `nivel|
+empresa_id|dataBr|livros_ordenados`. `base_dados_leitura` só recebe carga em importação em lote
+diária (não muda minuto a minuto) — TTL de poucos minutos nunca pega dado realmente
+desatualizado dessa fonte. O lado `contr_execucao_leitura` (`codigo_contr`, usado só como
+fallback pra UC sem evento em `base_dados_leitura`) fica igualmente cacheado por essa janela,
+mas o próprio scraper só revisita um livro a cada ~35-50min (ADR 0022 Adendo 1) — a defasagem
+do cache fica dentro da granularidade natural dessa fonte, não introduz atraso perceptível
+novo.
+
+**Bug achado e corrigido antes de considerar pronto**: a primeira versão da chave de cache era
+só `dataBr|livros`, SEM tenant. `contr_execucao_leitura`/`base_dados_leitura` têm RLS
+(`isolamento_empresa`: visível se `app.nivel = 'ROOT'` ou `empresa_id = app.empresa_id`, ambos
+`SET LOCAL` por transação via `abrirContextoTenant`) — sem o tenant na chave, duas empresas
+diferentes pedindo o MESMO número de livro na MESMA data compartilhariam cache uma da outra,
+furando o isolamento (vazamento de dado entre clientes). Corrigido lendo `current_setting
+('app.nivel')`/`current_setting('app.empresa_id')` de volta da própria transação (não recebido
+por parâmetro, pra não depender de quem chama passar certo) e incluindo os dois na chave.
+Verificado ao vivo: empresa A cacheia 118 linhas pro livro `025115`; empresa B pedindo o mesmo
+livro/data no mesmo processo devolve 0 linhas (RLS dela, não reaproveita o cache da empresa A);
+empresa A pedindo de novo bate no cache dela mesma (118 linhas, 0ms). `npm test` (12/12,
+incluindo os testes de isolamento entre empresas) confirmando que nada regrediu.
+
+### Verificação
+
+- `npm test` (12/12), `node --check` limpos
+- Cache hit: 1ª chamada de `obterEventosPorLivrosAteData` (444 livros) ~6,9s; chamadas
+  seguintes (mesmo livros/data/tenant, dentro do TTL) 0ms — inclusive com a lista de livros em
+  ordem diferente (mesmo conjunto), confirmando que a chave não depende de ordem
+- Cache miss correto: livro diferente, data diferente, ou tenant diferente — cada combinação
+  nova dispara consulta real
+- Isolamento entre tenants confirmado ao vivo (ver acima) — sem vazamento
+- Ganho end-to-end simulando dois polls consecutivos de `listarAtividadeHoje` no mesmo processo
+  (replica o padrão real: servidor de longa duração, barra lateral chamando a cada 60s): poll 1
+  (frio) ~10,1s, poll 2 (`obterEventosPorLivrosAteData` em cache) ~3,9s — redução de ~61% no
+  poll subsequente

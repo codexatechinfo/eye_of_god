@@ -1083,8 +1083,43 @@ async function buscarEventosLeitura(db, livro, ateData) {
 // achou evento) — quem chama decide o `codigo` final
 // (extrairCodigoDeMensagem(mensagem) ?? codigo_contr, mesma regra de
 // montarUcsAtuais) e a classificação de impedimento (ehImpedimentoReal).
+// Cache em memória (processo) do resultado de obterEventosPorLivrosAteData —
+// a consulta varre as 3,5 milhões de linhas de base_dados_leitura inteiras
+// (444+ livros no ANY() faz o planner preferir Bitmap Heap Scan a índice, ver
+// Adendo 2 da ADR 0025) e a barra lateral chama isso a cada poll de 60s.
+// base_dados_leitura só recebe carga em IMPORTAÇÃO EM LOTE DIÁRIA, não muda
+// minuto a minuto — TTL de alguns minutos é folga suficiente pra nunca
+// pegar dado realmente desatualizado dessa fonte. O lado
+// contr_execucao_leitura (`codigo_contr`, roster) fica igualmente cacheado
+// por essa janela, mas ele só é USADO como fallback pra UC sem evento em
+// base_dados_leitura, e o próprio scraper só revisita um livro a cada
+// ~35-50min (ver ADR 0022 Adendo 1) — a defasagem do cache fica bem dentro
+// da granularidade natural dessa fonte. Decisão de aceitar essa defasagem
+// (não só técnica) confirmada com o usuário antes de implementar.
+const CACHE_EVENTOS_TTL_MS = 3 * 60 * 1000;
+const cacheEventosPorLivros = new Map();
+
 async function obterEventosPorLivrosAteData(db, livros, dataBr) {
   if (!livros.length) return [];
+  // RLS de contr_execucao_leitura/base_dados_leitura decide visibilidade por
+  // app.nivel/app.empresa_id (SET LOCAL na transação, ver abrirContextoTenant
+  // em config/db.js) — SEM isso na chave, duas empresas diferentes pedindo o
+  // mesmo livro/data compartilhariam cache uma da outra, furando o
+  // isolamento por tenant. Lidos de volta da própria transação (não
+  // recebidos por parâmetro) pra não depender de quem chama passar isso
+  // certo.
+  const { rows: contextoRows } = await db.query(
+    "SELECT current_setting('app.nivel', true) AS nivel, current_setting('app.empresa_id', true) AS empresa_id",
+  );
+  const { nivel, empresa_id: empresaId } = contextoRows[0];
+  // Ordena antes de montar a chave — `livros` chega em ordem de iteração de
+  // Map/Set no chamador, não determinística entre chamadas mesmo com o
+  // mesmo conjunto de livros.
+  const chaveCache = `${nivel}|${empresaId}|${dataBr}|${[...livros].sort().join(',')}`;
+  const agora = Date.now();
+  const emCache = cacheEventosPorLivros.get(chaveCache);
+  if (emCache && emCache.expiraEm > agora) return emCache.rows;
+
   // livrosInt como parâmetro PRÓPRIO (não um `IN (SELECT ... FROM roster)`)
   // — achado ao vivo com EXPLAIN: passar a lista de livros como subquery de
   // uma CTE faz o planner tratar a cardinalidade como desconhecida e cair
@@ -1126,6 +1161,17 @@ async function obterEventosPorLivrosAteData(db, livros, dataBr) {
     `,
     [livros, dataBr, livrosInt],
   );
+
+  cacheEventosPorLivros.set(chaveCache, { rows, expiraEm: agora + CACHE_EVENTOS_TTL_MS });
+  // Limpeza simples: se a lista de livros ativos variar muito entre polls
+  // (chaves diferentes a cada vez), evita crescer sem limite — o cache
+  // perde valor mesmo quando isso acontece, então zerar tudo é seguro.
+  if (cacheEventosPorLivros.size > 20) {
+    for (const [chave, valor] of cacheEventosPorLivros) {
+      if (valor.expiraEm <= agora) cacheEventosPorLivros.delete(chave);
+    }
+  }
+
   return rows;
 }
 

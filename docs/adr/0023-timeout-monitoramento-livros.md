@@ -131,10 +131,17 @@ dois pontos de uso) — mesmo padrão já usado em `buscarEventosLeitura`/`obter
 inválido simplesmente não casa no `LEFT JOIN` (prazo/faixa de dias saem `null` só pro livro
 daquela etapa/mês), em vez de derrubar a consulta inteira.
 
-**Correção dos dados NÃO feita nesta sessão** — trazido ao usuário como achado separado (as 37
-linhas provavelmente deveriam ter `mes_ref = '2026-09-01'`, mas isso é inferência a partir do
-padrão dos meses já corretos e do intervalo de `prazo_leitura`, não confirmado com o usuário).
-Reescrever esse dado direto no banco fica pra quando ele confirmar o valor certo.
+**Correção dos dados**: usuário perguntou "é do mês 07 ou 09?" antes de decidir. Confirmado
+comparando com os dois lotes já corretos — `mes_ref = 2026-07-01` só tem `prazo_leitura` de
+julho, `mes_ref = 2026-08-01` só tem `prazo_leitura` de agosto (mês de `mes_ref` sempre bate com
+o mês dos prazos daquele lote); o lote malformado tem `prazo_leitura` quase todo em setembro
+(01/09 a 27/09, mais duas linhas em 31/08 — mesma virada de mês que já aparece nos lotes
+corretos). Confirma que era o lote de setembro, "31/07/2026" não bate com nada (nem é julho por
+completo). Usuário decidiu **apagar** as 37 linhas em vez de corrigir pra `2026-09-01` ("não sei
+como foram parar aí") — `DELETE FROM calendario_leitura WHERE mes_ref !~ '^\d{4}-\d{2}-\d{2}$'`,
+37 linhas removidas, 74 restantes (37 julho + 37 agosto), 0 malformadas. Setembro fica sem
+calendário até uma reimportação correta — aceito pelo usuário, não é bug, é ausência de dado que
+ainda não existe.
 
 ### Verificação
 
@@ -143,4 +150,8 @@ Reescrever esse dado direto no banco fica pra quando ele confirmar o valor certo
   `735ms`, sem erro
 - `obterDetalhe(db, { tipoServico: 'leiturarelitura' })`: antes, transação abortada (efeito
   colateral do erro anterior na mesma transação); depois, `163ms`, `77` linhas
+- Depois do `DELETE` das 37 linhas malformadas: `calendario_leitura` com 74 linhas (0
+  malformadas), `obterResumo`/`obterDetalhe` continuam OK (`757ms`/`186ms`, `83` linhas) — a
+  guarda de formato no código não fica órfã, continua valendo pra qualquer importação futura com
+  o mesmo problema
 - Não verificado visualmente no navegador (mesma limitação de sempre, sem credencial de login)

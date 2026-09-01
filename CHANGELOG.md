@@ -12,7 +12,8 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   linhas de `calendario_leitura` com data em formato errado (`31/07/2026` em vez de
   `2026-07-31`) faziam o `to_date(...)` estourar e derrubar a aba inteira, não só essa linha.
   Mensagem agora reflete a aba certa; consulta agora ignora linha de calendário com data
-  malformada em vez de quebrar tudo. Ver Adendo 1 da [ADR
+  malformada em vez de quebrar tudo. As 37 linhas malformadas (calendário de setembro, dado
+  ruim) foram apagadas do banco. Ver Adendo 1 da [ADR
   0023](docs/adr/0023-timeout-monitoramento-livros.md).
 
 - Mapa (aba Trilho) mostrava marcador e rota de colaborador sem nenhuma atividade no dia

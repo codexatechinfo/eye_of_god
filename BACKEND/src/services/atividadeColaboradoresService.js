@@ -1,4 +1,5 @@
 const { calcularSegmento } = require('./deslocamentoService');
+const { obterEventosPorLivrosAteData, extrairCodigoDeMensagem, ehImpedimentoReal } = require('./massivasService');
 
 const QTD_REGEX = /^(\d+)\/(\d+)$/;
 const LIMITE_PARADO_MINUTOS = 20;
@@ -516,6 +517,55 @@ async function listarAtividadeHoje(db, dataIso) {
       semSincronismo,
       livros,
     });
+  }
+
+  // Unifica as contagens de progresso de cada livro (digitados/naoDigitados/
+  // impedimentos) com o que o painel de detalhe do mesmo livro mostra
+  // (obterUcsDoLivro, massivasService.js) — antes, a barra usava só o
+  // snapshot de HOJE (`contr_execucao_leitura.data_import = hoje`) enquanto
+  // o painel usava o roster completo enriquecido por base_dados_leitura, e
+  // os dois podiam divergir pro mesmo livro (usuário reportou com print).
+  // "Ponto no tempo" (`ateData = hoje`, a mesma data desta consulta) em vez
+  // de sempre o estado mais atual — visualizar um dia passado no calendário
+  // mostra o livro como estava NAQUELE dia, não hoje. O que NÃO muda aqui:
+  // quais livros aparecem, colaborador/situação/histórico/parado-ativo —
+  // base_dados_leitura não tem esse dado, só entra pra corrigir as
+  // contagens de progresso.
+  const todosLivros = [...new Set(colaboradores.flatMap(c => c.livros.map(l => l.livro)))];
+  const eventosPorLivro = await obterEventosPorLivrosAteData(db, todosLivros, hoje);
+  const contagensPorLivro = new Map();
+  for (const linha of eventosPorLivro) {
+    const codigo = extrairCodigoDeMensagem(linha.mensagem) ?? linha.codigo_contr;
+    if (!contagensPorLivro.has(linha.livro)) {
+      contagensPorLivro.set(linha.livro, { digitados: 0, naoDigitados: 0, impedimentos: 0 });
+    }
+    const c = contagensPorLivro.get(linha.livro);
+    if (codigo) {
+      c.digitados++;
+      if (ehImpedimentoReal(codigo)) c.impedimentos++;
+    } else {
+      c.naoDigitados++;
+    }
+  }
+
+  for (const colaborador of colaboradores) {
+    for (const livro of colaborador.livros) {
+      const nova = contagensPorLivro.get(livro.livro);
+      if (!nova) continue; // livro sem correspondência em base_dados_leitura ainda — mantém o valor original, nunca quebra
+      livro.digitados = nova.digitados;
+      livro.naoDigitados = nova.naoDigitados;
+      livro.impedimentos = nova.impedimentos;
+    }
+    colaborador.totalRealizadas = colaborador.livros.reduce((soma, l) => soma + l.digitados, 0);
+    colaborador.totalPendentes = colaborador.livros.reduce((soma, l) => soma + l.naoDigitados, 0);
+    colaborador.totalImpedimentos = colaborador.livros.reduce((soma, l) => soma + (l.impedimentos || 0), 0);
+    // parado/ativo/semSincronismo dependem de totalRealizadas — recalcula
+    // com o valor unificado; minutosParado/ultimaMudancaHora NÃO mudam (são
+    // sobre QUANDO algo aconteceu, conceito que continua vindo só do
+    // scraper/contr_execucao_leitura, fora do escopo desta unificação).
+    colaborador.parado = colaborador.totalRealizadas === 0;
+    colaborador.semSincronismo = colaborador.totalRealizadas > 0 && colaborador.minutosParado >= LIMITE_PARADO_MINUTOS;
+    colaborador.ativo = colaborador.totalRealizadas > 0 && colaborador.minutosParado < LIMITE_PARADO_MINUTOS;
   }
 
   // Colaboradores só com massiva atribuída não aparecem em contr_execucao_leitura

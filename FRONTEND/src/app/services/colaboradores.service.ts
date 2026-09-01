@@ -712,7 +712,9 @@ export class ColaboradoresService {
     }
 
     this.http
-      .get<UcsLivroResponse>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
+      .get<UcsLivroResponse>(`${this.apiUrl}/massivas/livro-ucs`, {
+        params: new HttpParams().set('livro', livro).set('data', this.filtroData()),
+      })
       .subscribe({
         next: resposta => {
           this.timelineLivro.set(resposta.timeline);

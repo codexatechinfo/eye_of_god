@@ -103,3 +103,79 @@ diário — `id` reflete ordem de importação, não do evento). Índice novo
 - Par CON/GTP/BAM da mesma leitura (mesma data+hora) confirmado escolhendo CON nos dois lugares
 - `npm test` (12/12), `node --check` nos arquivos alterados, `ng build --configuration
   development` limpos
+
+## Adendo 1 — Unificar contagens "hoje" (barra lateral) com o painel do livro (2026-09-01)
+
+**Ponto 5 do pedido original**, deixado fora de escopo na decisão inicial ("Sim, separar —
+ponto 5 fica pra depois") por ser mais entrelaçado com o dashboard inteiro. Retomado depois que
+o usuário reportou, com print, que a barra lateral (aba Trilho) mostrava "39/50" pro livro
+025395 enquanto o painel de detalhe do MESMO livro mostrava "40 realizadas/48 a realizar" — dois
+escopos diferentes calculando o mesmo número: a barra (`listarAtividadeHoje`) sempre foi
+escopada só ao dia selecionado (`contr_execucao_leitura.data_import = $1`), o painel
+(`obterUcsDoLivro`, ADR 0025 acima) mostra o roster completo do livro sem filtro de data. A
+diferença já existia antes desta ADR; o enriquecimento por `base_dados_leitura` só a tornou mais
+visível (uma UC virava "realizada" no painel sem refletir na barra).
+
+**Decisão**: as contagens `digitados`/`naoDigitados`/`impedimentos` de cada livro em
+`listarAtividadeHoje`, e o painel (`obterUcsDoLivro`), passam a ser **ponto-no-tempo** — mesmo
+raciocínio desta ADR, "congelado" numa data (`ateData`) em vez de sempre o estado mais atual.
+Quando a barra e o painel usam a mesma data, os dois **sempre concordam**: mesma fonte, mesmo
+corte temporal. O que NÃO mudou (`base_dados_leitura` não tem esse dado): quais livros aparecem
+na lista "hoje" (membership), colaborador atribuído, situação, classificação
+Parado/Ativo/Sem sincronismo — o critério de membership atual (livro tocado pelo scraper no dia)
+já cobre o caso "livro que começou ontem e continua hoje", já que o scraper roda 24h contínuo.
+
+### Desenho
+
+- `massivasService.js`: nova `ehImpedimentoReal(codigo)` (réplica server-side de
+  `ehCodigoDeImpedimento` do frontend — mesmo padrão de duplicação já usado em
+  `deslocamentoService.js`, módulo não compartilhável entre os dois runtimes). Nova
+  `obterEventosPorLivrosAteData(db, livros, dataBr)`: uma chamada só pra TODOS os livros de
+  `listarAtividadeHoje` de uma vez (evita N+1), devolve por UC o `codigo` do roster
+  (`contr_execucao_leitura`) e o `mensagem` do evento mais recente de `base_dados_leitura` até
+  `dataBr`. `buscarEventosLeitura`/`obterUcsDoLivro`/`consultarUcsBrutasDoLivro` ganham
+  `ateData` opcional.
+- `atividadeColaboradoresService.js`: em `listarAtividadeHoje`, depois de montar `livros[]` por
+  colaborador como hoje, chama `obterEventosPorLivrosAteData` uma vez com todos os livros
+  distintos, agrupa por livro (`codigo = extrairCodigoDeMensagem(mensagem) ?? codigo_contr`,
+  conta digitados/naoDigitados/impedimentos via `ehImpedimentoReal`) e sobrescreve os campos de
+  cada `livros[]`; totais do colaborador recalculam sozinhos por já somarem sobre `livros`.
+- `massivasController.js#ucsLivro` e `colaboradores.service.ts#buscarUcsLivro`: painel do livro
+  passa a mandar/receber `?data=YYYY-MM-DD` (mesmo `filtroData` já usado pela barra), convertida
+  pra `DD/MM/YYYY` e repassada como `ateData`.
+
+### Bug achado ao implementar — fallback de `codigo` não respeitava `ateData`
+
+Primeira versão só filtrava `ateData` no lado de `base_dados_leitura` (`buscarEventosLeitura`);
+`consultarUcsBrutasDoLivro` (roster de `contr_execucao_leitura`) continuava sem filtro de data.
+Em `montarUcsAtuais`, quando uma UC não tinha evento de `base_dados_leitura` até `ateData`, o
+`codigo` caía no fallback `resto.codigo` — vindo do roster SEM CORTE, sempre o mais recente. Na
+prática, olhar uma data passada continuava mostrando o `codigo` de HOJE pra qualquer UC sem
+evento no corte, fazendo `atuais` (realizadas) não diminuir ao voltar no calendário — verificado
+ao vivo com o livro `025115`: `ateData=hoje` e `ateData=ontem` davam os mesmos 117 UCs
+"realizadas", quando deveria cair. Corrigido dando a `consultarUcsBrutasDoLivro` o mesmo
+`ateData` opcional (`data_import <= ateData`), então o fallback também respeita o corte. Só
+afeta o painel (`obterUcsDoLivro`, chamado com datas passadas via o calendário da barra) — não
+precisou em `obterEventosPorLivrosAteData` porque `listarAtividadeHoje` só chama com a data de
+hoje (sem UC de data futura possível, o filtro seria no-op ali).
+
+### Verificação
+
+- `npm test` (12/12), `node --check`, `ng build --configuration development` limpos
+- Livro `025115` (117 UCs, ativo em 01/09/2026): `listarAtividadeHoje` e `obterUcsDoLivro`
+  batendo exatamente — `digitados: 117` nos dois lados
+- Corte temporal provado: `obterUcsDoLivro('025115', ateData='31/08/2026')` (véspera, livro só
+  entrou no roster do scraper hoje) → 0 UCs realizadas, contra 117 em `ateData='01/09/2026'`
+- Achado colateral: `contr_execucao_leitura` nunca teve índice em `livro` (871 mil linhas,
+  sequential scan em TODA consulta por livro do sistema inteiro, não só as novas) — criado
+  `idx_contr_execucao_leitura_empresa_livro (empresa_id, livro)`
+- Achado colateral de performance de planner: filtrar `base_dados_leitura` por
+  `livro::int IN (SELECT ... FROM cte)` faz o Postgres não conseguir estimar cardinalidade e
+  cair pra Seq Scan nos 3,5 milhões de linhas mesmo com índice disponível; passar os mesmos
+  valores como array já resolvido (`= ANY($N::int[])`) faz o planner usar o índice
+  (`idx_base_dados_leitura_livro_int`). Confirmado via `EXPLAIN`/`PREPARE`
+- Latência: `listarAtividadeHoje` completo (207 colaboradores, ~700 livros ativos) passou de
+  já lento antes desta mudança pra ~19s ponta a ponta, dos quais a nova
+  `obterEventosPorLivrosAteData` soma ~6s (59 mil linhas, ~700 livros de uma vez). Aceitável
+  pro polling de 60s deste endpoint, mas cresce com o volume de `base_dados_leitura` — watch-item
+  pra revisitar se a tabela crescer muito mais

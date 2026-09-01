@@ -7,6 +7,12 @@ const {
   obterRegimeSucessivo,
 } = require('../services/massivasService');
 
+// "YYYY-MM-DD" -> "DD/MM/YYYY" (mesmo formato de contr_execucao_leitura.data_import).
+function isoParaDataBr(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso || '').trim());
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : null;
+}
+
 async function resumo(req, res) {
   try {
     const { regional, livro, etapa, colaborador, status, prazo, tipoServico } = req.query;
@@ -56,11 +62,12 @@ async function historicoLivro(req, res) {
 
 async function ucsLivro(req, res) {
   try {
-    const { livro } = req.query;
+    const { livro, data } = req.query;
     if (!livro) {
       return res.status(400).json({ sucesso: false, erro: 'Parâmetro "livro" é obrigatório.' });
     }
-    const dados = await obterUcsDoLivro(req.db, livro);
+    const ateData = data ? isoParaDataBr(data) : null;
+    const dados = await obterUcsDoLivro(req.db, livro, ateData);
     res.json({ sucesso: true, ...dados });
   } catch (erro) {
     console.error('❌ Erro ao obter UCs do livro:', erro);

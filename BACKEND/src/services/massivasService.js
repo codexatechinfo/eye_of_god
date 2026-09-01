@@ -944,15 +944,22 @@ async function obterHistoricoLivro(db, livro) {
 // seguinte, quando o leiturista finalmente lança a leitura) — é essa
 // repetição que permite reconstruir tanto "estado atual de cada UC" quanto
 // "quando cada UC virou realizada" a partir da mesma consulta.
-async function consultarUcsBrutasDoLivro(db, livro) {
+// `ateData` opcional ("DD/MM/YYYY") — quando informado, restringe às linhas
+// digitadas até aquela data (data_import), pra que o fallback de `codigo`
+// em montarUcsAtuais (usado quando não há evento de base_dados_leitura até
+// `ateData`) também respeite o corte temporal, em vez de sempre mostrar o
+// código mais recente independente da data selecionada.
+async function consultarUcsBrutasDoLivro(db, livro, ateData) {
+  const condicaoData = ateData ? `AND to_date(data_import, 'DD/MM/YYYY') <= to_date($2, 'DD/MM/YYYY')` : '';
   const { rows } = await db.query(
     `
     SELECT id, uc, codigo, equipamento, tipo_especificacao, faturamento, leitura_atual,
       situacao, colaborador, data_import, hora_import, etapa
     FROM contr_execucao_leitura
     WHERE livro = $1 AND uc IS NOT NULL
+      ${condicaoData}
     `,
-    [livro],
+    ateData ? [livro, ateData] : [livro],
   );
   return rows;
 }
@@ -964,6 +971,21 @@ async function consultarUcsBrutasDoLivro(db, livro) {
 function extrairCodigoDeMensagem(mensagem) {
   const m = /^(\d+)\s*-/.exec(mensagem ?? '');
   return m ? m[1] : null;
+}
+
+// Réplica server-side de ehCodigoDeImpedimento
+// (FRONTEND/src/app/services/colaboradores.service.ts) — mesma lista de
+// códigos administrativos (não é obstrução de campo: telemedida, leitura
+// do cliente, plurimensal, troca de medidor, UC fora de rota,
+// cadastrar/descadastrar cão feroz), confirmada com o usuário na ADR 0025.
+// Não dá pra compartilhar módulo entre os dois runtimes (mesmo padrão já
+// visto em deslocamentoService.js) — se a lista mudar num lado, mudar no
+// outro. Precisa existir aqui porque listarAtividadeHoje
+// (atividadeColaboradoresService.js) computa `impedimentos` no servidor.
+const CODIGOS_ADMINISTRATIVOS = new Set(['094', '059', '037', '027', '054', '055', '056']);
+
+function ehImpedimentoReal(codigo) {
+  return !!codigo && codigo !== '000' && codigo !== '099' && !CODIGOS_ADMINISTRATIVOS.has(codigo);
 }
 
 // "DD/MM/YYYY" + "HH:MM:SS" -> "YYYY-MM-DDTHH:MM:SS", só pra comparar
@@ -1030,7 +1052,12 @@ function escolherPorUc(linhas, ordem) {
 // chaveDataHoraOrdenavel (que faz split('/') na mão, sem to_date) trataria
 // uma data malformada futura como "0000-00-00" — mesmo problema da linha
 // em branco, silencioso — em vez de simplesmente excluir a linha ruim.
-async function buscarEventosLeitura(db, livro) {
+// `ateData` ("DD/MM/YYYY", opcional): quando informado, só considera
+// eventos até essa data — visão "ponto no tempo" do livro (ver ADR sobre
+// unificar contagens da barra lateral com o painel). Sem `ateData`,
+// comportamento idêntico a antes (sempre o estado mais atual).
+async function buscarEventosLeitura(db, livro, ateData) {
+  const condicaoData = ateData ? `AND to_date(data_da_leitura, 'DD/MM/YYYY') <= to_date($2, 'DD/MM/YYYY')` : '';
   const { rows } = await db.query(
     `
     SELECT unidade_consumidora, data_da_leitura, hora_da_leitura, especificacao, mensagem, equipamento, etapa
@@ -1038,8 +1065,57 @@ async function buscarEventosLeitura(db, livro) {
     WHERE livro::int = $1::int
       AND data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
       AND hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+      ${condicaoData}
     `,
-    [livro],
+    ateData ? [livro, ateData] : [livro],
+  );
+  return rows;
+}
+
+// Igual buscarEventosLeitura, mas pra VÁRIOS livros de uma vez, cruzados
+// contra o roster completo de contr_execucao_leitura (não só os eventos) —
+// usada por listarAtividadeHoje (atividadeColaboradoresService.js) pra
+// recalcular digitados/naoDigitados/impedimentos de todo livro que aparece
+// na barra lateral num corte só, sem N+1 (uma chamada por livro seria lenta
+// com dezenas/centenas de livros ativos). Devolve uma linha por UC de cada
+// livro do roster, com `codigo_contr` (contr_execucao_leitura, sempre
+// presente) e `mensagem` (base_dados_leitura até `dataBr`, null se não
+// achou evento) — quem chama decide o `codigo` final
+// (extrairCodigoDeMensagem(mensagem) ?? codigo_contr, mesma regra de
+// montarUcsAtuais) e a classificação de impedimento (ehImpedimentoReal).
+async function obterEventosPorLivrosAteData(db, livros, dataBr) {
+  if (!livros.length) return [];
+  // livrosInt como parâmetro PRÓPRIO (não um `IN (SELECT ... FROM roster)`)
+  // — achado ao vivo com EXPLAIN: passar a lista de livros como subquery de
+  // uma CTE faz o planner tratar a cardinalidade como desconhecida e cair
+  // pra Seq Scan nos 3,5 milhões de linhas de base_dados_leitura (8s pra 1
+  // livro só, mesmo com o índice idx_base_dados_leitura_livro_int
+  // existindo). Com o array de inteiros direto como parâmetro, o planner
+  // sabe exatamente quais valores buscar e usa o índice de verdade.
+  const livrosInt = [...new Set(livros.map(l => Number(l)).filter(Number.isFinite))];
+  const { rows } = await db.query(
+    `
+    WITH roster AS (
+      SELECT DISTINCT ON (c.livro, c.uc) c.livro, c.uc, c.codigo AS codigo_contr
+      FROM contr_execucao_leitura c
+      WHERE c.livro = ANY($1::text[])
+      ORDER BY c.livro, c.uc, c.id DESC
+    ), eventos AS (
+      SELECT DISTINCT ON (b.livro::int, b.unidade_consumidora)
+        b.livro::int AS livro_int, b.unidade_consumidora AS uc, b.mensagem
+      FROM base_dados_leitura b
+      WHERE b.livro::int = ANY($3::int[])
+        AND b.data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
+        AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+        AND to_date(b.data_da_leitura, 'DD/MM/YYYY') <= to_date($2, 'DD/MM/YYYY')
+      ORDER BY b.livro::int, b.unidade_consumidora,
+        to_date(b.data_da_leitura, 'DD/MM/YYYY') DESC, b.hora_da_leitura DESC, (b.especificacao = 'CON') DESC
+    )
+    SELECT r.livro, r.uc, r.codigo_contr, ev.mensagem
+    FROM roster r
+    LEFT JOIN eventos ev ON ev.livro_int = (r.livro)::int AND ev.uc = r.uc
+    `,
+    [livros, dataBr, livrosInt],
   );
   return rows;
 }
@@ -1247,10 +1323,17 @@ async function obterRegimeSucessivo(db, uc) {
   return { uc, codigoAtual, ciclosConsecutivos: ciclos };
 }
 
-async function obterUcsDoLivro(db, livro) {
+// `ateData` opcional ("DD/MM/YYYY") — repassado pra buscarEventosLeitura,
+// congela o painel "como o livro estava" naquela data em vez do estado mais
+// atual. Frontend manda o dia selecionado no calendário da barra lateral
+// (filtroData), pra bater com o mesmo corte que listarAtividadeHoje usa.
+async function obterUcsDoLivro(db, livro, ateData) {
   // eventos (base_dados_leitura) e brutas (contr_execucao_leitura) são
   // consultas independentes — buscadas em paralelo, combinadas só depois.
-  const [eventos, brutas] = await Promise.all([buscarEventosLeitura(db, livro), consultarUcsBrutasDoLivro(db, livro)]);
+  const [eventos, brutas] = await Promise.all([
+    buscarEventosLeitura(db, livro, ateData),
+    consultarUcsBrutasDoLivro(db, livro, ateData),
+  ]);
   const eventosPrimeiraPorUc = escolherPorUc(eventos, 'primeira');
   const eventosUltimaPorUc = escolherPorUc(eventos, 'ultima');
 
@@ -1368,4 +1451,7 @@ module.exports = {
   obterUcsDoLivro,
   obterRegimeSucessivo,
   contrDedupSql,
+  ehImpedimentoReal,
+  extrairCodigoDeMensagem,
+  obterEventosPorLivrosAteData,
 };

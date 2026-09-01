@@ -7,6 +7,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Barra lateral (aba Trilho) e painel de detalhe do mesmo livro podiam mostrar números
+  diferentes de "realizadas" (ex.: "39/50" na barra vs. "40 realizadas/48 a realizar" no painel)
+  — eram duas fontes com escopos diferentes: a barra sempre escopada ao dia selecionado, o
+  painel mostrando o roster completo do livro sem filtro de data. As duas contagens agora usam a
+  mesma fonte e o mesmo corte temporal (data selecionada no calendário), então sempre concordam.
+  Achado no caminho e corrigido: `contr_execucao_leitura` nunca teve índice em `livro` (871 mil
+  linhas, toda consulta por livro do sistema fazia sequential scan). Ver [ADR
+  0025](docs/adr/0025-timeline-deslocamento-jornada-base-dados-leitura.md), Adendo 1.
+
 - Jornada do colaborador (aba Trilho) finalmente mostra tempo trabalhado real — antes ficava
   sempre ~0s pra qualquer colaborador (causa raiz: horário do ciclo de raspagem, não da leitura
   real). Timeline do livro, deslocamento/km percorrido e impedimentos agora se baseiam em

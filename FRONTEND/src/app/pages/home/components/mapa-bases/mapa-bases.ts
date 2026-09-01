@@ -197,7 +197,14 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // com dado velho até o próximo ciclo de 60s). Ver ADR 0022.
   private grupoPontos = L.layerGroup(); // camada 2: pontos coletados
   private grupoSequencia = L.layerGroup(); // camada 7: rota planejada + desvios
-  private grupoAgentes = L.layerGroup(); // camada 6: demais agentes
+  private grupoAgentes = L.layerGroup(); // camada 6: demais agentes (toggle)
+  // Marcador do colaborador dono da rota/livro aberto no momento — sempre no
+  // mapa, nunca controlado pelo toggle "Demais agentes" (usuário: desmarcar
+  // só deve sumir com quem NÃO corresponde à rota/ponto selecionado). Fica
+  // fora de grupoAgentes de propósito: adicionado diretamente ao mapa em
+  // ngAfterViewInit, não entra no painel Camadas.
+  private grupoAgenteAtual = L.layerGroup();
+  private nomeAgenteEmDestaque: string | null = null;
   private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo do livro
   private grupoLimitesMunicipais = L.layerGroup(); // camada 5: contorno IBGE
 
@@ -227,6 +234,14 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       const atuais = this.colaboradoresService.atuaisLivro();
       const timeline = this.colaboradoresService.timelineLivro();
       this.atualizarRotaLivro(selecionado, atuais, timeline);
+    });
+    // Marcador do colaborador da rota aberta sai de grupoAgentes (toggle) e
+    // vai pro grupo sempre-visível — independente do estado de "Demais
+    // agentes". Roda em effect próprio (não dentro do de cima) porque é uma
+    // preocupação diferente (membership de grupo, não desenho da rota).
+    effect(() => {
+      const selecionado = this.colaboradoresService.livroSelecionado();
+      this.atualizarAgenteEmDestaque(selecionado?.colaboradorNome ?? null);
     });
     // "Centralizar no mapa" (botão do card de detalhe de UC, item 4) — voa
     // bem de perto (ZOOM_FOCO) num ponto específico, diferente do
@@ -290,6 +305,32 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     return atuais
       .map((item): L.LatLngTuple => [Number(item.latitude), Number(item.longitude)])
       .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+  }
+
+  // Move o marcador do colaborador em destaque entre grupoAgentes (sujeito
+  // ao toggle "Demais agentes") e grupoAgenteAtual (sempre visível). Não
+  // recria o marcador — só troca de grupo, então preserva listener de
+  // clique/tooltip já anexados.
+  private atualizarAgenteEmDestaque(nome: string | null): void {
+    if (nome === this.nomeAgenteEmDestaque) return;
+
+    if (this.nomeAgenteEmDestaque) {
+      const anterior = this.marcadoresColaboradores.get(this.nomeAgenteEmDestaque);
+      if (anterior) {
+        this.grupoAgenteAtual.removeLayer(anterior);
+        anterior.addTo(this.grupoAgentes);
+      }
+    }
+
+    if (nome) {
+      const atual = this.marcadoresColaboradores.get(nome);
+      if (atual) {
+        this.grupoAgentes.removeLayer(atual);
+        atual.addTo(this.grupoAgenteAtual);
+      }
+    }
+
+    this.nomeAgenteEmDestaque = nome;
   }
 
   private alternarGrupo(grupo: L.LayerGroup, ligado: boolean): void {
@@ -449,6 +490,8 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     this.alternarGrupo(this.grupoAgentes, this.camadaAgentes());
     this.alternarGrupo(this.grupoSetorPlanejado, this.camadaSetorPlanejado());
     this.alternarGrupo(this.grupoLimitesMunicipais, this.camadaLimitesMunicipais());
+    // Sempre no mapa — não é uma camada do painel, não tem toggle.
+    this.grupoAgenteAtual.addTo(this.mapa);
 
     this.atualizarMarcadoresColaboradores();
     this.aplicarZoomRegional(this.colaboradoresService.filtroRegional());
@@ -483,6 +526,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
 
     for (const marcador of this.marcadoresColaboradores.values()) {
       this.grupoAgentes.removeLayer(marcador);
+      this.grupoAgenteAtual.removeLayer(marcador);
     }
     this.marcadoresColaboradores.clear();
 
@@ -497,8 +541,13 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
       const ehMoto = colaborador.cargo === 'LEITURISTA MOTOCICLISTA' || colaborador.cargo === 'MONITOR';
+      // Rebuild recria do zero a cada refresh — se este for o colaborador da
+      // rota aberta, nasce direto no grupo sempre-visível, senão nomeAgenteEmDestaque
+      // ficaria "certo" no campo mas o marcador voltaria pro grupo com toggle
+      // até o próximo clique trocar a seleção (ver atualizarAgenteEmDestaque).
+      const grupoAlvo = loc.colaborador === this.nomeAgenteEmDestaque ? this.grupoAgenteAtual : this.grupoAgentes;
       const marcador = L.marker([lat, lng], { icon: ehMoto ? ICONE_MOTO : ICONE_PEDESTRE })
-        .addTo(this.grupoAgentes)
+        .addTo(grupoAlvo)
         .bindTooltip(`${colaborador.colaborador} - última leitura em ${loc.data_import} ${loc.hora_import}`, {
           direction: 'top',
           offset: [0, -14],

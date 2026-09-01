@@ -37,7 +37,9 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   do livro: "Pendente" virou "A realizar" (é só "ainda não realizada", nunca foi a situação real
   do portal). Clicar no ícone do colaborador no mapa agora também abre o card dele na lista
   lateral esquerda (destaque + jornada) **e rola a lista até ele** — sem isso o destaque
-  acontecia fora da área visível numa lista de ~360 nomes, parecendo que nada tinha mudado. Ver
+  acontecia fora da área visível numa lista de ~360 nomes, parecendo que nada tinha mudado.
+  Desmarcar "Demais agentes" agora só esconde os colaboradores que não correspondem à rota
+  aberta — o dono da rota selecionada continua sempre visível. Ver
   [ADR 0022](docs/adr/0022-camadas-mapa-e-limites-municipais.md).
 
 - Aba Trilho: mapa mostra sempre um ícone por colaborador (moto para motoqueiro/monitor, pessoa

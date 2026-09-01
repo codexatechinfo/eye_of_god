@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-09-01T00:15:00.000Z",
+  "atualizado_em": "2026-09-01T00:25:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "24eb850",
+  "commit": "a11dfb9",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -929,6 +929,13 @@
       "skill": "/projeto-novo",
       "evento": "Import em massa de 3.511.075 linhas em base_dados_leitura (4 CSV + 1 xlsx) - dois problemas reais achados e corrigidos ao vivo",
       "detalhe": "Usuario forneceu 4 CSVs (~230MB/230MB/230MB/80MB, export do Excel dividido no teto de 1.048.576 linhas) mais um xlsx de 132 linhas, pedindo import um por vez. Pipeline padrao (importarArquivo/aba Importacao) e ExcelJS-only e materializa tudo em memoria - inviavel pro formato (CSV) e pra escala (3,5 milhoes de linhas nao cabem num INSERT parametrizado so, motor generico ja teto a 300 linhas/lote por bug do driver pg). Confirmado antes de codar que awk -F';' bate 23 campos em TODAS as linhas (split simples seguro, sem aspas/delimitador escapado). Indice novo idx_base_dados_leitura_chave (empresa_id+4 colunas da chave de upsert) criado ANTES de importar - sem ele o DELETE por lote repetiria o bug da ADR 0023 conforme a tabela cresce de 0 pra 3,5 milhoes. Script descartavel BACKEND/_temp_importar_base_dados_leitura.js (nunca commitado, apagado ao final) replicando manualmente a semantica de importarArquivo (DELETE de todas as chaves do arquivo INTEIRO uma vez so, nao por lote pequeno - mesma leitura gera linhas com a MESMA chave quando especificacao varia, CON/GTP, confirmado nos dados reais; DELETE por lote pequeno perderia uma dessas ao processar o lote com a outra). Problema 1: estouro de memoria no 2o arquivo (heap 4GB) - 1o arquivo (1.048.575 linhas) ja tinha commitado com sucesso antes do crash, nada corrompido (confirmado com count exato depois). Corrigido subindo pra 12GB (maquina tem 34GB) e liberando o array de ~1 milhao de objetos entre arquivos (--expose-gc + global.gc() explicito), script reiniciado pulando o 1o arquivo ja importado. Problema 2: lentidao severa depois do reinicio (60mil linhas em 10min vs 1 milhao em ~2min antes) - investigado via pg_stat_activity, sessoes presas em SELECT set_config (mesma query de abrirContextoTenant). Causa real, so descoberta depois: nodemon do servidor real (rodando desde muito antes desta sessao) observa o BACKEND inteiro (watching path(s): *.*, sem allowlist) e o script descartavel tinha sido criado la dentro - cada edicao disparava reinicio do servidor, derrubando o job de coleta Copel no meio de um ciclo. Achado colateral registrado pra nao repetir: nas primeiras vezes que vi essas sessoes travadas, tomei por orfas de teste e as encerrei com pg_terminate_backend - em retrospecto mais provavel que fossem consequencia dos reinicios do nodemon, nao orfas de verdade. Perguntado ao usuario como prosseguir - escolheu pausar o servidor. Servidor parado (Stop-Process nos PIDs do nodemon/node), import concluiu os 2 arquivos restantes de ~1 milhao de linhas em ~103s cada sem contencao, script apagado, servidor religado via preview_start - ciclo de coleta reiniciou sozinho, login novo na Copel (comportamento ja esperado, ADR 0019/0020). Resultado final: 3.511.075 linhas (1.048.575x3 + 365.218 + 132), 0 lotes com falha em nenhum dos 5 arquivos, count(*) bate exato com a soma dos logs. Amostra conferida: pares CON/GTP preservados, mes_ref_livro uniforme 2026-08-01. npm test (12/12) voltou a passar depois do servidor religado, mais rapido que antes. Ver Adendo 2 da ADR 0024."
+    },
+    {
+      "data": "2026-09-01T00:25:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Corrigido: desmarcar Demais agentes escondia tambem o colaborador da rota aberta",
+      "detalhe": "Usuario testou e apontou: desmarcar Demais agentes deveria sumir so com quem NAO corresponde a rota/ponto selecionado, nao com o dono da rota aberta no momento. Antes grupoAgentes (grupo controlado pelo toggle) continha TODOS os marcadores sem distincao. Novo grupo grupoAgenteAtual, adicionado direto ao mapa em ngAfterViewInit sem toggle (sempre visivel, nao entra no painel Camadas). Novo metodo atualizarAgenteEmDestaque(nome), chamado por effect proprio que observa livroSelecionado(): move o marcador do colaborador anterior de volta pra grupoAgentes (volta a obedecer o toggle) e puxa o marcador do novo selecionado pra grupoAgenteAtual - sem recriar o marcador, so troca de grupo (preserva listener de clique e tooltip). Como atualizarMarcadoresColaboradores recria todos os marcadores do zero a cada refresh de localizacao, o loop de criacao tambem checa loc.colaborador === nomeAgenteEmDestaque pra nascer direto no grupo certo - sem isso o proximo refresh (60s) devolveria silenciosamente o marcador em destaque pro grupo com toggle. ng build --configuration development limpo. Ver Adendo 5 da ADR 0022."
     }
   ]
 }

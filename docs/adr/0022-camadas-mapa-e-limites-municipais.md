@@ -228,3 +228,26 @@ casando por `data-colaborador` no `<li>`). `abrirColaborador` zera `colaboradorF
 setar de novo — sem isso, clicar duas vezes seguidas no mesmo ícone do mapa (ex.: usuário rolou
 a lista pra outro lugar no meio) escreveria o mesmo nome de novo e o `effect` não reagiria
 (signal de string só dispara em mudança de valor). `ng build --configuration development` limpo.
+
+## Adendo 5 — "Demais agentes" não deve esconder o agente da rota aberta
+
+Usuário testou e apontou: desmarcar "Demais agentes" deveria sumir só com os colaboradores que
+**não** correspondem à rota/ponto selecionado no momento — não com o dono da rota aberta.
+Antes, `grupoAgentes` (o grupo controlado pelo toggle) continha TODOS os marcadores de
+colaborador sem distinção, então desligar a camada escondia até o colaborador cuja rota estava
+sendo exibida no painel.
+
+Novo grupo `grupoAgenteAtual`, adicionado direto ao mapa em `ngAfterViewInit` (sem toggle, não
+entra no painel Camadas — é sempre visível, por definição é "o agente relevante agora"). Novo
+método `atualizarAgenteEmDestaque(nome)`, chamado por um `effect()` próprio que observa
+`livroSelecionado()`: move o marcador do colaborador anterior de volta pra `grupoAgentes`
+(volta a obedecer o toggle) e puxa o marcador do novo colaborador selecionado pra
+`grupoAgenteAtual` — sem recriar o marcador (`L.Marker` só troca de grupo via
+`removeLayer`/`addTo`, preserva o listener de clique e o tooltip já anexados). Como
+`atualizarMarcadoresColaboradores()` recria todos os marcadores do zero a cada refresh de
+localização (efeito separado, existente), o loop de criação também checa
+`loc.colaborador === this.nomeAgenteEmDestaque` pra nascer direto no grupo certo — sem isso, o
+próximo refresh (60s) devolveria silenciosamente o marcador em destaque pro grupo com toggle até
+o usuário clicar em outra rota.
+
+`ng build --configuration development` limpo.

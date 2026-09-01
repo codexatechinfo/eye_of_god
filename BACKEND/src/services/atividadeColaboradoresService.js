@@ -777,20 +777,34 @@ async function obterSuspensoesHoje(db, dataConsultaIso) {
 // DISTINCT ON de propósito (não é um LEFT JOIN nem um filtro aplicado
 // depois): isso faz o ORDER BY ... LIMIT 1 implícito do DISTINCT ON
 // escolher, pra cada colaborador, a linha de maior id dentre as que TÊM
-// coordenada — ou seja, já pula automaticamente pra UC anterior com
-// coordenada se a mais recente não tiver match (só ~4% das UCs não têm).
-// Colaborador só fica de fora se NENHUMA UC que ele já realizou tiver
-// coordenada — bem raro. Se reescrever isso um dia, manter o JOIN dentro
-// do DISTINCT ON, não mover pra depois (perde esse fallback automático).
-async function obterUltimaUcRealizadaPorColaborador(db) {
-  const { rows } = await db.query(`
+// coordenada — ou seja, já pula automaticamente pra UC anterior COM
+// COORDENADA, DENTRO DO MESMO DIA (`data_import = $1`), se a mais recente
+// não tiver match (só ~4% das UCs não têm). Colaborador só fica de fora se
+// NENHUMA UC que ele realizou NAQUELE DIA tiver coordenada — bem raro. Se
+// reescrever isso um dia, manter o JOIN dentro do DISTINCT ON, não mover
+// pra depois (perde esse fallback automático).
+//
+// `dataBr` ("DD/MM/YYYY") filtra pro dia selecionado no calendário da barra
+// — antes esta consulta não tinha filtro de data nenhum (sempre a última
+// UC realizada em QUALQUER dia), então um colaborador sem nenhuma
+// atividade hoje aparecia no mapa com a posição/rota de dias atrás.
+// Usuário reportou com print: marcador de NELSON MACHADO GONCALVES restando
+// "última leitura em 28/08" apesar de ele ter atividade só de hoje na
+// lista da esquerda, e o clique abrindo o livro DAQUELE dia antigo, não o
+// de hoje — o fallback acima (que pula UC sem coordenada) estava pulando
+// pra um dia inteiro diferente, não só pra outra UC do mesmo dia.
+async function obterUltimaUcRealizadaPorColaborador(db, dataBr) {
+  const { rows } = await db.query(
+    `
     SELECT DISTINCT ON (c.colaborador)
       c.colaborador, c.uc, c.livro, c.data_import, c.hora_import, m.latitude, m.longitude
     FROM contr_execucao_leitura c
     JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = c.uc
-    WHERE c.colaborador IS NOT NULL AND c.codigo IS NOT NULL
+    WHERE c.colaborador IS NOT NULL AND c.codigo IS NOT NULL AND c.data_import = $1
     ORDER BY c.colaborador, c.id DESC
-  `);
+    `,
+    [dataBr],
+  );
   return rows;
 }
 

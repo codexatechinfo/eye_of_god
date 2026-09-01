@@ -52,7 +52,12 @@ async function atividadeHoje(req, res) {
 
 async function localizacoes(req, res) {
   try {
-    const dados = await obterUltimaUcRealizadaPorColaborador(req.db);
+    const { data } = req.query;
+    const dataBr = data ? isoParaDataBr(data) : hojeBr();
+    if (!dataBr) {
+      return res.status(400).json({ sucesso: false, erro: 'Parâmetro "data" inválido, use YYYY-MM-DD.' });
+    }
+    const dados = await obterUltimaUcRealizadaPorColaborador(req.db, dataBr);
     res.json({ sucesso: true, localizacoes: dados });
   } catch (erro) {
     console.error('❌ Erro ao obter localizações dos colaboradores:', erro);

@@ -519,7 +519,10 @@ export class ColaboradoresService {
     // um dia passado não tem "chegando dado novo" pra esperar, e ficar
     // refazendo a mesma busca a cada 60s seria trabalho à toa.
     setInterval(() => {
-      if (this.filtroData() === hojeIso()) this.carregarAtividadeHoje();
+      if (this.filtroData() === hojeIso()) {
+        this.carregarAtividadeHoje();
+        this.carregarLocalizacoes();
+      }
     }, this.INTERVALO_ATIVIDADE_MS);
   }
 
@@ -566,14 +569,17 @@ export class ColaboradoresService {
     this.filtroData.set(hojeIso());
     this.buscar();
     this.carregarAtividadeHoje();
+    this.carregarLocalizacoes();
   }
 
   // Chamado pelo template quando o usuário troca a data no calendário —
-  // recarrega a atividade (Realizados/Impedimentos/cards/lista de livros)
-  // pra refletir o dia selecionado.
+  // recarrega a atividade (Realizados/Impedimentos/cards/lista de livros) E
+  // as localizações (marcadores do mapa, ver obterUltimaUcRealizadaPorColaborador)
+  // pra refletir o dia selecionado nos dois.
   onFiltroDataChange(data: string): void {
     this.filtroData.set(data);
     this.carregarAtividadeHoje();
+    this.carregarLocalizacoes();
   }
 
   carregarAtividadeHoje(): void {
@@ -597,7 +603,8 @@ export class ColaboradoresService {
   }
 
   carregarLocalizacoes(): void {
-    this.http.get<LocalizacoesResponse>(`${this.apiUrl}/colaboradores/localizacoes`).subscribe({
+    const params = new HttpParams().set('data', this.filtroData());
+    this.http.get<LocalizacoesResponse>(`${this.apiUrl}/colaboradores/localizacoes`, { params }).subscribe({
       next: resposta => this.localizacoes.set(resposta.localizacoes),
       error: () => {},
     });

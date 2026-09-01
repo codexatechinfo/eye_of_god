@@ -687,3 +687,46 @@ navegador (sem credencial de login disponível nesta sessão) — confirmado por
 (mesmo gate `atividadeDe()` já usado e testado na lista da esquerda) e pelo rastreio completo do
 fluxo de clique (marcador → `abrirLivro`/`abrirColaborador`, único caminho que desenha a rota a
 partir do mapa).
+
+## Adendo 12 — causa raiz mais profunda: `localizacoes()` nunca teve filtro de data nenhum
+
+Usuário trouxe um segundo print (mesma sessão, `NELSON MACHADO GONCALVES`, tooltip do mapa
+mostrando "última leitura em 28/08/2026 16:37:50") mostrando o MESMO sintoma do Adendo 11 —
+posição/rota de um dia antigo, livro clicado não correspondendo à execução de hoje.
+
+Investigado se o gate do Adendo 11 (`atividadeDe(nome)`) já bastava: confirmado ao vivo que
+`NELSON MACHADO GONCALVES` tem **zero linhas em `contr_execucao_leitura` pra `data_import =
+01/09/2026`** — ou seja, ele já devia ter sido pego pelo gate do Adendo 11 (sem entrada em
+`atividadeHoje`, sem marcador). O mais provável é este print ser do MESMO teste que gerou o
+Adendo 11, antes do fix estar no ar — mas achado no caminho um problema mais profundo, real e
+que o Adendo 11 sozinho NÃO cobre: `obterUltimaUcRealizadaPorColaborador`
+(`atividadeColaboradoresService.js`, alimenta `/colaboradores/localizacoes`) **nunca teve filtro
+de data nenhum** — sempre a última UC realizada em QUALQUER dia com coordenada conhecida
+(`DISTINCT ON (colaborador) ... ORDER BY id DESC`), e o `JOIN` (não `LEFT JOIN`) com
+`coordenadas_ucs_mineradas` faz esse `DISTINCT ON` pular automaticamente pra UC anterior COM
+coordenada quando a mais recente não tem — por design (comentário original), só que esse "pular
+pra anterior" não tinha limite de quantos DIAS pra trás, só de quantas LINHAS. Um colaborador
+com atividade HOJE mas cujas UCs de hoje não batessem com `coordenadas_ucs_mineradas` (gap de
+~4%, Adendo 5) cairia de volta pra uma UC de dias atrás com coordenada — passando pelo gate do
+Adendo 11 (tem atividade hoje) mas mostrando posição/rota erradas mesmo assim. Frontend também
+nunca recarregava `localizacoes()` ao trocar a data no calendário (`onFiltroDataChange`) nem no
+polling de 60s — só uma vez, no arranque do app.
+
+**Correção**: `obterUltimaUcRealizadaPorColaborador(db, dataBr)` ganhou o filtro `c.data_import
+= $1` — o fallback "pula UC sem coordenada" continua existindo, mas agora só DENTRO do mesmo
+dia; colaborador sem NENHUMA UC com coordenada NAQUELE DIA simplesmente não aparece (mesmo
+raciocínio do Adendo 11, aplicado na fonte, não só num gate por cima). Controller
+(`colaboradoresController.js#localizacoes`) ganhou `?data=` (mesmo padrão `isoParaDataBr`/
+`hojeBr()` já usado em `jornada`). Frontend: `carregarLocalizacoes()` manda `filtroData()`, e
+passou a ser chamada também em `onFiltroDataChange` (troca de data no calendário) e no polling
+de 60s (junto com `carregarAtividadeHoje`, só enquanto a data selecionada for hoje — mesma
+condição já usada lá). O gate `atividadeDe()` do Adendo 11 continua no lugar (redundante agora
+na maioria dos casos, mas inofensivo como segunda camada de proteção).
+
+Verificado ao vivo contra o banco: `obterUltimaUcRealizadaPorColaborador(db, '01/09/2026')` —
+90 colaboradores, NELSON MACHADO GONCALVES **não** aparece (confirma que sumiu);
+`obterUltimaUcRealizadaPorColaborador(db, '28/08/2026')` — 51 colaboradores, NELSON aparece
+(confirma que o filtro por data funciona nos dois sentidos, não é regressão que simplesmente
+esconde todo mundo). `npm test` (12/12), `node --check`, `ng build --configuration development`
+limpos. Novamente não verificado visualmente no navegador (mesma limitação do Adendo 11, sem
+credencial de login).

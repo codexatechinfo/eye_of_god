@@ -298,6 +298,7 @@
                 type="button"
                 (click)="centralizarNoMapa(item)"
                 [disabled]="!item.latitude || !item.longitude"
+                [title]="!item.latitude || !item.longitude ? 'Sem coordenada cadastrada pra essa UC' : ''"
                 class="flex-1 text-[9.5px] font-semibold px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Centralizar no mapa

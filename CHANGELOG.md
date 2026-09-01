@@ -13,6 +13,9 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   mesma fonte, nunca mais ficam inconsistentes entre si). Ver [ADR
   0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md), Adendo 9.
 
+- Botão "Centralizar no mapa" desabilitado (UC sem coordenada cadastrada) agora tem tooltip
+  explicando o motivo, em vez de só ficar cinza sem explicação. Ver Adendo 10 da ADR 0021.
+
 - Aba Monitoramento de Livros presa em "Carregando..." indefinidamente. Causa: consulta de
   resumo/detalhe (`contr_execucao_leitura`, 871 mil linhas) sem índice em `(data_import,
   hora_import)` e uma estimativa de cardinalidade errada do Postgres (`DISTINCT ON` sobre

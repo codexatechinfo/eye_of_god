@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-09-01T00:35:00.000Z",
+  "atualizado_em": "2026-09-01T00:55:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "edf740a",
+  "commit": "ad11047",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -943,6 +943,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: cards Realizadas/A realizar do painel do livro podiam mostrar 0/0 com Impedimentos > 0 ao mesmo tempo",
       "detalhe": "Usuario reportou com print: painel do livro 040981 mostrando Realizadas 0 e A realizar 0 junto com Impedimentos 38 - inconsistente, impedimento e um tipo de UC realizada (tem codigo preenchido). Causa raiz: Realizadas/A realizar liam sel.livro.digitados/naoDigitados (LivroAtividade de atividadeHoje()), enquanto Impedimentos ja lia atuaisLivro() (busca propria sempre fresca pro livro aberto). Quando o livro e aberto pelo clique no icone do colaborador no mapa e esse livro nao aparece na lista de atividade hoje do colaborador, o codigo ja usava deliberadamente um objeto minimo com digitados:0/naoDigitados:0 como fallback (decisao documentada desde a criacao da funcionalidade) - so que ficar em branco na pratica virou mostrar 0 lado a lado com numero real de outra fonte. Confirmado contra o banco: livro 040981/JOSIANE APARECIDA ANZOLIN tem 108 UCs reais (76 realizadas, 32 a realizar), nada a ver com os 0/0 exibidos. Corrigido trocando a fonte: dois computed novos em colaboradores.service.ts (realizadasLivro/aRealizarLivro), mesma base de impedimentosLivro (atuaisLivro().filter(codigo)/filter(!codigo)) - os 3 cards do painel agora sempre concordam entre si, vem da mesma fonte fresca. sel.livro.digitados/naoDigitados continuam usados normalmente nos outros lugares que precisam do agregado de TODOS os livros do colaborador (cards da lista lateral) - so os 2 cards deste painel especifico trocaram de fonte. ng build --configuration development limpo. Ver Adendo 9 da ADR 0021."
+    },
+    {
+      "data": "2026-09-01T00:55:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Explicado codigo 094 (leitura telemedida) e catalogo de codigos; tooltip no botao Centralizar no mapa desabilitado",
+      "detalhe": "Usuario perguntou o que aconteceu com UCs codigo 094. Investigado contra base_dados_leitura (tem coluna mensagem que contr_execucao_leitura nao tem): 094 = LEITURA TELEMEDIDA, medidor lido remotamente, nao e problema de campo. Levantado catalogo completo dos codigos reais (obstrucoes reais como 001-portao fechado/002-cao feroz/020-md com defeito vs categorias administrativas como 094/059-leitura do cliente/037-plurimensal/027-troca de medidor). Perguntado se queria separar os dois grupos na contagem de Impedimentos - usuario decidiu nao mexer por ora. Segunda pergunta com 2 prints: por que algumas UCs 094 mostram endereco/coordenada e outras nao, e por que Centralizar no mapa as vezes nao clica. Confirmado no banco que a UC do 2o print nao tem NENHUMA correspondencia em coordenadas_ucs_mineradas - mesma lacuna de ~4% ja documentada, sem relacao com o codigo 094 (coincidencia aparecerem juntos no mesmo print). Botao ja ficava corretamente desabilitado pra UC sem coordenada, nao era bug - adicionado title explicando o motivo a pedido do usuario. ng build --configuration development limpo. Ver Adendo 10 da ADR 0021."
     }
   ]
 }

@@ -626,3 +626,27 @@ lugares que precisam do agregado de TODOS os livros do colaborador (cards da lis
 
 `ng build --configuration development` limpo. Confirmado ao vivo contra o banco:
 `contr_execucao_leitura` pro livro 040981/JOSIANE tem 108 linhas (76 com `codigo`, 32 sem).
+
+## Adendo 10 — dúvida sobre código 094 e tooltip no botão "Centralizar no mapa" desabilitado
+
+Usuário perguntou o que "aconteceu" com UCs marcadas código 094. Investigado contra
+`base_dados_leitura` (ADR 0024, tem a coluna `mensagem` que `contr_execucao_leitura` não tem):
+**094 = "LEITURA TELEMEDIDA"** — medidor lido remotamente (smart meter), não é problema de
+campo. Catálogo completo dos códigos que aparecem nos dados reais também levantado nessa
+investigação (`001-PORTAO FECHADO`, `002-CAO FEROZ`, `020-MD COM DEFEITO` são obstruções reais;
+`094`, `059-LEIT FORNECIDA PELO CLI`, `037-LEIT PLURIMENSAL`, `027-TROCA DE MEDIDOR` são
+categorias administrativas, não obstrução) — usuário perguntou se eu queria ajustar
+`ehCodigoDeImpedimento()` pra separar os dois grupos, mas decidiu não mexer por ora (deixar
+como está, qualquer código != 000/099 continua contando como impedimento).
+
+Segunda pergunta, com 2 prints: por que algumas UCs código 094 mostram endereço/coordenada
+normalmente e outras não, e por que o botão "Centralizar no mapa" às vezes nem clica. Confirmado
+contra o banco (`LEFT JOIN coordenadas_ucs_mineradas`): a UC específica do 2º print
+(115584285) não tem NENHUMA correspondência na tabela de coordenadas — mesma lacuna de ~4% já
+documentada (Adendo 5), sem relação com o código 094 em si (é coincidência as duas coisas
+aparecerem juntas no mesmo print). O botão já ficava corretamente desabilitado
+(`[disabled]="!item.latitude || !item.longitude"`, `livro-detalhe.html`) — não é bug, é o
+comportamento certo pra UC sem coordenada. Único ajuste pedido: `title` no botão desabilitado
+("Sem coordenada cadastrada pra essa UC") pra não parecer quebrado sem explicação.
+
+`ng build --configuration development` limpo.

@@ -35,3 +35,28 @@ Total no Postgres local: 15 tabelas (12 de negócio + as 3 de RBAC).
   (`pg_dump --schema-only -t nome_da_tabela`) só para ela — não reimportar tudo de novo.
 - `docs/RBAC.md`, `docs/ARQUITETURA.md` e `docs/estado.json`, que citavam "~48 tabelas de
   negócio" (ADR 0003), passam a refletir 12.
+
+## Adendo 1 — `control_empreiteiras` removida (superada por `base_dados_leitura`)
+
+Usuário pediu pra apagar `control_empreiteiras` e atualizar o modelo de importação/exportação
+(`importacaoConfig.js`, que também alimenta o gerador de planilha de exemplo — `GET
+/importacao/exemplo`, `gerarExemploTodasTabelas`). Uma das 12 tabelas originais desta ADR,
+`control_empreiteiras` foi **superada** pela ADR 0024 (`base_dados_leitura`, réplica exata da
+mesma estrutura, criada especificamente pra substituí-la — data/hora reais de leitura em vez do
+ciclo de raspagem, ver ADR 0025) e desde então não era mais escrita nem lida por nenhuma
+consulta do app; só sobrava referenciada no allowlist de importação.
+
+Confirmado antes de apagar: tabela com **0 linhas** (já não recebia dado há tempos), nenhuma FK
+de outra tabela apontando pra ela, nenhuma view dependente. `DROP TABLE control_empreiteiras`
+executado. Entrada correspondente removida de `importacaoConfig.js` (`CONFIG_IMPORTACAO`) — o
+gerador de planilha de exemplo é inteiramente derivado desse config
+(`Object.entries(CONFIG_IMPORTACAO)`), então a tabela também deixou de aparecer no dropdown da
+aba Importação e nos modelos/exemplos baixáveis sem precisar tocar em código além do config.
+
+### Verificação
+
+- `node --check` no config alterado, `npm test` (12/12)
+- `information_schema`/`pg_tables` confirmando a tabela removida
+- `gerarExemploTodasTabelas` testado direto contra o banco depois da remoção — continua
+  gerando o arquivo normalmente (13 tabelas restantes no modelo, `control_empreiteiras`
+  ausente, `base_dados_leitura` presente)

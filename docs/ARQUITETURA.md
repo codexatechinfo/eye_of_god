@@ -56,12 +56,14 @@ classDiagram
   class Postgres_Local {
     <<self-hosted via Supabase, WSL>>
     +users
-    +control_empreiteiras
+    +base_dados_leitura
     +pendentes_im
     +atribuidas_im
     +em_execucao_im
     +massivas
-    +... 15 tabelas (12 de negócio + empresas/tenant_features/audit_log — podado, ver ADR 0004)
+    +... 19 tabelas (15 de negócio + empresas/tenant_features/audit_log + spatial_ref_sys do
+        PostGIS — podado, ver ADR 0004; control_empreiteiras removida, superada por
+        base_dados_leitura, ver Adendo 1)
   }
 
   FRONTEND_Angular --> BACKEND_Express : HTTP + JWT

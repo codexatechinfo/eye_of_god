@@ -96,6 +96,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   gravar numa coluna que não existe mais. Ver Adendo 6 da [ADR
   0015](docs/adr/0015-percentual-execucao-e-prazo-regulatorio-por-livro.md).
 
+- Tabela `control_empreiteiras` — superada pela `base_dados_leitura` (ADR 0024, réplica exata
+  da mesma estrutura) desde a reconstrução da timeline/deslocamento/jornada sobre dados reais
+  de leitura (ADR 0025); não recebia dado nem era consultada por nenhuma feature havia tempos.
+  Estava vazia (0 linhas), sem FK ou view dependente. Removida também do modelo de
+  importação/exportação (`importacaoConfig.js`, que também alimenta a planilha de exemplo
+  baixável) — deixa de aparecer no dropdown da aba Importação. Ver Adendo 1 da [ADR
+  0004](docs/adr/0004-poda-de-tabelas-nao-usadas.md).
+
 ### Adicionado
 
 - Nova tabela `base_dados_leitura` (empresa_id + RLS, `id` autoincremento), réplica exata da

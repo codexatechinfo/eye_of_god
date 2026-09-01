@@ -48,13 +48,15 @@ o que não está explicitamente liberado).
 ## RLS — onde a garantia de verdade mora
 
 Documento aqui é intenção; o que vale é o banco. O banco local só tem as tabelas que o app
-de fato usa (16 no total, depois da poda em [ADR 0004](adr/0004-poda-de-tabelas-nao-usadas.md)
-e da restauração pontual em [ADR 0007](adr/0007-restaura-tab-ligacao-coordenadas.md)), e
-**todas as 16** têm `empresa_id` `not null`, RLS `enable` + `force`, e a mesma policy de
-isolamento (`ROOT` vê tudo, os demais só a própria empresa) — nem `using` nem `with check`
-abrem exceção pra ausência de contexto: as 9 tabelas de negócio originais (`atestados`,
-`ativos_inativos`, `atribuidas_im`, `contr_execucao_leitura`, `control_empreiteiras`,
-`em_execucao_im`, `pendentes_im`, `prazo_reg_livros`, `suspensao`), `users`, as 3 de apoio ao
+de fato usa, depois da poda em [ADR 0004](adr/0004-poda-de-tabelas-nao-usadas.md) (que também
+removeu, num Adendo posterior, a `control_empreiteiras` original — superada por
+`base_dados_leitura`, ver ADR 0024) e da restauração pontual em [ADR
+0007](adr/0007-restaura-tab-ligacao-coordenadas.md). **Todas** as tabelas de negócio têm
+`empresa_id` `not null`, RLS `enable` + `force`, e a mesma policy de isolamento (`ROOT` vê
+tudo, os demais só a própria empresa) — nem `using` nem `with check` abrem exceção pra
+ausência de contexto: as tabelas de negócio originais (`atestados`, `ativos_inativos`,
+`atribuidas_im`, `contr_execucao_leitura`, `em_execucao_im`, `pendentes_im`,
+`prazo_reg_livros`, `suspensao`), `users`, as 3 de apoio ao
 RBAC (`empresas`, `tenant_features`, `audit_log`), e desde a
 [ADR 0009](adr/0009-empresa_id-nas-tabelas-de-referencia.md) também `calendario_leitura`,
 `cidades_localidades` e `tab_ligacao_coordenadas` — inicialmente tratadas como referência
@@ -66,7 +68,7 @@ Prova automatizada em `BACKEND/test/isolamento_tenant.test.js` (`npm test`).
 
 ## Importação de planilha
 
-Ver [ADR 0005](adr/0005-importacao-de-planilha.md) — `POST /importacao/:tabela` (12
+Ver [ADR 0005](adr/0005-importacao-de-planilha.md) — `POST /importacao/:tabela` (13
 tabelas, `.xlsx`), restrito a `ADMINISTRADOR`/`ROOT`. Pra quem não é `ROOT`, `empresa_id`
 sempre do token, nunca do arquivo ou da URL. `ROOT` não tem empresa própria — precisa
 escolher via `?empresaId=` (ver [ADR 0008](adr/0008-empresa-alvo-importacao-root.md));

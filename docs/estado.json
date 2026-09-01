@@ -4,9 +4,9 @@
   "perfil": "saas-multi-cliente",
   "versao": "0.7.0",
   "ambiente": "wsl-dev",
-  "atualizado_em": "2026-09-01T00:25:00.000Z",
+  "atualizado_em": "2026-09-01T00:35:00.000Z",
   "atualizado_por": "/projeto-novo",
-  "commit": "a11dfb9",
+  "commit": "edf740a",
   "seguranca": {
     "nota": null,
     "corte": 70,
@@ -936,6 +936,13 @@
       "skill": "/projeto-novo",
       "evento": "Corrigido: desmarcar Demais agentes escondia tambem o colaborador da rota aberta",
       "detalhe": "Usuario testou e apontou: desmarcar Demais agentes deveria sumir so com quem NAO corresponde a rota/ponto selecionado, nao com o dono da rota aberta no momento. Antes grupoAgentes (grupo controlado pelo toggle) continha TODOS os marcadores sem distincao. Novo grupo grupoAgenteAtual, adicionado direto ao mapa em ngAfterViewInit sem toggle (sempre visivel, nao entra no painel Camadas). Novo metodo atualizarAgenteEmDestaque(nome), chamado por effect proprio que observa livroSelecionado(): move o marcador do colaborador anterior de volta pra grupoAgentes (volta a obedecer o toggle) e puxa o marcador do novo selecionado pra grupoAgenteAtual - sem recriar o marcador, so troca de grupo (preserva listener de clique e tooltip). Como atualizarMarcadoresColaboradores recria todos os marcadores do zero a cada refresh de localizacao, o loop de criacao tambem checa loc.colaborador === nomeAgenteEmDestaque pra nascer direto no grupo certo - sem isso o proximo refresh (60s) devolveria silenciosamente o marcador em destaque pro grupo com toggle. ng build --configuration development limpo. Ver Adendo 5 da ADR 0022."
+    },
+    {
+      "data": "2026-09-01T00:35:00.000Z",
+      "nivel": "ok",
+      "skill": "/projeto-novo",
+      "evento": "Corrigido: cards Realizadas/A realizar do painel do livro podiam mostrar 0/0 com Impedimentos > 0 ao mesmo tempo",
+      "detalhe": "Usuario reportou com print: painel do livro 040981 mostrando Realizadas 0 e A realizar 0 junto com Impedimentos 38 - inconsistente, impedimento e um tipo de UC realizada (tem codigo preenchido). Causa raiz: Realizadas/A realizar liam sel.livro.digitados/naoDigitados (LivroAtividade de atividadeHoje()), enquanto Impedimentos ja lia atuaisLivro() (busca propria sempre fresca pro livro aberto). Quando o livro e aberto pelo clique no icone do colaborador no mapa e esse livro nao aparece na lista de atividade hoje do colaborador, o codigo ja usava deliberadamente um objeto minimo com digitados:0/naoDigitados:0 como fallback (decisao documentada desde a criacao da funcionalidade) - so que ficar em branco na pratica virou mostrar 0 lado a lado com numero real de outra fonte. Confirmado contra o banco: livro 040981/JOSIANE APARECIDA ANZOLIN tem 108 UCs reais (76 realizadas, 32 a realizar), nada a ver com os 0/0 exibidos. Corrigido trocando a fonte: dois computed novos em colaboradores.service.ts (realizadasLivro/aRealizarLivro), mesma base de impedimentosLivro (atuaisLivro().filter(codigo)/filter(!codigo)) - os 3 cards do painel agora sempre concordam entre si, vem da mesma fonte fresca. sel.livro.digitados/naoDigitados continuam usados normalmente nos outros lugares que precisam do agregado de TODOS os livros do colaborador (cards da lista lateral) - so os 2 cards deste painel especifico trocaram de fonte. ng build --configuration development limpo. Ver Adendo 9 da ADR 0021."
     }
   ]
 }

@@ -594,3 +594,35 @@ não como realizada), mas o efeito colateral é que não há hoje, nesta base, u
 exato "UC de um colaborador, próxima na rota de outro colaborador" pra confirmar visualmente.
 Mecanismo verificado por partes (fonte de dado certa, traversal, comparação); fica pro usuário
 confirmar na tela assim que um livro real passar por reatribuição no meio da execução.
+
+## Adendo 9 — cards "Realizadas"/"A realizar" zerados com "Impedimentos" > 0 no mesmo painel
+
+Usuário reportou (com print): painel do livro 040981 mostrando "Realizadas: 0" e "A realizar: 0"
+ao mesmo tempo que "Impedimentos: 38" — inconsistente, já que impedimento é um tipo de UC
+realizada (tem `codigo` preenchido), não dá pra ter 38 impedimentos com 0 realizadas.
+
+Causa raiz: "Realizadas"/"A realizar" liam `sel.livro.digitados`/`naoDigitados`
+(`LivroAtividade`, vindo de `atividadeHoje()`), enquanto "Impedimentos" já lia
+`atuaisLivro()` (busca própria, sempre fresca, feita especificamente pro livro aberto — ver
+Adendo 5). Quando o livro é aberto pelo clique no ícone do colaborador no **mapa**
+(`mapa-bases.ts#atualizarMarcadoresColaboradores`) e esse livro não aparece na lista de
+"atividade hoje" do colaborador (ex.: colaborador sem execução registrada hoje nesse livro
+específico, ou livro fora do filtro que `atividadeHoje` usa), o código já usava
+deliberadamente um objeto mínimo com `digitados: 0, naoDigitados: 0` como fallback — decisão
+documentada desde a criação dessa funcionalidade ("os cards de resumo do painel ficam em branco
+nesse caso, mas a rota/timeline... carrega normal"). Só que "ficar em branco" na prática virou
+"mostrar 0 lado a lado com um número real de outra fonte", o que é pior que branco — confirmado
+contra o banco: livro 040981/JOSIANE APARECIDA ANZOLIN tem 108 UCs reais (76 realizadas, 32 a
+realizar), nada a ver com os 0/0 exibidos.
+
+Corrigido trocando a fonte: dois `computed` novos em `colaboradores.service.ts`
+(`realizadasLivro`/`aRealizarLivro`), mesma base de `impedimentosLivro` (`atuaisLivro().filter(uc
+=> uc.codigo)`/`filter(uc => !uc.codigo)`) — os 3 cards do painel agora sempre concordam entre
+si, porque vêm da mesma fonte fresca, nunca mais do `LivroAtividade` potencialmente zerado.
+`sel.livro.digitados`/`naoDigitados` continuam existindo e sendo usados normalmente nos outros
+lugares que precisam do agregado de TODOS os livros do colaborador (cards da lista lateral,
+`totalRealizadas`/`totalPendentes`) — só os 2 cards deste painel específico (que já tem
+`atuaisLivro()` carregado pro livro exibido) trocaram de fonte.
+
+`ng build --configuration development` limpo. Confirmado ao vivo contra o banco:
+`contr_execucao_leitura` pro livro 040981/JOSIANE tem 108 linhas (76 com `codigo`, 32 sem).

@@ -114,7 +114,7 @@
         </div>
         <div class="min-w-0 leading-tight">
           <div class="text-[8.5px] font-semibold text-emerald-500 uppercase tracking-wide truncate">Realizadas</div>
-          <div class="text-xs font-bold text-emerald-700 tabular-nums">{{ sel.livro.digitados }}</div>
+          <div class="text-xs font-bold text-emerald-700 tabular-nums">{{ colaboradoresService.realizadasLivro() }}</div>
         </div>
       </div>
 
@@ -128,7 +128,7 @@
         </div>
         <div class="min-w-0 leading-tight">
           <div class="text-[8.5px] font-semibold text-red-500 uppercase tracking-wide truncate">A realizar</div>
-          <div class="text-xs font-bold text-red-700 tabular-nums">{{ sel.livro.naoDigitados }}</div>
+          <div class="text-xs font-bold text-red-700 tabular-nums">{{ colaboradoresService.aRealizarLivro() }}</div>
         </div>
       </div>
 

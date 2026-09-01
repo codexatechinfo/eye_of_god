@@ -420,6 +420,16 @@ export class ColaboradoresService {
   private intervaloUcsLivroId?: ReturnType<typeof setInterval>;
 
   impedimentosLivro = computed(() => this.atuaisLivro().filter(uc => ehCodigoDeImpedimento(uc.codigo)).length);
+  // Cards "Realizadas"/"A realizar" do painel do livro (livro-detalhe.html)
+  // — direto de atuaisLivro (sempre buscado fresco pro livro aberto), não
+  // do LivroAtividade.digitados/naoDigitados vindo de atividadeHoje. Esse
+  // último fica 0/0 quando o livro clicado no mapa não está na lista de
+  // "atividade hoje" do colaborador (livroSelecionado usa um objeto mínimo
+  // nesse caso, ver abrirLivro em mapa-bases.ts) — usuário viu isso
+  // acontecer com Impedimentos>0 e Realizadas/A realizar em 0 ao mesmo
+  // tempo, incoerente. Mesma fonte que já alimenta impedimentosLivro acima.
+  realizadasLivro = computed(() => this.atuaisLivro().filter(uc => uc.codigo).length);
+  aRealizarLivro = computed(() => this.atuaisLivro().filter(uc => !uc.codigo).length);
 
   // Posição de cada colaborador no mapa (última UC realizada, qualquer dia)
   // — buscada uma vez só (não muda a cada minuto como atividadeHoje).

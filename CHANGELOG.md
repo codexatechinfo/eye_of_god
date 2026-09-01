@@ -7,6 +7,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Painel do livro: cards "Realizadas" e "A realizar" podiam mostrar 0/0 ao mesmo tempo que
+  "Impedimentos" mostrava um número real (livro aberto pelo clique no colaborador no mapa,
+  quando esse livro não está na lista de "atividade hoje" — os 3 cards agora vêm sempre da
+  mesma fonte, nunca mais ficam inconsistentes entre si). Ver [ADR
+  0021](docs/adr/0021-tabela-coordenadas-ucs-mineradas.md), Adendo 9.
+
 - Aba Monitoramento de Livros presa em "Carregando..." indefinidamente. Causa: consulta de
   resumo/detalhe (`contr_execucao_leitura`, 871 mil linhas) sem índice em `(data_import,
   hora_import)` e uma estimativa de cardinalidade errada do Postgres (`DISTINCT ON` sobre

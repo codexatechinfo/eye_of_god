@@ -5,11 +5,31 @@ function normalizar(texto) {
   return String(texto ?? '').trim();
 }
 
+// "YYYY-MM-DD" a partir dos componentes LOCAIS do Date (não `toISOString()`,
+// que converte pra UTC e pode voltar um dia — mesma cilada de fuso horário
+// já documentada em PRAZO_CONTR_SQL/monitoramentoService.js).
+function formatarDataIso(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  const dia = String(data.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
 // Primeira linha da planilha é o cabeçalho e tem que bater exatamente (sem
 // acento/caixa não importa) com uma coluna conhecida da tabela — nunca aceita
 // nome de coluna vindo do arquivo sem checar contra o allowlist, pra não virar
 // injeção de SQL via cabeçalho malicioso.
-async function extrairLinhas(buffer, colunasValidas) {
+//
+// `colunasDataIso` (opcional, ver CONFIG_IMPORTACAO): colunas de data que
+// fogem do padrão DD/MM/YYYY do restante do schema e precisam de
+// "YYYY-MM-DD" — hoje só `calendario_leitura.mes_ref`. Achado ao vivo
+// (usuário reportou com print): sem essa exceção, uma célula do Excel
+// formatada como data virava DD/MM/YYYY igual a qualquer outra coluna,
+// quebrando `to_date(cal.mes_ref, 'YYYY-MM-DD')` em todo lugar que junta
+// com essa tabela (mesmo sintoma do Adendo 1 da ADR 0023, mas ali a causa
+// era uma importação ANTERIOR a este fix — a guarda de formato adicionada
+// lá evita o crash, mas não corrige o dado; este fix ataca a causa real).
+async function extrairLinhas(buffer, colunasValidas, colunasDataIso = []) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
   const planilha = workbook.worksheets[0];
@@ -35,6 +55,7 @@ async function extrairLinhas(buffer, colunasValidas) {
     throw new Error('Nenhuma coluna reconhecida na primeira linha da planilha.');
   }
 
+  const setColunasDataIso = new Set(colunasDataIso);
   const linhas = [];
   planilha.eachRow((linha, numeroLinha) => {
     if (numeroLinha === 1) return;
@@ -45,13 +66,14 @@ async function extrairLinhas(buffer, colunasValidas) {
       if (!coluna) return;
       let valor = celula.value;
       if (valor && typeof valor === 'object' && 'result' in valor) valor = valor.result; // fórmula
-      // Todas as colunas de data/hora do schema são texto livre no formato
-      // DD/MM/YYYY (mesmo padrão que o scraper grava) — se a célula do Excel
-      // estiver formatada como data, o ExcelJS entrega um objeto Date, que
-      // precisa virar essa mesma string, senão quebra os to_date(...) do
-      // resto do app.
+      // A maioria das colunas de data/hora do schema é texto livre no
+      // formato DD/MM/YYYY (mesmo padrão que o scraper grava) — se a célula
+      // do Excel estiver formatada como data, o ExcelJS entrega um objeto
+      // Date, que precisa virar essa mesma string, senão quebra os
+      // to_date(...) do resto do app. `colunasDataIso` é a exceção
+      // conhecida (ver comentário de extrairLinhas).
       if (valor instanceof Date) {
-        valor = valor.toLocaleDateString('pt-BR');
+        valor = setColunasDataIso.has(coluna) ? formatarDataIso(valor) : valor.toLocaleDateString('pt-BR');
       }
       if (valor !== null && valor !== undefined && valor !== '') temAlgumValor = true;
       objeto[coluna] = valor === '' ? null : valor;
@@ -92,7 +114,7 @@ async function importarArquivo(db, tabela, empresaId, buffer) {
     throw new Error(`Tabela "${tabela}" não está habilitada para importação.`);
   }
 
-  const linhas = await extrairLinhas(buffer, config.colunas);
+  const linhas = await extrairLinhas(buffer, config.colunas, config.colunasDataIso);
   if (!linhas.length) {
     return { linhasProcessadas: 0, modo: config.modo, tabela };
   }

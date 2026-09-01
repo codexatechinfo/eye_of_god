@@ -155,3 +155,59 @@ ainda não existe.
   guarda de formato no código não fica órfã, continua valendo pra qualquer importação futura com
   o mesmo problema
 - Não verificado visualmente no navegador (mesma limitação de sempre, sem credencial de login)
+
+## Adendo 2 — causa raiz de verdade corrigida: `importacaoService.js` convertia data errado pra esta tabela
+
+Usuário reportou com print, numa sessão seguinte: reimportou o calendário de setembro pela aba
+Importação e `mes_ref` voltou a gravar errado (`31/08/2026` em vez de `2026-09-01`) — mesmo
+sintoma do Adendo 1, confirmando ao vivo a hipótese que tinha ficado em aberto lá ("não
+investigado se foi esse o mecanismo desta importação específica").
+
+**Causa raiz**: `importacaoService.js#extrairLinhas` converte QUALQUER célula do Excel
+formatada como data pra string `DD/MM/YYYY` (`valor.toLocaleDateString('pt-BR')`), igual em
+TODAS as colunas de TODAS as tabelas — regra certa pra quase toda coluna de data do schema
+(mesmo padrão que o scraper grava), errada pra `calendario_leitura.mes_ref`, que o resto do
+código sempre tratou como `YYYY-MM-DD` (`to_date(cal.mes_ref, 'YYYY-MM-DD')`). A guarda de
+formato do Adendo 1 evita o crash quando isso acontece, mas não corrige o dado — o usuário
+reimportou depois daquele fix e caiu na mesma armadilha de novo, porque a causa (a conversão
+em si) continuava lá.
+
+**Correção**: `extrairLinhas` ganhou um terceiro parâmetro opcional, `colunasDataIso` — quando a
+coluna da célula está nessa lista, formata como `YYYY-MM-DD` (função nova `formatarDataIso`,
+usando componentes LOCAIS do `Date`, não `toISOString()`, que converte pra UTC e pode voltar um
+dia) em vez do `DD/MM/YYYY` padrão. `importarArquivo` repassa `config.colunasDataIso` do
+`CONFIG_IMPORTACAO` da tabela. **Achado no caminho, ao investigar**: não é só `mes_ref` — antes
+de propagar o fix, verificado no código todo lugar que faz `to_date(cal.<coluna>, ...)` pra
+achar quais outras colunas de `calendario_leitura` também esperam ISO:
+`PRAZO_LEITURA_SQL` (`to_date(cal.prazo_leitura, 'YYYY-MM-DD')`) e as condições de prazo de
+massiva (`to_date(cal.prazo_massiva, 'YYYY-MM-DD')`) — `prazo_leitura` e `prazo_massiva`
+também precisam de ISO, mesmo problema, só não tinham aparecido ainda porque a guarda de
+`mes_ref` do Adendo 1 já filtrava a linha inteira do `LEFT JOIN` antes de `PRAZO_LEITURA_SQL`
+chegar a rodar contra elas. `calendario_leitura.colunasDataIso` em `importacaoConfig.js` agora
+lista as 3: `['mes_ref', 'prazo_leitura', 'prazo_massiva']`. As outras colunas de data da
+tabela (`prazo_regulatorio`, `envio_releitura`, `prazo_releitura`, `envio_massiva`,
+`vencimento_fatura`, `envio_leitura`, `prazo_leitura_fimm`) nunca aparecem em nenhum
+`to_date(...)` no código — não mexidas, ficam no padrão DD/MM/YYYY por não ter evidência
+contrária.
+
+**Dado já gravado errado, corrigido direto no banco**: as 37 linhas do lote de setembro (as
+mesmas do Adendo 1, apagadas ali a pedido do usuário e reimportadas por ele depois — a
+reimportação caiu no mesmo bug, já que o `importacaoService.js` ainda não tinha sido corrigido
+naquele momento) — `mes_ref` atualizado pra `'2026-09-01'`; `prazo_leitura` (37 linhas) e
+`prazo_massiva` (19 linhas, nem toda etapa tem prazo de massiva) convertidas de `DD/MM/YYYY`
+pra `YYYY-MM-DD` via `to_char(to_date(..., 'DD/MM/YYYY'), 'YYYY-MM-DD')`, só nas linhas que
+batiam o padrão malformado (defesa contra converter duas vezes).
+
+### Verificação
+
+- `node --check` nos dois arquivos alterados (`importacaoService.js`, `importacaoConfig.js`),
+  `npm test` (12/12)
+- Teste de ida e volta real: `.xlsx` em memória (ExcelJS) com `mes_ref` como célula de data de
+  verdade (não string) — grava `YYYY-MM-DD` corretamente; célula de data numa coluna QUE NÃO
+  está em `colunasDataIso` (`prazo_leitura` no primeiro teste, `vencimento_fatura` no segundo)
+  continua `DD/MM/YYYY`, confirmando que a exceção é por coluna, não global
+  — segundo teste cobrindo as 3 colunas ISO de uma vez (`mes_ref`, `prazo_leitura`,
+  `prazo_massiva`) + 1 coluna de controle fora da lista, todas corretas
+- `obterResumo`/`obterDetalhe` testados depois da correção dos dados — `621ms`/`139ms`, sem
+  erro
+- Não verificado visualmente no navegador (mesma limitação de sempre, sem credencial de login)

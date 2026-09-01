@@ -7,6 +7,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Importação por planilha de `calendario_leitura`: célula de data no Excel gravava `mes_ref`
+  (e, achado no caminho, também `prazo_leitura`/`prazo_massiva`) no formato `DD/MM/YYYY` em vez
+  do `YYYY-MM-DD` que essas 3 colunas específicas exigem — quebrava a aba Monitoramento de
+  Livros de novo, mesmo depois da guarda de formato anterior (aquela evitava o crash, não
+  corrigia o dado). Causa raiz corrigida: conversão de data do Excel agora respeita exceção por
+  coluna. Dado já gravado errado (calendário de setembro) corrigido direto no banco. Ver Adendo
+  2 da [ADR 0023](docs/adr/0023-timeout-monitoramento-livros.md).
+
 - Importação por planilha de `contr_execucao_leitura`: o modelo (`importacaoConfig.js`) nunca
   tinha sido atualizado desde a reestruturação de colunas da ADR 0018 — ainda listava 8
   colunas removidas há tempos (`tipo_oss`, `numero_os`...) e não tinha nenhuma das colunas

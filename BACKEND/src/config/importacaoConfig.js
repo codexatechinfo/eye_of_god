@@ -89,10 +89,25 @@ const CONFIG_IMPORTACAO = {
   },
   // Ver ADR 0009 — deixou de ser compartilhada: cada empresa pode ter seu
   // próprio contrato/região, logo seu próprio calendário de prazos.
+  //
+  // `mes_ref`/`prazo_leitura`/`prazo_massiva` são as ÚNICAS colunas de data
+  // de todo o modelo de importação em formato "YYYY-MM-DD" (todo o resto do
+  // schema é "DD/MM/YYYY", mesmo padrão do scraper) — confirmado contra
+  // `to_date(cal.mes_ref, 'YYYY-MM-DD')`/`PRAZO_LEITURA_SQL`/condições de
+  // `prazo_massiva` em monitoramentoService.js. Usuário reportou com print:
+  // célula formatada como data no Excel virava "31/08/2026" no banco em vez
+  // de "2026-08-31", quebrando esses `to_date(...)` em toda consulta que
+  // junta com essa tabela (mesmo sintoma achado antes, na guarda de formato
+  // do Adendo 1 da ADR 0023 — aquela guarda evita o crash mas não corrige o
+  // dado; `colunasDataIso` ataca a causa real). Achado só de `mes_ref` no
+  // primeiro passe — `prazo_leitura`/`prazo_massiva` tinham o mesmo
+  // problema, só apareceram depois que `mes_ref` parou de barrar a linha
+  // inteira no `LEFT JOIN`.
   calendario_leitura: {
     modo: 'upsert',
     temEmpresa: true,
     chave: ['mes_ref'],
+    colunasDataIso: ['mes_ref', 'prazo_leitura', 'prazo_massiva'],
     colunas: [
       'mes_ref', 'etapa', 'prazo_leitura', 'prazo_regulatorio', 'envio_releitura',
       'prazo_releitura', 'envio_massiva', 'prazo_massiva', 'vencimento_fatura',

@@ -7,6 +7,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Jornada do colaborador (aba Trilho) finalmente mostra tempo trabalhado real — antes ficava
+  sempre ~0s pra qualquer colaborador (causa raiz: horário do ciclo de raspagem, não da leitura
+  real). Timeline do livro, deslocamento/km percorrido e impedimentos agora se baseiam em
+  `base_dados_leitura` (data/hora reais por UC), que também revelou UCs já realizadas que
+  `contr_execucao_leitura` ainda mostrava como pendentes. Impedimentos passam a separar
+  obstrução real de campo (portão fechado, cão feroz...) de categoria administrativa
+  (telemedida, leitura do cliente, troca de medidor...). Corrigidas no caminho duas
+  inconsistências de dado achadas ao vivo (linhas em branco e 132 linhas com data em formato
+  ISO). Ver [ADR 0025](docs/adr/0025-timeline-deslocamento-jornada-base-dados-leitura.md).
+
 - Painel do livro: cards "Realizadas" e "A realizar" podiam mostrar 0/0 ao mesmo tempo que
   "Impedimentos" mostrava um número real (livro aberto pelo clique no colaborador no mapa,
   quando esse livro não está na lista de "atividade hoje" — os 3 cards agora vêm sempre da

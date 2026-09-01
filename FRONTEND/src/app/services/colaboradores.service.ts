@@ -308,11 +308,25 @@ interface LocalizacoesResponse {
   localizacoes: LocalizacaoColaborador[];
 }
 
-// "000" = leitura normal, "099" = sem leitura (não é problema de campo);
-// qualquer outro código preenchido é um impedimento real (portão trancado,
-// cão solto, etc.) — pedido explícito do usuário pro card "Impedimentos".
+// Códigos administrativos — não são obstrução de campo (portão fechado, cão
+// feroz, medidor com defeito etc.), são categorias de rotina/gestão do
+// próprio processo de leitura. Levantados do catálogo real dos dados
+// (base_dados_leitura.mensagem) e confirmados com o usuário: 094-leitura
+// telemedida (medidor lido remotamente, nem precisou visita), 059-leitura
+// fornecida pelo cliente, 037-leitura plurimensal, 027-troca de medidor,
+// 054-UC fora de rota, 055/056-cadastrar/descadastrar cão feroz (a AÇÃO
+// administrativa, não o cão em si — esse é o 002, que continua impedimento
+// real). Ambíguos (098-não confirmado, 030-suspeita de irregularidade,
+// 031-casa interligada) ficam do lado de impedimento real, a pedido do
+// usuário — ainda pedem atenção de campo, não são rotina.
+const CODIGOS_ADMINISTRATIVOS = new Set(['094', '059', '037', '027', '054', '055', '056']);
+
+// "000" = leitura normal, "099" = sem leitura (não é problema de campo),
+// códigos administrativos acima também não contam; qualquer outro código
+// preenchido é um impedimento real (portão trancado, cão solto, etc.) —
+// pedido explícito do usuário pro card "Impedimentos".
 export function ehCodigoDeImpedimento(codigo: string | null): boolean {
-  return !!codigo && codigo !== '000' && codigo !== '099';
+  return !!codigo && codigo !== '000' && codigo !== '099' && !CODIGOS_ADMINISTRATIVOS.has(codigo);
 }
 
 // Qual UC foi a primeira, cronologicamente, a mostrar cada código de

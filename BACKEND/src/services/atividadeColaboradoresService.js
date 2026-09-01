@@ -775,28 +775,53 @@ async function obterUltimaUcRealizadaPorColaborador(db) {
 // leituras sem correspondência (ADR 0021 Adendo 5) — elas contam pro total
 // de realizadas, só não contribuem com distância (calcularSegmento já
 // devolve null quando falta coordenada de um dos lados).
+// Reescrita pra base_dados_leitura (ADR 0024/0025) em vez de
+// contr_execucao_leitura — data_da_leitura/hora_da_leitura são o instante
+// REAL da leitura, não o ciclo de raspagem (ver massivasService.js#
+// buscarEventosLeitura pro mesmo raciocínio aplicado à timeline do livro).
+// `nome_do_usuario` já vem limpo (sem o regex SITUACAO_COM_COLABORADOR que
+// contr_execucao_leitura.situacao exigia).
+//
+// `ja_realizado_antes` usa comparação de DATA de verdade
+// (`to_date(...) < to_date($2, ...)`), não o truque de `id < primeiro_id
+// do dia` usado na versão antiga — aquele truque dependia de `id` ser
+// aproximadamente cronológico (válido pra contr_execucao_leitura, que o
+// scraper escreve em tempo real). base_dados_leitura é alimentada por
+// import em lote (diário, ADR 0024) — `id` reflete ordem de IMPORTAÇÃO, não
+// ordem do evento; comparar por `data_da_leitura` de verdade é a forma
+// certa aqui, e só é possível porque agora existe uma coluna de data real.
+//
+// `data_da_leitura ~ '^\d{2}/\d{2}/\d{4}$'` é defesa contra formato
+// malformado — achado ao vivo: 132 linhas importadas de uma planilha
+// .xlsx vieram com data em ISO ("2026-08-31") em vez de "DD/MM/YYYY",
+// quebrando `to_date(...)` com erro fatal (corrigido direto no banco pra
+// essa leva específica, mas uma importação futura pode repetir o problema
+// com outro formato) — sem o filtro, uma única linha malformada derruba a
+// jornada do dia inteiro pro colaborador, em vez de só ficar de fora.
 async function obterJornadaColaborador(db, colaborador, dataBr) {
   const { rows } = await db.query(
     `
-    WITH corte_do_dia AS (
-      SELECT MIN(id) AS primeiro_id FROM contr_execucao_leitura WHERE data_import = $2
-    ), ja_realizado_antes AS (
-      SELECT DISTINCT c.livro, c.uc
-      FROM contr_execucao_leitura c
-      CROSS JOIN corte_do_dia cd
-      WHERE c.colaborador = $1 AND c.codigo IS NOT NULL AND c.id < cd.primeiro_id
+    WITH ja_realizado_antes AS (
+      SELECT DISTINCT b.livro, b.unidade_consumidora
+      FROM base_dados_leitura b
+      WHERE b.nome_do_usuario = $1
+        AND b.data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
+        AND to_date(b.data_da_leitura, 'DD/MM/YYYY') < to_date($2, 'DD/MM/YYYY')
     ), primeira_realizacao AS (
-      SELECT DISTINCT ON (c.livro, c.uc)
-        c.id, c.uc, c.livro, c.etapa, c.data_import, c.hora_import
-      FROM contr_execucao_leitura c
-      WHERE c.colaborador = $1 AND c.data_import = $2 AND c.codigo IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM ja_realizado_antes j WHERE j.livro = c.livro AND j.uc = c.uc)
-      ORDER BY c.livro, c.uc, c.id ASC
+      SELECT DISTINCT ON (b.livro, b.unidade_consumidora)
+        b.unidade_consumidora AS uc, b.livro, b.etapa, b.data_da_leitura AS data_import, b.hora_da_leitura AS hora_import
+      FROM base_dados_leitura b
+      WHERE b.nome_do_usuario = $1 AND b.data_da_leitura = $2
+        AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+        AND NOT EXISTS (SELECT 1 FROM ja_realizado_antes j WHERE j.livro = b.livro AND j.unidade_consumidora = b.unidade_consumidora)
+      -- CON antes de GTP quando o par cai no mesmo instante (mesmo padrão
+      -- de escolherPorUc em massivasService.js).
+      ORDER BY b.livro, b.unidade_consumidora, b.hora_da_leitura ASC, (b.especificacao = 'CON') DESC
     )
     SELECT pr.uc, pr.livro, pr.etapa, pr.data_import, pr.hora_import, m.latitude, m.longitude
     FROM primeira_realizacao pr
     LEFT JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = pr.uc
-    ORDER BY pr.id ASC
+    ORDER BY pr.hora_import ASC
     `,
     [colaborador, dataBr],
   );

@@ -957,6 +957,93 @@ async function consultarUcsBrutasDoLivro(db, livro) {
   return rows;
 }
 
+// Extrai o código numérico do prefixo de `mensagem` (base_dados_leitura,
+// ex.: "094 - LEITURA TELEMEDIDA" -> "094") — substitui o `codigo` de
+// contr_execucao_leitura (coluna própria já numérica) como fonte de
+// verdade pra UC com evento de leitura real disponível. Ver ADR 0025.
+function extrairCodigoDeMensagem(mensagem) {
+  const m = /^(\d+)\s*-/.exec(mensagem ?? '');
+  return m ? m[1] : null;
+}
+
+// "DD/MM/YYYY" + "HH:MM:SS" -> "YYYY-MM-DDTHH:MM:SS", só pra comparar
+// cronologicamente — string "DD/MM/YYYY" não ordena certo (confirmado ao
+// vivo: MIN/MAX de data_da_leitura como texto devolvia o mês errado).
+function chaveDataHoraOrdenavel(evento) {
+  const [dia, mes, ano] = (evento.data_da_leitura || '').split('/').map(Number);
+  const anoStr = Number.isFinite(ano) ? String(ano).padStart(4, '0') : '0000';
+  const mesStr = Number.isFinite(mes) ? String(mes).padStart(2, '0') : '00';
+  const diaStr = Number.isFinite(dia) ? String(dia).padStart(2, '0') : '00';
+  return `${anoStr}-${mesStr}-${diaStr}T${evento.hora_da_leitura || ''}`;
+}
+
+// Escolhe UMA linha por UC entre os eventos de leitura de base_dados_leitura
+// — 'primeira' pra saber QUANDO a UC virou realizada pela primeira vez
+// (timeline), 'ultima' pro estado mais recente (enriquece `atuais`).
+// Desempata por especificacao='CON' quando duas linhas têm exatamente a
+// mesma data+hora — confirmado ao vivo que a mesma leitura gera um par
+// CON/GTP (grandezas de medição distintas do mesmo evento, mesmo padrão de
+// tipo_especificacao já visto em contr_execucao_leitura).
+function escolherPorUc(linhas, ordem) {
+  const porUc = new Map();
+  for (const linha of linhas) {
+    const chave = chaveDataHoraOrdenavel(linha);
+    const atual = porUc.get(linha.unidade_consumidora);
+    if (!atual) {
+      porUc.set(linha.unidade_consumidora, { linha, chave });
+      continue;
+    }
+    if (chave === atual.chave) {
+      if (linha.especificacao === 'CON' && atual.linha.especificacao !== 'CON') {
+        porUc.set(linha.unidade_consumidora, { linha, chave });
+      }
+      continue;
+    }
+    const substitui = ordem === 'primeira' ? chave < atual.chave : chave > atual.chave;
+    if (substitui) porUc.set(linha.unidade_consumidora, { linha, chave });
+  }
+  return new Map([...porUc].map(([uc, { linha }]) => [uc, linha]));
+}
+
+// Eventos de leitura reais (base_dados_leitura, ADR 0024/0025) do livro —
+// data/hora de verdade por UC, não o instante do ciclo de raspagem
+// (contr_execucao_leitura.hora_import). `livro` diverge em formato entre as
+// duas tabelas (contr_execucao_leitura tem zero à esquerda, "040980";
+// base_dados_leitura não, "40980" — confirmado ao vivo), por isso o cast
+// ::int dos dois lados em vez de comparação de string — ver índice
+// idx_base_dados_leitura_livro_int.
+// data_da_leitura/hora_da_leitura em branco existe nos dados reais (achado
+// ao vivo, algumas linhas do CSV original vêm sem esses dois campos) —
+// sem excluir aqui, chaveDataHoraOrdenavel trata "" como "0000-00-00T",
+// que vence QUALQUER data real na comparação `<` e a linha em branco rouba
+// o lugar de "primeira realização" de uma UC que na verdade tem data boa
+// em outra linha (ou nenhuma, caindo certo no fallback de
+// contr_execucao_leitura em montarUcsAtuais). Uma linha sem os dois campos
+// não serve pra nada aqui — nunca teria "quando" nem "instante" válido.
+//
+// O filtro `~ '^\d{2}/\d{2}/\d{4}$'` é por outro achado ao vivo: as 132
+// linhas importadas do .xlsx vieram com data_da_leitura em formato ISO
+// ("2026-08-31", o ExcelJS devolveu string já formatada assim pra essa
+// coluna, não um objeto Date — a conversão de lerXlsx só cobria o caso
+// Date) em vez de "DD/MM/YYYY" como o resto da tabela (corrigido direto no
+// banco pra essa leva específica). Sem essa validação de formato aqui,
+// chaveDataHoraOrdenavel (que faz split('/') na mão, sem to_date) trataria
+// uma data malformada futura como "0000-00-00" — mesmo problema da linha
+// em branco, silencioso — em vez de simplesmente excluir a linha ruim.
+async function buscarEventosLeitura(db, livro) {
+  const { rows } = await db.query(
+    `
+    SELECT unidade_consumidora, data_da_leitura, hora_da_leitura, especificacao, mensagem, equipamento, etapa
+    FROM base_dados_leitura
+    WHERE livro::int = $1::int
+      AND data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
+      AND hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+    `,
+    [livro],
+  );
+  return rows;
+}
+
 // Estado ATUAL de cada UC do livro — pega, por UC, a linha mais recente
 // (não importa se realizada ou não, só a mais nova). Serve pra mostrar
 // "como está o livro agora, UC por UC" (Monitoramento de Livros).
@@ -969,8 +1056,16 @@ async function consultarUcsBrutasDoLivro(db, livro) {
 // do colaborador (que soma linhas cruas do lote) e este painel (que já
 // deduplicava por UC, mas com desempate ambíguo pela hora) mostrando
 // totais de impedimentos diferentes pro mesmo livro único.
-async function listarUcsAtuaisDoLivro(db, livro) {
-  const brutas = await consultarUcsBrutasDoLivro(db, livro);
+//
+// `eventosUltimaPorUc`: Map<uc, evento de base_dados_leitura> (a leitura
+// mais recente de cada UC, ver escolherPorUc) — quando existe, sobrescreve
+// codigo/data_import/hora_import/tipo_especificacao com o dado real (ADR
+// 0025); UC sem evento lá (import ainda não chegou, ou pendente de
+// verdade) mantém o dado original de contr_execucao_leitura, nunca quebra.
+// `extrairCodigoDeMensagem` pode devolver null se `mensagem` vier num
+// formato inesperado — nesse caso mantém o `codigo` original em vez de
+// apagar um código já sabido (`?? resto.codigo`).
+function montarUcsAtuais(brutas, eventosUltimaPorUc) {
   const porUc = new Map();
   for (const linha of brutas) {
     const atual = porUc.get(linha.uc);
@@ -980,31 +1075,42 @@ async function listarUcsAtuaisDoLivro(db, livro) {
   }
   return [...porUc.values()]
     .sort((a, b) => a.uc.localeCompare(b.uc))
-    .map(({ id, ...resto }) => resto);
+    .map(({ id, ...resto }) => {
+      const evento = eventosUltimaPorUc.get(resto.uc);
+      if (!evento) return resto;
+      return {
+        ...resto,
+        codigo: extrairCodigoDeMensagem(evento.mensagem) ?? resto.codigo,
+        data_import: evento.data_da_leitura,
+        hora_import: evento.hora_da_leitura,
+        tipo_especificacao: evento.especificacao,
+      };
+    });
 }
 
-// Quando cada UC do livro virou realizada — por UC, pega a linha de MENOR
-// id em que `codigo` já aparece preenchido (a primeira vez que a leitura
-// daquela UC foi vista lançada), ordenado da mais antiga pra mais recente
-// (mesmo motivo de usar `id` em vez de hora_import — ver
-// listarUcsAtuaisDoLivro). UC que nunca teve `codigo` preenchido em nenhum
-// ciclo (ainda não realizada) fica de fora — não tem "quando" pra uma
-// coisa que não aconteceu. Serve pra reconstruir a timeline "da primeira
-// UC realizada até a última execução" (aba Trilho, painel de livro
-// específico).
-async function listarTimelineUcsRealizadasDoLivro(db, livro) {
-  const brutas = await consultarUcsBrutasDoLivro(db, livro);
-  const primeiraRealizacaoPorUc = new Map();
-  for (const linha of brutas) {
-    if (!linha.codigo) continue;
-    const atual = primeiraRealizacaoPorUc.get(linha.uc);
-    if (!atual || linha.id < atual.id) {
-      primeiraRealizacaoPorUc.set(linha.uc, linha);
-    }
-  }
-  return [...primeiraRealizacaoPorUc.values()]
-    .sort((a, b) => a.id - b.id)
-    .map(({ id, ...resto }) => resto);
+// Quando cada UC do livro virou realizada — a primeira vez (data+hora REAL
+// de leitura, base_dados_leitura, não o ciclo de raspagem) que cada UC
+// aparece com um evento. Serve pra reconstruir a timeline "da primeira UC
+// realizada até a última execução" (aba Trilho, painel de livro
+// específico) com horários de verdade, o que também alimenta corretamente
+// o cálculo de deslocamento/pausa (ver anexarSegmentosDeslocamento) e a
+// classificação de impedimento (ver ehCodigoDeImpedimento no frontend).
+function listarTimelineUcsRealizadasDoLivro(eventosPrimeiraPorUc) {
+  return [...eventosPrimeiraPorUc.entries()]
+    .sort(([, a], [, b]) => (chaveDataHoraOrdenavel(a) < chaveDataHoraOrdenavel(b) ? -1 : 1))
+    .map(([uc, evento]) => ({
+      uc,
+      codigo: extrairCodigoDeMensagem(evento.mensagem),
+      equipamento: evento.equipamento,
+      tipo_especificacao: evento.especificacao,
+      faturamento: null,
+      leitura_atual: null,
+      situacao: null,
+      colaborador: null,
+      data_import: evento.data_da_leitura,
+      hora_import: evento.hora_da_leitura,
+      etapa: evento.etapa,
+    }));
 }
 
 // Anexa endereço/coordenada de cada UC (vindos de coordenadas_ucs_mineradas,
@@ -1142,10 +1248,14 @@ async function obterRegimeSucessivo(db, uc) {
 }
 
 async function obterUcsDoLivro(db, livro) {
-  const [atuaisBrutas, timelineBruta] = await Promise.all([
-    listarUcsAtuaisDoLivro(db, livro),
-    listarTimelineUcsRealizadasDoLivro(db, livro),
-  ]);
+  // eventos (base_dados_leitura) e brutas (contr_execucao_leitura) são
+  // consultas independentes — buscadas em paralelo, combinadas só depois.
+  const [eventos, brutas] = await Promise.all([buscarEventosLeitura(db, livro), consultarUcsBrutasDoLivro(db, livro)]);
+  const eventosPrimeiraPorUc = escolherPorUc(eventos, 'primeira');
+  const eventosUltimaPorUc = escolherPorUc(eventos, 'ultima');
+
+  const atuaisBrutas = montarUcsAtuais(brutas, eventosUltimaPorUc);
+  const timelineBruta = listarTimelineUcsRealizadasDoLivro(eventosPrimeiraPorUc);
 
   // Uma única consulta de coordenadas cobrindo os UCs das duas listas juntas
   // (timeline é subconjunto de atuais na prática, mas junta os dois sets por

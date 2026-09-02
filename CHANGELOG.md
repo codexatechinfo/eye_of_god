@@ -124,6 +124,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Extração "Controle de Empreiteiras" do portal Copel passa a alimentar `base_dados_leitura`
+  automaticamente — portada de um script Python fornecido pelo usuário, agora encadeada dentro
+  do job de Massivas (mesma sessão Copel, sem login extra). Cada ciclo reconcilia o dia anterior
+  (relatório pode ter sido corrigido/consolidado desde a última coleta) e depois o dia atual,
+  cada um com seu próprio apagar+reimportar. Ver [ADR
+  0027](docs/adr/0027-extracao-controle-empreiteiras-base-dados-leitura.md).
+
 - Nova tabela `base_dados_leitura` (empresa_id + RLS, `id` autoincremento), réplica exata da
   estrutura de `control_empreiteiras` — mesmo cabeçalho de planilha fornecido pelo usuário.
   Habilitada pra importação pela aba Importação (upsert por

@@ -1,6 +1,13 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { extrairControleEmpreiteiras } = require('./copelControleEmpreiteirasScraperService');
+
+// Mesmos valores default do script Python fornecido pelo usuário — sem
+// exigir editar .env pra funcionar já. COPEL_CONCESSIONARIA/COPEL_EMPREITEIRA
+// permitem sobrescrever por ambiente se um dia precisar.
+const CONTROLE_EMPREITEIRAS_CONCESSIONARIA = process.env.COPEL_CONCESSIONARIA || 'COMPANHIA PARANAENSE DE ENERGIA';
+const CONTROLE_EMPREITEIRAS_EMPREITEIRA = process.env.COPEL_EMPREITEIRA || 'F IMM BRASIL LTDA';
 
 const DIR_DIAGNOSTICO = path.join(__dirname, '..', '..', 'diagnosticos');
 
@@ -237,10 +244,51 @@ async function coletarMassivas() {
 
     const anexarImport = obj => ({ ...obj, dt_import: dtImport, hr_import: hrImport, mes_ref: mesRef });
 
+    // Controle de Empreiteiras (-> base_dados_leitura): encadeado aqui, na
+    // MESMA sessão já logada (não abre login novo — portal Copel trata
+    // sessão como única por conta, ADR 0019). Ontem primeiro (relatório já
+    // consolidado, pode ter sido corrigido desde a última coleta), depois
+    // hoje — pedido explícito do usuário: cada ciclo reconcilia os dois
+    // dias, não só o atual.
+    //
+    // `null` (não tentado/falhou) é DIFERENTE de `[]` (tentado, achou zero
+    // linhas de verdade) — quem importa (coletaMassivasService.js) só faz
+    // DELETE+INSERT pro dia quando o valor não é `null`. Sem essa
+    // distinção, um erro de rede na extração de "ontem" viraria `[]` igual
+    // a "não tem nada mesmo", e o importador APAGARIA dado bom de um dia
+    // anterior por causa de uma falha transitória — pior que não ter
+    // rodado. Cada data tem seu próprio try/catch: erro em "ontem" não
+    // pode impedir a tentativa de "hoje".
+    const hoje = agora;
+    const ontem = new Date(agora);
+    ontem.setDate(ontem.getDate() - 1);
+
+    const controleEmpreiteiras = { ontem: null, hoje: null };
+    console.log('[Controle Empreiteiras] 🟡 Iniciando extração (ontem + hoje)...');
+    try {
+      controleEmpreiteiras.ontem = await extrairControleEmpreiteiras(page, ontem, {
+        concessionaria: CONTROLE_EMPREITEIRAS_CONCESSIONARIA,
+        empreiteira: CONTROLE_EMPREITEIRAS_EMPREITEIRA,
+      });
+    } catch (erro) {
+      console.error('[Controle Empreiteiras] ❌ Erro na extração de ontem:', erro);
+      await salvarDiagnostico(page, 'controle_empreiteiras_ontem_falhou');
+    }
+    try {
+      controleEmpreiteiras.hoje = await extrairControleEmpreiteiras(page, hoje, {
+        concessionaria: CONTROLE_EMPREITEIRAS_CONCESSIONARIA,
+        empreiteira: CONTROLE_EMPREITEIRAS_EMPREITEIRA,
+      });
+    } catch (erro) {
+      console.error('[Controle Empreiteiras] ❌ Erro na extração de hoje:', erro);
+      await salvarDiagnostico(page, 'controle_empreiteiras_hoje_falhou');
+    }
+
     return {
       pendentes: paraObjetos(dadosPendentes, NOMES_COLUNAS).map(anexarImport),
       atribuidas: paraObjetos(dadosAtribuidas, NOMES_COLUNAS_ATRIBUIDAS).map(anexarImport),
       emExecucao: paraObjetos(dadosEmExecucao, NOMES_COLUNAS_ATRIBUIDAS).map(anexarImport),
+      controleEmpreiteiras,
     };
   } finally {
     await browser.close();

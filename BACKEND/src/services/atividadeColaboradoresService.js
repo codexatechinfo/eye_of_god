@@ -2,7 +2,12 @@ const { calcularSegmento } = require('./deslocamentoService');
 const { obterEventosPorLivrosAteData, extrairCodigoDeMensagem, ehImpedimentoReal } = require('./monitoramentoService');
 
 const QTD_REGEX = /^(\d+)\/(\d+)$/;
-const LIMITE_PARADO_MINUTOS = 20;
+// 30min — unificado com LIMITE_PARADO_MINUTOS do lado frontend
+// (colaboradores.service.ts), que também alimenta a barra de resumo da aba
+// Massivas/Monitoramento de Livros (antes um valor local separado,
+// LIMITE_COMUNICACAO_MINUTOS, mantido de propósito diferente deste — o
+// usuário pediu pra unificar mesmo assim).
+const LIMITE_PARADO_MINUTOS = 30;
 
 function parseQtd(str) {
   const match = QTD_REGEX.exec(str || '');

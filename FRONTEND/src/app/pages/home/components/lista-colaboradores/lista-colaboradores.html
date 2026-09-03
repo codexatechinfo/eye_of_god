@@ -91,6 +91,26 @@
             <path d="M9 11V7a3 3 0 0 1 6 0v4" />
             <path d="M12 15v3" />
           </svg>
+          <!-- Oposto do ícone acima: afastamento cadastrado, mas COM
+               atividade real hoje — divergência entre cadastro e campo,
+               âmbar de alerta (ver afastadosComAtividade/pontuacaoDestaque
+               em colaboradores.service.ts). -->
+          <svg
+            *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) && colaboradoresService.afastamentoDe(colaborador.colaborador) as afAtivo"
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-3 w-3 shrink-0 text-amber-500"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            [title]="'Afastado com atividade em campo — ' + (afAtivo.motivoAfastamento || 'ausência justificada')"
+          >
+            <path d="M12 9v4" />
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z" />
+            <path d="M12 17h.01" />
+          </svg>
         </span>
         <!-- Último sincronismo sempre visível abaixo do nome (não só no card
              expandido) — mesmo campo já usado lá (a.ultimaMudancaHora). -->

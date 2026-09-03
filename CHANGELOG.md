@@ -7,6 +7,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Filtros de colaborador (aba Trilho): limite de "tempo parado" que decide Ativo/Sem sincronismo
+  estava em 20min desde sempre, deveria ser 30min — unificado com o limite já usado (30min) na
+  barra de resumo da aba Massivas/Monitoramento de Livros, antes mantidos de propósito separados.
+  Colaborador com afastamento cadastrado (atestado/licença/suspensão) que mesmo assim gerou
+  atividade real hoje agora aparece nos dois filtros que bate (Afastados + o de atividade), sobe
+  pro topo da lista, ganha badge e dispara alerta central automático — antes a atividade sempre
+  vencia e esse caso nunca aparecia em Afastados. Ver [ADR
+  0029](docs/adr/0029-filtros-colaboradores-afastado-com-atividade.md).
+
 - Coleta de Acompanhamento: lista de ETAPAs travava em 2, mesmo existindo mais com dado real no
   portal — sem `stylesheet`, a página colapsava pra caber na viewport e a rolagem que carrega
   mais etapas ficava sem efeito; ciclos voltando a cada 5s também não davam folga pro site

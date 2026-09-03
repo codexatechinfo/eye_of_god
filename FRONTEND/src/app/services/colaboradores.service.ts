@@ -1,4 +1,4 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, effect, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 
@@ -8,6 +8,13 @@ export function normalizarRegional(base: string): string {
     .replace(/\s+(LEITURA|ADM)$/i, '')
     .trim();
 }
+
+// Limite de "tempo parado" (Ativo/Sem sincronismo) — mesmo valor usado pelo
+// backend (LIMITE_PARADO_MINUTOS, atividadeColaboradoresService.js) e agora
+// também pela barra de resumo da aba Massivas/Monitoramento de Livros
+// (antes um valor local separado ali, LIMITE_COMUNICACAO_MINUTOS — unificado
+// a pedido do usuário).
+export const LIMITE_PARADO_MINUTOS = 30;
 
 export function hojeIso(): string {
   const agora = new Date();
@@ -160,9 +167,17 @@ function temLivroCritico(atividade: AtividadeColaborador | undefined): boolean {
 // 87005) aparecendo DEPOIS de alguém sem sincronismo a 13,5% com
 // minutosParado=658 (score 87158), quando deveria vir antes por ter menos
 // % feito. Critério agora é só percentual, como o usuário pediu.
-function pontuacaoDestaque(atividade: AtividadeColaborador | undefined): number {
+// Afastado com atividade real hoje (livro atribuído/em execução apesar do
+// afastamento cadastrado) é o tier MAIS alto — acima até de livro crítico:
+// é uma divergência entre o cadastro (afastado) e o campo (trabalhando),
+// digna de atenção imediata, não só mais um caso de destaque por prazo.
+function pontuacaoDestaque(
+  atividade: AtividadeColaborador | undefined,
+  afastamento?: AfastamentoInfo | null,
+): number {
   if (!atividade) return -1;
   const criticidade = 100 - percentualExecucao(atividade);
+  if (afastamento) return 3_000_000 + criticidade;
   if (temLivroCritico(atividade)) return 2_000_000 + criticidade;
   return criticidade;
 }
@@ -190,6 +205,28 @@ export function categoriaDe(
   if (atividade.semSincronismo) return 'semSincronismo';
   if (atividade.parado) return 'parado';
   return 'ativo';
+}
+
+// Diferente de categoriaDe() (que escolhe UMA categoria "dona"), aqui a
+// pergunta é "esse colaborador entra no filtro X?" — um colaborador com
+// afastamento cadastrado que MESMO ASSIM gerou atividade real hoje precisa
+// aparecer tanto no filtro Afastados quanto no filtro de atividade
+// correspondente (usuário pediu explicitamente pra não esconder esse caso
+// atrás de só uma categoria). É a única sobreposição possível: Parado/
+// Ativo/Sem sincronismo continuam mutuamente exclusivos entre si (vêm de
+// totalRealizadas/minutosParado, nunca dois ao mesmo tempo), e Sem serviço
+// exige ausência total (nem atividade, nem afastamento).
+export function pertenceCategoria(
+  atividade: AtividadeColaborador | undefined | null,
+  afastamento: AfastamentoInfo | undefined | null,
+  categoria: CategoriaAtividade,
+): boolean {
+  if (categoria === 'afastado') return !!afastamento;
+  if (categoria === 'semServico') return !atividade && !afastamento;
+  if (!atividade) return false;
+  if (categoria === 'parado') return atividade.parado;
+  if (categoria === 'ativo') return atividade.ativo;
+  return atividade.semSincronismo; // 'semSincronismo'
 }
 
 export interface LivroSelecionado {
@@ -486,11 +523,38 @@ export class ColaboradoresService {
     const afastamentos = this.afastamentosHoje();
     const filtro = this.filtroCategoria();
     const lista = [...this.colaboradores()].sort(
-      (a, b) => pontuacaoDestaque(atividade[b.colaborador]) - pontuacaoDestaque(atividade[a.colaborador]),
+      (a, b) =>
+        pontuacaoDestaque(atividade[b.colaborador], afastamentos[b.colaborador]) -
+        pontuacaoDestaque(atividade[a.colaborador], afastamentos[a.colaborador]),
     );
     if (!filtro) return lista;
-    return lista.filter(c => categoriaDe(atividade[c.colaborador], afastamentos[c.colaborador]) === filtro);
+    return lista.filter(c => pertenceCategoria(atividade[c.colaborador], afastamentos[c.colaborador], filtro));
   });
+
+  // Quem tem afastamento cadastrado (atestado/licença/suspensão) cobrindo
+  // hoje MAS mesmo assim gerou atividade real (livro atribuído/em execução)
+  // — divergência entre o cadastro e o campo, tratada como o caso mais
+  // crítico da lista (ver pontuacaoDestaque) e disparo do alerta central
+  // (ver afastadosVistos/mostrarAlertaAfastado abaixo).
+  afastadosComAtividade = computed(() => {
+    const atividade = this.atividadeHoje();
+    const afastamentos = this.afastamentosHoje();
+    return this.colaboradores().filter(c => !!atividade[c.colaborador] && !!afastamentos[c.colaborador]);
+  });
+
+  // Controla o alerta central (home.html): só dispara sozinho quando um
+  // nome NOVO entra em afastadosComAtividade — fechar o alerta marca todos
+  // os nomes atuais como "vistos" e ele fica quieto até aparecer outro nome
+  // que ainda não tinha sido visto (não fica reabrindo pros mesmos nomes a
+  // cada poll de 60s).
+  afastadosVistos = signal<Set<string>>(new Set());
+  mostrarAlertaAfastado = signal(false);
+
+  fecharAlertaAfastado(): void {
+    const nomesAtuais = this.afastadosComAtividade().map(c => c.colaborador);
+    this.afastadosVistos.set(new Set(nomesAtuais));
+    this.mostrarAlertaAfastado.set(false);
+  }
 
   // "hoje" enquanto a data selecionada for o dia atual; "em DD/MM/YYYY"
   // quando o usuário navegou pro calendário pra um dia passado — usado nos
@@ -515,6 +579,16 @@ export class ColaboradoresService {
     this.buscar();
     this.carregarAtividadeHoje();
     this.carregarLocalizacoes();
+
+    // Abre o alerta sozinho (sem precisar de clique) assim que aparece um
+    // nome em afastadosComAtividade que ainda não estava em afastadosVistos
+    // — dispara de novo no próximo poll de 60s só se for um nome novo.
+    effect(() => {
+      const nomesAtuais = this.afastadosComAtividade().map(c => c.colaborador);
+      if (nomesAtuais.length && nomesAtuais.some(nome => !this.afastadosVistos().has(nome))) {
+        this.mostrarAlertaAfastado.set(true);
+      }
+    });
     // Só repete sozinho enquanto a data selecionada for hoje — consultar
     // um dia passado não tem "chegando dado novo" pra esperar, e ficar
     // refazendo a mesma busca a cada 60s seria trabalho à toa.

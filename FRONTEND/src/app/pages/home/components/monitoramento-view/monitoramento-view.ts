@@ -2,7 +2,7 @@ import { Component, Input, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DetalheLinha, EscopoMonitoramento, MonitoramentoService, StatusMonitoramento } from '../../../../services/monitoramento.service';
-import { ColaboradoresService } from '../../../../services/colaboradores.service';
+import { ColaboradoresService, LIMITE_PARADO_MINUTOS } from '../../../../services/colaboradores.service';
 
 type CorLinha = 'verde' | 'amarelo' | 'vermelho';
 type ColunaOrdenavel =
@@ -19,13 +19,6 @@ type ColunaOrdenavel =
   | 'diasPrazoRegulatorio'
   | 'dataRecebimento';
 type DirecaoOrdenacao = 'asc' | 'desc';
-
-// Limite pra "comunicação" na barra de resumo (anexo2 do usuário) — diferente
-// do limite de 20min já usado pro toggle Parado/Ativo/Sem sincronismo da
-// aba Trilho (LIMITE_PARADO_MINUTOS em atividadeColaboradoresService.js).
-// Deliberadamente um número separado: mudar esse aqui não deve alterar o
-// comportamento já validado do Trilho.
-const LIMITE_COMUNICACAO_MINUTOS = 30;
 
 @Component({
   selector: 'app-monitoramento-view',
@@ -93,7 +86,7 @@ export class MonitoramentoView implements OnInit {
   comunicacaoOk(): number {
     return this.agentesEmCampoLista().filter(c => {
       const atividade = this.colaboradoresService.atividadeDe(c.colaborador);
-      return (atividade?.minutosParado ?? Infinity) < LIMITE_COMUNICACAO_MINUTOS;
+      return (atividade?.minutosParado ?? Infinity) < LIMITE_PARADO_MINUTOS;
     }).length;
   }
 
@@ -117,7 +110,7 @@ export class MonitoramentoView implements OnInit {
   }
 
   // Lista pro modal aberto em abrirSemComunicar(): mesmos colaboradores de
-  // semComunicar30() (minutosParado >= LIMITE_COMUNICACAO_MINUTOS), com as
+  // semComunicar30() (minutosParado >= LIMITE_PARADO_MINUTOS), com as
   // etapas distintas dos livros que cada um tem hoje e o total ainda a
   // realizar (naoDigitados agregado — mesma fonte de totalPendentes).
   // Ordenado por mais tempo sem comunicar primeiro (mais crítico no topo).
@@ -127,7 +120,7 @@ export class MonitoramentoView implements OnInit {
         const atividade = this.colaboradoresService.atividadeDe(c.colaborador);
         return { colaborador: c.colaborador, atividade };
       })
-      .filter(({ atividade }) => (atividade?.minutosParado ?? Infinity) >= LIMITE_COMUNICACAO_MINUTOS)
+      .filter(({ atividade }) => (atividade?.minutosParado ?? Infinity) >= LIMITE_PARADO_MINUTOS)
       .map(({ colaborador, atividade }) => ({
         nome: colaborador,
         minutosParado: atividade?.minutosParado ?? 0,

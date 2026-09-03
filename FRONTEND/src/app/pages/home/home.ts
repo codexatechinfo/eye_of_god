@@ -10,6 +10,7 @@ import { LivroDetalhe } from './components/livro-detalhe/livro-detalhe';
 import { MapaBases } from './components/mapa-bases/mapa-bases';
 import { MonitoramentoView } from './components/monitoramento-view/monitoramento-view';
 import { ImportacaoView } from './components/importacao-view/importacao-view';
+import { ColaboradoresService } from '../../services/colaboradores.service';
 
 type StatusColeta = 'coletando' | 'parada' | 'offline' | null;
 // 'monitoramento' é a aba Trilho (rótulo mudou, chave não — ver ADR 0006).
@@ -53,6 +54,9 @@ export class Home implements OnInit, OnDestroy {
     private http: HttpClient,
     private authService: AuthService,
     private router: Router,
+    // Público — o alerta de "afastado com atividade" é global (não preso à
+    // aba Trilho, ver home.html), consumido direto do template daqui.
+    public colaboradoresService: ColaboradoresService,
   ) {}
 
   ngOnInit(): void {

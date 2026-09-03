@@ -82,6 +82,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Scraper de Acompanhamento parou de abrir OS de cada livro (a causa real de "sessão perdida" —
+  confirmado ao vivo que a taxa ficou igual ou pior mesmo testando com até 10 contas Copel
+  isoladas em paralelo, descartando colisão de sessão como causa) — agora só lê a lista de
+  livros já carregada no DOM após 1 busca (login + busca + leitura, sem fila/retry/paralelismo).
+  Ciclo caiu de 35-50min pra 28s-3min. `contr_execucao_leitura` passa a ter 1 linha por livro
+  por ciclo (situação/colaborador), sem mais `uc`/`codigo` — todo dado por UC (quais existem,
+  quais foram executadas, quando) passa a vir de `coordenadas_ucs_mineradas` + `base_dados_leitura`
+  em vez de `contr_execucao_leitura`, nos 6 pontos que dependiam do jeito antigo (painel de
+  detalhe do livro, barra lateral, histórico do livro, cards/tabela de "Monitoramento de
+  Livros", painel "Leitura Urbana", regime sucessivo de impedimento por UC). Ver [ADR
+  0028](docs/adr/0028-acompanhamento-sem-abrir-os-roster-coordenadas-mineradas.md).
+
 - Performance da barra lateral (aba Trilho): `work_mem` do Postgres estava no padrão de 4MB,
   forçando consultas com `DISTINCT ON` sobre centenas de milhares de linhas a espalhar sort pra
   disco. Aumentado globalmente pra 64MB (`effective_cache_size` também, de 128MB pra 4GB — sem

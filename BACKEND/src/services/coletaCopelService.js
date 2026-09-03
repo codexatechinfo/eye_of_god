@@ -5,6 +5,16 @@ const dashboardCache = require('./dashboardCacheService');
 const { comSessaoExclusiva } = require('./copelSessaoLock');
 const { log, logErro } = require('../utils/logTempo');
 
+// A tentativa de usar contas Copel dedicadas (uma por sessão paralela) foi
+// abandonada — o site se mostrou instável sob abertura repetida de OS
+// mesmo com contas 100% isoladas entre si (mesma taxa de "sessão perdida"
+// com 1 ou com 10 contas simultâneas), e a extração parou de precisar
+// abrir OS de qualquer forma (só lê a lista já carregada, ver
+// copelScraperService.js). Voltou a usar COPEL_USERNAME/COPEL_PASSWORD —
+// a MESMA conta de Massivas/Controle de Empreiteiras — então
+// `comSessaoExclusiva` volta a ser necessário aqui: login de um job
+// derruba a sessão do outro no servidor Copel se rodarem ao mesmo tempo
+// (ver copelSessaoLock.js).
 async function executarColetaCopel(db, empresaId) {
   const inicioCiclo = Date.now();
   log('[Coleta Acomp] 🟡 Iniciando coleta de acompanhamento...');

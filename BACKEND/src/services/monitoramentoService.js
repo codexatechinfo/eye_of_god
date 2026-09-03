@@ -126,18 +126,22 @@ const PRAZO_CONTR_SQL = `
 // pelo mesmo motivo do PRAZO_RELEITURA_SQL (comparado direto com ele).
 const IMPORT_TS_CONTR_SQL = `to_timestamp(c.data_import || ' ' || c.hora_import, 'DD/MM/YYYY HH24:MI:SS')::timestamp`;
 
-// contarFonteContr/obterFaixasDias/detalheContr fazem DISTINCT ON sobre uma
-// subquery de dedup (contrDedupSql) e depois LEFT JOIN com cidades_localidades
-// (657 linhas) e calendario_leitura (74 linhas) — tabelas minúsculas. O
-// planner do Postgres não consegue estimar direito a cardinalidade de saída
-// de um DISTINCT ON sobre subquery (chuta ~1 linha) e escolhe Nested Loop
-// pros dois LEFT JOIN, mesmo quando a saída real do dedup é de milhares de
-// linhas (~13 mil no lote mais recente, medido ao vivo) — um Nested Loop de
-// 13 mil × (657+74) é o que travava a query por 8-11 MINUTOS (confirmado ao
-// vivo, viraram pilha de sessões travadas no banco). `SET LOCAL` (só vale
-// pra transação da requisição atual, criada por anexarContextoTenant) força
+// contarTabela/contarTotalMassivaDeduplicado (fonte massiva) fazem DISTINCT
+// ON e depois LEFT JOIN com cidades_localidades (657 linhas) e
+// calendario_leitura (74 linhas) — tabelas minúsculas. O planner do
+// Postgres não consegue estimar direito a cardinalidade de saída de um
+// DISTINCT ON sobre subquery (chuta ~1 linha) e escolhe Nested Loop pros
+// dois LEFT JOIN, mesmo quando a saída real é de milhares de linhas (~13
+// mil no lote mais recente, medido ao vivo) — um Nested Loop de 13 mil ×
+// (657+74) é o que travava a query por 8-11 MINUTOS (confirmado ao vivo,
+// viraram pilha de sessões travadas no banco). `SET LOCAL` (só vale pra
+// transação da requisição atual, criada por anexarContextoTenant) força
 // Hash Join, que não depende dessa estimativa errada pra ser rápido —
 // mesma query caiu pra ~600ms depois de testado ao vivo. Ver ADR 0023.
+// (contarFonteContr/obterFaixasDias/detalheContr, fonte leitura/releitura,
+// deixaram de precisar de DISTINCT ON quando o scraper parou de abrir OS —
+// contr_execucao_leitura já tem 1 linha por livro — mas continuam sob o
+// mesmo SET LOCAL, chamado uma vez só no início de obterResumo/obterDetalhe.)
 async function desligarNestedLoop(db) {
   await db.query('SET LOCAL enable_nestloop = off');
 }
@@ -270,71 +274,6 @@ function condicaoQuantidadeNao(coluna) {
   return `CASE WHEN ${coluna} ~ '^[0-9]+/[0-9]+$' THEN split_part(${coluna}, '/', 2)::int ELSE 0 END`;
 }
 
-// Progresso da fonte leitura/releitura: uma UC (uma linha de
-// contr_execucao_leitura) é "realizada" quando a coluna `codigo` está
-// preenchida (o import já converte string vazia em NULL — ver
-// copelImportService.js), "não realizada" quando está NULL.
-//
-// Duas versões de cada — CRUA (por linha/UC) e agregada POR LIVRO (via
-// window function `SUM(...) OVER (PARTITION BY c.livro)`) — porque um
-// livro agora tem várias linhas (uma por UC, ver ADR 0018 Adendo 2) e as
-// duas formas de consultar essa tabela precisam de uma ou de outra:
-// queries com `GROUP BY` de verdade (historicoContrLivro) usam a crua
-// dentro do próprio SUM; queries com `DISTINCT ON (c.livro)` (que
-// escolhem UMA linha pra representar o livro, mas ainda assim precisam do
-// total de TODAS as UCs dele) usam a agregada. Nunca reaproveitar uma no
-// lugar da outra: a crua sozinha numa DISTINCT ON reintroduz o mesmo bug
-// que isso corrige (conta só a UC escolhida, não o livro inteiro); a
-// agregada dentro de um SUM (agregado sobre agregado) é erro de sintaxe.
-//
-// Essa agregação só fica correta enquanto nenhum filtro do WHERE dessas
-// queries discriminar por UC (hoje todos — tipoServico, prazo, faixaDias,
-// regional, livro, etapa — vêm de campos de cabeçalho, idênticos em toda
-// UC do mesmo livro): um filtro por UC no futuro faria a window function
-// refletir só o subconjunto filtrado, não o livro inteiro.
-//
-// Fonte massiva (t.qtd_digitados_nao_digitados, pendentes_im/atribuidas_im/
-// em_execucao_im) não foi tocada — continua usando
-// condicaoQuantidade/condicaoQuantidadeNao normalmente.
-const CONTR_REALIZADO_LINHA_SQL = 'CASE WHEN c.codigo IS NOT NULL THEN 1 ELSE 0 END';
-const CONTR_NAO_REALIZADO_LINHA_SQL = 'CASE WHEN c.codigo IS NULL THEN 1 ELSE 0 END';
-// `SUM(...) OVER(...)` devolve bigint no Postgres — sem o cast, o driver
-// `pg` manda esse valor pro Node como STRING (pra não perder precisão em
-// bigint grande), e "169" + "12" vira concatenação ("16912"), não soma
-// (169+12=181). Resultado visto ao vivo: progresso de livros com muitas
-// UCs saindo grosseiramente errado (169/12 mostrando 1% em vez de ~93%).
-// `::int` aqui garante que o valor chega no JS já como number.
-const CONTR_REALIZADO_LIVRO_SQL = `(SUM(${CONTR_REALIZADO_LINHA_SQL}) OVER (PARTITION BY c.livro))::int`;
-const CONTR_NAO_REALIZADO_LIVRO_SQL = `(SUM(${CONTR_NAO_REALIZADO_LINHA_SQL}) OVER (PARTITION BY c.livro))::int`;
-
-// Deduplica contr_execucao_leitura por UC dentro do lote que gerou cada
-// linha (mesmo livro + data_import + hora_import) — bug real encontrado em
-// produção: o scraper podia gravar a MESMA UC mais de uma vez no mesmo lote
-// (uma exceção dentro do `finally` de abrirEExtrairOs descartava o retorno
-// de sucesso e fazia o worker reprocessar um livro que já tinha extraído
-// com êxito — corrigido em copelScraperService.js, ver ADR 0018 Adendo 18).
-// Sem deduplicar aqui, toda contagem que soma linhas cruas desta tabela
-// (CONTR_REALIZADO_LIVRO_SQL/CONTR_NAO_REALIZADO_LIVRO_SQL e o SUM() de
-// historicoContrLivro) conta UC duplicada mais de uma vez, inflando
-// Realizados/Não realizados/Leituras. `id` (bigserial, estritamente
-// cronológico) escolhe a cópia mais recente de cada UC dentro do lote —
-// pode haver diferença de `codigo` entre cópias, já que minutos podem se
-// passar entre a extração original e a retentativa que causou a duplicata.
-//
-// Recebe as duas condições de escopo que cada chamador já teria posto no
-// WHERE de qualquer forma (por livro+lote, ou só por livro pra
-// historicoContrLivro) — dedupilcar SÓ dentro desse escopo, não a tabela
-// inteira, mantém a operação barata (a tabela não tem índice que ajude uma
-// deduplicação global, mas cada lote tem só uma fração das linhas).
-function contrDedupSql(condicaoEscopo) {
-  return `(
-    SELECT DISTINCT ON (c2.livro, c2.data_import, c2.hora_import, c2.uc) c2.*
-    FROM contr_execucao_leitura c2
-    WHERE ${condicaoEscopo}
-    ORDER BY c2.livro, c2.data_import, c2.hora_import, c2.uc, c2.id DESC
-  )`;
-}
-
 async function contarTabela(db, chave, dataImport, horaImport, filtros) {
   const { nome, temLeiturista } = TABELAS_MASSIVA[chave];
   const { semResultado, condicoes, parametros } = construirCondicoes({ ...filtros, temLeiturista });
@@ -395,34 +334,37 @@ async function contarFonteContr(db, statusChave, tipoServico, dataImport, horaIm
   if (condicaoPrazoExterna) condicoesExtras.push(condicaoPrazoExterna);
   const condicaoPrazoInterna = condicaoSqlPrazoContr(filtros.condicaoPrazo);
   if (condicaoPrazoInterna) condicoesExtras.push(condicaoPrazoInterna);
+  if (filtros.colaborador) {
+    parametros.push(`%${filtros.colaborador}%`);
+    condicoesExtras.push(`${LEITURISTA_CONTR_SQL} ILIKE $${parametros.length + 2}`);
+  }
+  if (rotulo) condicoesExtras.push(`${STATUS_CONTR_SQL} = '${rotulo}'`);
 
-  // Realizados/não realizados agregados por LIVRO (todas as UCs dele),
-  // não só da UC que o DISTINCT ON abaixo escolhe pra representar o livro
-  // — ver comentário de CONTR_REALIZADO_LIVRO_SQL.
-  const digitados = CONTR_REALIZADO_LIVRO_SQL;
-  const naoDigitados = CONTR_NAO_REALIZADO_LIVRO_SQL;
-
+  // Um livro já tem 1 linha só por lote (desde que o scraper de
+  // Acompanhamento parou de abrir OS, ver copelScraperService.js) — sem
+  // dedup nem window function pra "escolher" uma UC representante, só lê
+  // o cabeçalho do livro direto. Digitados/naoDigitados (progresso real de
+  // UC) vêm à parte, de obterProgressoPorLivro (coordenadas_ucs_mineradas
+  // + base_dados_leitura), não mais de c.codigo.
   const sql = `
-    SELECT COUNT(*)::int AS livros, COALESCE(SUM(digitados) + SUM(nao_digitados), 0)::int AS leituras
-    FROM (
-      SELECT DISTINCT ON (c.livro) c.livro, ${digitados} AS digitados, ${naoDigitados} AS nao_digitados,
-        ${STATUS_CONTR_SQL} AS status_calc,
-        ${LEITURISTA_CONTR_SQL} AS leiturista_calc
-      FROM ${contrDedupSql('c2.data_import = $1 AND c2.hora_import = $2')} c
-      LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
-      ${joinCalendarioContr()}
-      WHERE c.data_import = $1 AND c.hora_import = $2
-        ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
-      ORDER BY c.livro, c.id ASC
-    ) escolhido
-    WHERE 1 = 1
-      ${rotulo ? `AND status_calc = '${rotulo}'` : ''}
-      ${filtros.colaborador ? `AND leiturista_calc ILIKE $${parametros.length + 3}` : ''}
+    SELECT c.livro
+    FROM contr_execucao_leitura c
+    LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+    ${joinCalendarioContr()}
+    WHERE c.data_import = $1 AND c.hora_import = $2
+      ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
   `;
-  if (filtros.colaborador) parametros.push(`%${filtros.colaborador}%`);
 
-  const { rows: [linha] } = await db.query(sql, [dataImport, horaImport, ...parametros]);
-  return { livros: linha?.livros ?? 0, leituras: linha?.leituras ?? 0 };
+  const { rows } = await db.query(sql, [dataImport, horaImport, ...parametros]);
+  if (!rows.length) return { ...CONTAGEM_ZERO };
+
+  const progresso = await obterProgressoPorLivro(db, rows.map(r => r.livro), dataImport);
+  let leituras = 0;
+  for (const linha of rows) {
+    const p = progresso.get(linha.livro);
+    if (p) leituras += p.digitados + p.naoDigitados;
+  }
+  return { livros: rows.length, leituras };
 }
 
 function somarContagens(...contagens) {
@@ -550,51 +492,35 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
     condicoesExtras.push(`cl.regional = $${parametros.length + 2}`);
   }
 
-  // Realizados/não realizados agregados por LIVRO — ver comentário de
-  // CONTR_REALIZADO_LIVRO_SQL.
-  const digitados = CONTR_REALIZADO_LIVRO_SQL;
-  const naoDigitados = CONTR_NAO_REALIZADO_LIVRO_SQL;
-
-  // livros = 1 linha por livro (contagem direta); leituras = soma de
-  // digitados+não digitados do próprio livro — mesma dupla {livros,
-  // leituras} das outras contagens da tela, pro toggle Livros/Leituras
-  // valer aqui também.
+  // Já 1 linha por livro (ver comentário de contarFonteContr) — sem dedup
+  // nem window function. `leituras` de cada livro vem de
+  // obterProgressoPorLivro (coordenadas_ucs_mineradas + base_dados_leitura),
+  // classificação de faixa e agregação por faixa em JS.
   const sql = `
-    SELECT faixa, COUNT(*)::int AS livros, COALESCE(SUM(leituras), 0)::int AS leituras
-    FROM (
-      SELECT
-        CASE
-          WHEN efetivo < 27 THEN 'menor27'
-          WHEN efetivo = 33 THEN 'igual33'
-          WHEN efetivo >= 34 THEN 'maior34'
-        END AS faixa,
-        leituras
-      FROM (
-        SELECT DISTINCT ON (c.livro)
-          c.livro,
-          (${digitados} + ${naoDigitados}) AS leituras,
-          ${EFETIVO_PRAZO_REG_SQL} AS efetivo
-        FROM ${contrDedupSql('c2.data_import = $1 AND c2.hora_import = $2')} c
-        LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
-        JOIN prazo_reg_livros preg
-          ON preg.livro::int = c.livro::int
-          AND preg.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
-        WHERE c.data_import = $1 AND c.hora_import = $2
-          ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
-        ORDER BY c.livro, c.id ASC
-      ) x
-    ) classificado
-    WHERE faixa IS NOT NULL
-    GROUP BY faixa
+    SELECT c.livro, ${EFETIVO_PRAZO_REG_SQL} AS efetivo
+    FROM contr_execucao_leitura c
+    LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+    JOIN prazo_reg_livros preg
+      ON preg.livro::int = c.livro::int
+      AND preg.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
+    WHERE c.data_import = $1 AND c.hora_import = $2
+      ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
   `;
 
   const { rows } = await db.query(sql, [dataImport, horaImport, ...parametros]);
-  const mapa = Object.fromEntries(rows.map(r => [r.faixa, { livros: r.livros, leituras: r.leituras }]));
-  return {
-    menor27: mapa.menor27 ?? { ...CONTAGEM_ZERO },
-    igual33: mapa.igual33 ?? { ...CONTAGEM_ZERO },
-    maior34: mapa.maior34 ?? { ...CONTAGEM_ZERO },
-  };
+  const progresso = await obterProgressoPorLivro(db, rows.map(r => r.livro), dataImport);
+
+  const mapa = { menor27: { ...CONTAGEM_ZERO }, igual33: { ...CONTAGEM_ZERO }, maior34: { ...CONTAGEM_ZERO } };
+  for (const linha of rows) {
+    const efetivo = linha.efetivo;
+    if (efetivo == null) continue;
+    const faixa = efetivo < 27 ? 'menor27' : efetivo === 33 ? 'igual33' : efetivo >= 34 ? 'maior34' : null;
+    if (!faixa) continue;
+    const p = progresso.get(linha.livro);
+    mapa[faixa].livros += 1;
+    mapa[faixa].leituras += p ? p.digitados + p.naoDigitados : 0;
+  }
+  return mapa;
 }
 
 async function obterResumo(db, filtros) {
@@ -855,10 +781,7 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
   if (condicaoTipo) condicoesExtras.push(condicaoTipo);
 
   const status = filtros.status && filtros.status !== 'todos' ? ROTULO_STATUS[filtros.status] : null;
-  // Realizados/não realizados agregados por LIVRO — ver comentário de
-  // CONTR_REALIZADO_LIVRO_SQL.
-  const digitados = CONTR_REALIZADO_LIVRO_SQL;
-  const naoDigitados = CONTR_NAO_REALIZADO_LIVRO_SQL;
+  if (status) condicoesExtras.push(`${STATUS_CONTR_SQL} = '${status}'`);
 
   const condicaoPrazoExterna = condicaoSqlPrazoContr(filtros.prazo);
   if (condicaoPrazoExterna) condicoesExtras.push(condicaoPrazoExterna);
@@ -870,39 +793,51 @@ async function detalheContr(db, tipoServico, dataImport, horaImport, filtros) {
   const condicaoFaixa = condicaoFaixaDias(filtros.faixaDias);
   if (condicaoFaixa) condicoesExtras.push(condicaoFaixa);
 
-  let filtroColaborador = '';
   if (filtros.colaborador) {
     parametros.push(`%${filtros.colaborador}%`);
-    filtroColaborador = `AND leiturista_calc ILIKE $${parametros.length + 2}`;
+    condicoesExtras.push(`${LEITURISTA_CONTR_SQL} ILIKE $${parametros.length + 2}`);
   }
 
+  // Já 1 linha por livro (ver comentário de contarFonteContr) — sem dedup
+  // nem window function. digitados/nao_digitados entram depois via
+  // obterProgressoPorLivro (coordenadas_ucs_mineradas + base_dados_leitura).
   const sql = `
-    SELECT status_calc AS status, tipo_calc AS tipo_servico, livro, etapa, regional, dt_prev_limite, digitados, nao_digitados, leiturista_calc AS leiturista, dias_prazo_regulatorio, data_recebimento
-    FROM (
-      SELECT DISTINCT ON (c.livro) c.livro, c.etapa, cl.regional,
-        to_char(${PRAZO_CONTR_SQL}, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS dt_prev_limite,
-        ${digitados} AS digitados, ${naoDigitados} AS nao_digitados,
-        ${STATUS_CONTR_SQL} AS status_calc,
-        ${LEITURISTA_CONTR_SQL} AS leiturista_calc,
-        ${TIPO_SERVICO_CONTR_SQL} AS tipo_calc,
-        ${EFETIVO_PRAZO_REG_SQL} AS dias_prazo_regulatorio,
-        CASE WHEN c.data_recebimento IS NOT NULL THEN c.data_recebimento || COALESCE(' ' || c.hora_recebimento, '') ELSE NULL END AS data_recebimento
-      FROM ${contrDedupSql('c2.data_import = $1 AND c2.hora_import = $2')} c
-      LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
-      ${joinCalendarioContr()}
-      ${joinPrazoRegLivros()}
-      WHERE c.data_import = $1 AND c.hora_import = $2
-        ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
-      ORDER BY c.livro, c.id ASC
-    ) escolhido
-    WHERE 1 = 1
-      ${status ? `AND status_calc = '${status}'` : ''}
-      ${filtroColaborador}
-    ORDER BY dt_prev_limite ASC NULLS LAST, livro ASC
+    SELECT c.livro, c.etapa, cl.regional,
+      to_char(${PRAZO_CONTR_SQL}, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS dt_prev_limite,
+      ${STATUS_CONTR_SQL} AS status,
+      ${LEITURISTA_CONTR_SQL} AS leiturista,
+      ${TIPO_SERVICO_CONTR_SQL} AS tipo_servico,
+      ${EFETIVO_PRAZO_REG_SQL} AS dias_prazo_regulatorio,
+      CASE WHEN c.data_recebimento IS NOT NULL THEN c.data_recebimento || COALESCE(' ' || c.hora_recebimento, '') ELSE NULL END AS data_recebimento
+    FROM contr_execucao_leitura c
+    LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
+    ${joinCalendarioContr()}
+    ${joinPrazoRegLivros()}
+    WHERE c.data_import = $1 AND c.hora_import = $2
+      ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
+    ORDER BY dt_prev_limite ASC NULLS LAST, c.livro ASC
   `;
 
   const { rows } = await db.query(sql, [dataImport, horaImport, ...parametros]);
-  return rows;
+  if (!rows.length) return [];
+
+  const progresso = await obterProgressoPorLivro(db, rows.map(r => r.livro), dataImport);
+  return rows.map(linha => {
+    const p = progresso.get(linha.livro) ?? { digitados: 0, naoDigitados: 0 };
+    return {
+      status: linha.status,
+      tipo_servico: linha.tipo_servico,
+      livro: linha.livro,
+      etapa: linha.etapa,
+      regional: linha.regional,
+      dt_prev_limite: linha.dt_prev_limite,
+      digitados: p.digitados,
+      nao_digitados: p.naoDigitados,
+      leiturista: linha.leiturista,
+      dias_prazo_regulatorio: linha.dias_prazo_regulatorio,
+      data_recebimento: linha.data_recebimento,
+    };
+  });
 }
 
 // "DD/MM/YYYY" + "HH:MM:SS" -> epoch, pra ordenar direito entre meses/anos
@@ -968,19 +903,64 @@ async function obterHistoricoLivro(db, livro) {
 // em montarUcsAtuais (usado quando não há evento de base_dados_leitura até
 // `ateData`) também respeite o corte temporal, em vez de sempre mostrar o
 // código mais recente independente da data selecionada.
+// Desde que o scraper de Acompanhamento parou de abrir OS (ele só lê a
+// situação do livro, ver copelScraperService.js), contr_execucao_leitura
+// não tem mais `uc` nenhuma — a lista de UCs do livro vem de
+// `coordenadas_ucs_mineradas` (minerada à parte, tem unidade_consumidora
+// por livro) e o cabeçalho (situação/colaborador/datas) vem da linha mais
+// recente de `contr_execucao_leitura` pra este livro (1 linha por ciclo,
+// não mais 1 por UC). `codigo` sai sempre NULL daqui — quem preenche de
+// verdade é o merge com `eventosUltimaPorUc` (base_dados_leitura) logo
+// depois em `montarUcsAtuais`, sem mudança nessa parte.
+// Cast numérico (`livro::int`) pro mesmo motivo do comentário de
+// buscarMapaCoordenadas: o formato diverge de contr_execucao_leitura só
+// por zero à esquerda.
 async function consultarUcsBrutasDoLivro(db, livro, ateData) {
   const condicaoData = ateData ? `AND to_date(data_import, 'DD/MM/YYYY') <= to_date($2, 'DD/MM/YYYY')` : '';
-  const { rows } = await db.query(
-    `
-    SELECT id, uc, codigo, equipamento, tipo_especificacao, faturamento, leitura_atual,
-      situacao, colaborador, data_import, hora_import, etapa
-    FROM contr_execucao_leitura
-    WHERE livro = $1 AND uc IS NOT NULL
-      ${condicaoData}
-    `,
-    ateData ? [livro, ateData] : [livro],
-  );
-  return rows;
+  const [{ rows: ucs }, { rows: cabecalhoRows }] = await Promise.all([
+    db.query(
+      `
+      SELECT unidade_consumidora AS uc
+      FROM coordenadas_ucs_mineradas
+      WHERE livro ~ '^[0-9]+$' AND livro::int = $1::int
+      `,
+      [livro],
+    ),
+    db.query(
+      `
+      SELECT situacao, colaborador, data_import, hora_import, etapa
+      FROM contr_execucao_leitura
+      WHERE livro = $1
+        ${condicaoData}
+      ORDER BY id DESC
+      LIMIT 1
+      `,
+      ateData ? [livro, ateData] : [livro],
+    ),
+  ]);
+
+  const cabecalho = cabecalhoRows[0] || {
+    situacao: null,
+    colaborador: null,
+    data_import: null,
+    hora_import: null,
+    etapa: null,
+  };
+
+  return ucs.map((linha, i) => ({
+    id: i,
+    uc: linha.uc,
+    codigo: null,
+    equipamento: null,
+    tipo_especificacao: null,
+    faturamento: null,
+    leitura_atual: null,
+    situacao: cabecalho.situacao,
+    colaborador: cabecalho.colaborador,
+    data_import: cabecalho.data_import,
+    hora_import: cabecalho.hora_import,
+    etapa: cabecalho.etapa,
+  }));
 }
 
 // Extrai o código numérico do prefixo de `mensagem` (base_dados_leitura,
@@ -1159,18 +1139,24 @@ async function obterEventosPorLivrosAteData(db, livros, dataBr) {
   const { rows } = await db.query(
     `
     WITH roster AS (
-      SELECT DISTINCT ON (c.livro, c.uc) c.livro, c.uc, c.codigo AS codigo_contr
-      FROM contr_execucao_leitura c
-      WHERE c.livro = ANY($1::text[])
-      ORDER BY c.livro, c.uc, c.id DESC
+      -- Roster de UCs por livro vem de coordenadas_ucs_mineradas desde que
+      -- o scraper de Acompanhamento parou de abrir OS (contr_execucao_leitura
+      -- não tem mais uc). codigo_contr fica sempre NULL — codigo só existe
+      -- via base_dados_leitura (join com eventos abaixo). livro reformatado
+      -- pro padrão de 6 dígitos de contr_execucao_leitura (mesmo LPAD de
+      -- obterUltimaUcRealizadaPorColaborador, atividadeColaboradoresService.js)
+      -- pra bater com o formato que quem chama esta função já espera.
+      SELECT LPAD(m.livro::int::text, 6, '0') AS livro, m.unidade_consumidora AS uc, NULL::text AS codigo_contr
+      FROM coordenadas_ucs_mineradas m
+      WHERE m.livro ~ '^[0-9]+$' AND m.livro::int = ANY($2::int[])
     ), eventos AS (
       SELECT DISTINCT ON (b.livro::int, b.unidade_consumidora)
         b.livro::int AS livro_int, b.unidade_consumidora AS uc, b.mensagem
       FROM base_dados_leitura b
-      WHERE b.livro::int = ANY($3::int[])
+      WHERE b.livro::int = ANY($2::int[])
         AND b.data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
         AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
-        AND to_date(b.data_da_leitura, 'DD/MM/YYYY') <= to_date($2, 'DD/MM/YYYY')
+        AND to_date(b.data_da_leitura, 'DD/MM/YYYY') <= to_date($1, 'DD/MM/YYYY')
       ORDER BY b.livro::int, b.unidade_consumidora,
         to_date(b.data_da_leitura, 'DD/MM/YYYY') DESC, b.hora_da_leitura DESC, (b.especificacao = 'CON') DESC
     )
@@ -1178,7 +1164,7 @@ async function obterEventosPorLivrosAteData(db, livros, dataBr) {
     FROM roster r
     LEFT JOIN eventos ev ON ev.livro_int = (r.livro)::int AND ev.uc = r.uc
     `,
-    [livros, dataBr, livrosInt],
+    [dataBr, livrosInt],
   );
 
   cacheEventosPorLivros.set(chaveCache, { rows, expiraEm: agora + CACHE_EVENTOS_TTL_MS });
@@ -1192,6 +1178,32 @@ async function obterEventosPorLivrosAteData(db, livros, dataBr) {
   }
 
   return rows;
+}
+
+// Progresso (digitados/naoDigitados) por LIVRO, pra telas que listam vários
+// livros de uma vez (obterResumo/obterFaixasDias/detalheContr aqui e
+// calcularLeituraUrbana em leituraUrbanaService.js) — reaproveita
+// obterEventosPorLivrosAteData (já cacheado, já tunado pra não cair em Seq
+// Scan) em vez de escrever outra consulta em lote do zero: cada UC do
+// roster (coordenadas_ucs_mineradas) é "digitada" quando tem evento em
+// base_dados_leitura até `dataImport`, mesma regra de
+// extrairCodigoDeMensagem(mensagem) ?? codigo_contr já usada em
+// atividadeColaboradoresService.js (`codigo_contr` sempre NULL agora que o
+// scraper não abre mais OS, mas o fallback não precisa saber disso).
+// `dataImport` (não hora_import) como corte é suficiente na prática:
+// base_dados_leitura só recebe carga em importação diária, granularidade
+// de hora dentro do mesmo dia não muda o resultado.
+async function obterProgressoPorLivro(db, livros, dataImport) {
+  const eventos = await obterEventosPorLivrosAteData(db, livros, dataImport);
+  const mapa = new Map();
+  for (const linha of eventos) {
+    if (!mapa.has(linha.livro)) mapa.set(linha.livro, { digitados: 0, naoDigitados: 0 });
+    const contagem = mapa.get(linha.livro);
+    const codigo = extrairCodigoDeMensagem(linha.mensagem) ?? linha.codigo_contr;
+    if (codigo) contagem.digitados++;
+    else contagem.naoDigitados++;
+  }
+  return mapa;
 }
 
 // Estado ATUAL de cada UC do livro — pega, por UC, a linha mais recente
@@ -1369,25 +1381,35 @@ function anexarSegmentosDeslocamento(atuaisComCoordenadas) {
 // contado (a query só devolve meses com leitura — sem esse segundo check,
 // um mês pulado por atraso de coleta contaria como "consecutivo" mesmo
 // sendo um buraco no calendário).
+// Desde que o scraper de Acompanhamento parou de abrir OS,
+// contr_execucao_leitura não tem mais `codigo` por UC — o código de cada
+// mês vem de base_dados_leitura (mensagem, mesma extração de
+// extrairCodigoDeMensagem usada em todo o resto do arquivo).
 async function obterRegimeSucessivo(db, uc) {
   const { rows } = await db.query(
     `
-    SELECT DISTINCT ON (date_trunc('month', to_date(data_import, 'DD/MM/YYYY')))
-      date_trunc('month', to_date(data_import, 'DD/MM/YYYY')) AS mes, codigo
-    FROM contr_execucao_leitura
-    WHERE uc = $1 AND codigo IS NOT NULL
-    ORDER BY mes DESC, id DESC
+    SELECT DISTINCT ON (date_trunc('month', to_date(data_da_leitura, 'DD/MM/YYYY')))
+      date_trunc('month', to_date(data_da_leitura, 'DD/MM/YYYY')) AS mes, mensagem
+    FROM base_dados_leitura
+    WHERE unidade_consumidora = $1
+      AND data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
+      AND mensagem IS NOT NULL
+    ORDER BY mes DESC, to_date(data_da_leitura, 'DD/MM/YYYY') DESC, hora_da_leitura DESC
     `,
     [uc],
   );
 
-  if (!rows.length) return { uc, codigoAtual: null, ciclosConsecutivos: 0 };
+  const linhasComCodigo = rows
+    .map(linha => ({ mes: linha.mes, codigo: extrairCodigoDeMensagem(linha.mensagem) }))
+    .filter(linha => linha.codigo);
 
-  const codigoAtual = rows[0].codigo;
+  if (!linhasComCodigo.length) return { uc, codigoAtual: null, ciclosConsecutivos: 0 };
+
+  const codigoAtual = linhasComCodigo[0].codigo;
   let ciclos = 0;
   let mesEsperado = null;
 
-  for (const linha of rows) {
+  for (const linha of linhasComCodigo) {
     if (linha.codigo !== codigoAtual) break;
     if (mesEsperado && linha.mes.getTime() !== mesEsperado.getTime()) break;
     ciclos++;
@@ -1479,42 +1501,65 @@ async function historicoMassivaLivro(db, livro) {
   }));
 }
 
+// Desde que o scraper de Acompanhamento parou de abrir OS,
+// contr_execucao_leitura passou a gravar 1 linha por LIVRO por ciclo (não
+// mais 1 por UC) — cada linha já É um "ponto no tempo" direto, sem
+// precisar de dedup por UC nem SUM/GROUP BY (a versão antiga, que reagia a
+// c.codigo por linha, ficaria sempre com digitados=0 agora). O que muda de
+// verdade ao longo do tempo (digitados/naoDigitados) passa a vir de
+// cruzar o roster de UCs do livro (coordenadas_ucs_mineradas) com a
+// primeira leitura real de cada UC (base_dados_leitura, via
+// buscarEventosLeitura/escolherPorUc — mesmo par já usado por
+// obterUcsDoLivro pra montar a timeline): pra cada ponto, `digitados` é
+// quantas UCs do roster já tinham leitura registrada até aquele instante.
 async function historicoContrLivro(db, livro) {
-  // Versão CRUA (por linha/UC), não a agregada por livro — esta query já
-  // tem GROUP BY de verdade, o SUM() abaixo já agrega sozinho. Usar a
-  // versão com window function aqui seria agregado-sobre-agregado (erro de
-  // sintaxe) — ver comentário de CONTR_REALIZADO_LIVRO_SQL.
-  const digitados = CONTR_REALIZADO_LINHA_SQL;
-  const naoDigitados = CONTR_NAO_REALIZADO_LINHA_SQL;
-
-  const sql = `
+  const sqlPontos = `
     SELECT ${STATUS_CONTR_SQL} AS status,
       ${TIPO_SERVICO_CONTR_SQL} AS tipo_servico,
       c.etapa, cl.regional, c.data_import, c.hora_import,
       to_char(${PRAZO_CONTR_SQL}, 'YYYY-MM-DD') AS dt_prev_limite,
-      SUM(${digitados})::int AS digitados,
-      SUM(${naoDigitados})::int AS nao_digitados,
-      STRING_AGG(DISTINCT ${LEITURISTA_CONTR_SQL}, ', ' ORDER BY ${LEITURISTA_CONTR_SQL}) AS leiturista
-    FROM ${contrDedupSql('c2.livro = $1')} c
+      ${LEITURISTA_CONTR_SQL} AS leiturista
+    FROM contr_execucao_leitura c
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
     ${joinCalendarioContr()}
     WHERE c.livro = $1
-    GROUP BY status, tipo_servico, c.etapa, cl.regional, c.data_import, c.hora_import, dt_prev_limite
+    ORDER BY c.data_import, c.hora_import
   `;
 
-  const { rows } = await db.query(sql, [livro]);
-  return rows.map(linha => ({
-    status: linha.status,
-    tipoServico: linha.tipo_servico,
-    etapa: linha.etapa,
-    regional: linha.regional,
-    dataImport: linha.data_import,
-    horaImport: linha.hora_import,
-    dtPrevLimite: linha.dt_prev_limite ? String(linha.dt_prev_limite).split(' ')[0] : null,
-    digitados: linha.digitados,
-    naoDigitados: linha.nao_digitados,
-    leiturista: linha.leiturista,
-  }));
+  const sqlTotalUcs = `
+    SELECT count(*)::int AS total
+    FROM coordenadas_ucs_mineradas
+    WHERE livro ~ '^[0-9]+$' AND livro::int = $1::int
+  `;
+
+  const [{ rows: pontos }, { rows: totalRows }, eventos] = await Promise.all([
+    db.query(sqlPontos, [livro]),
+    db.query(sqlTotalUcs, [livro]),
+    buscarEventosLeitura(db, livro),
+  ]);
+
+  const totalUcs = totalRows[0]?.total ?? 0;
+  const primeiraPorUc = escolherPorUc(eventos, 'primeira');
+  // Chaves ordenáveis (YYYY-MM-DDTHH:MM:SS) de cada primeira leitura, já
+  // extraídas uma vez — evita recalcular por UC a cada ponto do histórico.
+  const chavesLeitura = [...primeiraPorUc.values()].map(chaveDataHoraOrdenavel);
+
+  return pontos.map(linha => {
+    const chavePonto = chaveDataHoraOrdenavel({ data_da_leitura: linha.data_import, hora_da_leitura: linha.hora_import });
+    const digitados = chavesLeitura.filter(chave => chave <= chavePonto).length;
+    return {
+      status: linha.status,
+      tipoServico: linha.tipo_servico,
+      etapa: linha.etapa,
+      regional: linha.regional,
+      dataImport: linha.data_import,
+      horaImport: linha.hora_import,
+      dtPrevLimite: linha.dt_prev_limite ? String(linha.dt_prev_limite).split(' ')[0] : null,
+      digitados,
+      naoDigitados: Math.max(0, totalUcs - digitados),
+      leiturista: linha.leiturista,
+    };
+  });
 }
 
 module.exports = {
@@ -1524,8 +1569,8 @@ module.exports = {
   obterHistoricoLivro,
   obterUcsDoLivro,
   obterRegimeSucessivo,
-  contrDedupSql,
   ehImpedimentoReal,
   extrairCodigoDeMensagem,
   obterEventosPorLivrosAteData,
+  obterProgressoPorLivro,
 };

@@ -186,6 +186,17 @@ async function coletarMassivas() {
     await page.fill("input[name='j_password']", process.env.COPEL_PASSWORD);
     await page.locator("input[type='submit']").click();
 
+    // Senha perto de expirar cai numa tela intermediária pedindo pra trocar
+    // agora — "Adiar alteração" segue o login normalmente sem trocar nada
+    // (mesmo tratamento do Adendo no scraper de Acompanhamento). Só espera
+    // 5s por esse botão, não atrasa quem não cai nessa tela.
+    try {
+      await page.locator("input[type='button'][value='Adiar alteração']").click({ timeout: 5000 });
+      console.log('Senha perto de expirar — adiando alteração pra manter o login.');
+    } catch {
+      // não caiu nessa tela, segue o fluxo normal
+    }
+
     // Pendentes
     console.log('Abrindo pendentes...');
     try {

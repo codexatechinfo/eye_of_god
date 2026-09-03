@@ -73,9 +73,9 @@ const CONFIG_IMPORTACAO = {
   // só na hora do INSERT) e não tinha como preencher UC/colaborador/código.
   // `chave` também reescrita: a original dependia de `numero_os`/
   // `qtd_digitados_nao_digitados`, ambas removidas — agora usa
-  // `livro+uc+data_import+hora_import`, mesma composição que já identifica
-  // uma linha de forma única em outras consultas desta tabela (ver
-  // `contrDedupSql`, `monitoramentoService.js`).
+  // `livro+uc+data_import+hora_import`. Vale só pra importação manual por
+  // planilha (upsert) — o scraper de Acompanhamento passou a gravar 1
+  // linha por livro por ciclo, sem `uc` (ver copelScraperService.js).
   contr_execucao_leitura: {
     modo: 'upsert',
     temEmpresa: true,

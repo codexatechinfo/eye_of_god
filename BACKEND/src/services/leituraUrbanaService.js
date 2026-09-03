@@ -1,4 +1,4 @@
-const { contrDedupSql } = require('./monitoramentoService');
+const { obterProgressoPorLivro } = require('./monitoramentoService');
 
 const FILTRO_LEITURA = `
   c.data_recebimento IS NOT NULL
@@ -29,39 +29,76 @@ async function calcularLeituraUrbana(db) {
 
   const { data_import: dataImport, hora_import: horaImport } = ultimoBatch;
 
-  const { rows: atual } = await db.query(
+  // Desde que o scraper de Acompanhamento parou de abrir OS,
+  // contr_execucao_leitura tem 1 linha por LIVRO por lote (não mais 1 por
+  // UC) — sem dedup nem SUM/GROUP BY de codigo por UC (sempre NULL agora).
+  // O progresso real (digitados/naoDigitados) vem à parte, de
+  // obterProgressoPorLivro (coordenadas_ucs_mineradas + base_dados_leitura),
+  // agregado por etapa+base aqui embaixo em JS.
+  const { rows: linhas } = await db.query(
     `
     SELECT
       substring(c.etapa from '\\d+') AS etapa_num,
       COALESCE(cl.regional, 'SEM BASE') AS base,
-      MIN(to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')) AS prazo_min,
-      MAX(to_date(split_part(c.data_prevista_limite, ' ', 1), 'DD/MM/YYYY')) AS prazo_max,
-      -- Um livro agora tem várias linhas (uma por UC/medidor, ver ADR 0018
-      -- Adendo 2) — COUNT(*) contaria UCs, não livros.
-      COUNT(DISTINCT c.livro)::int AS livros,
-      -- Realizados/não realizados por UC: coluna codigo preenchida =
-      -- realizada (o import já converte string vazia em NULL — ver
-      -- copelImportService.js). Já dentro de um GROUP BY de verdade
-      -- (linha abaixo), então SUM() agrega direto, sem precisar de window
-      -- function (comparar com CONTR_REALIZADO_LIVRO_SQL em
-      -- monitoramentoService.js, usada só onde não há GROUP BY real).
-      SUM(CASE WHEN c.codigo IS NOT NULL THEN 1 ELSE 0 END)::int AS digitados,
-      SUM(CASE WHEN c.codigo IS NULL THEN 1 ELSE 0 END)::int AS nao_digitados,
-      -- colaborador já vem separado da coluna própria (populada no
-      -- import) — antes tentava re-extrair o nome via regex de dentro de
-      -- situacao, que não tem mais o parêntese com o nome; o regex nunca
-      -- casava e essa contagem ficava presa em no máximo 1.
-      COUNT(DISTINCT CASE WHEN c.situacao = 'Em Execução' THEN c.colaborador END)::int AS leituristas_ativos
-    FROM ${contrDedupSql('c2.data_import = $1 AND c2.hora_import = $2')} c
+      c.livro,
+      split_part(c.data_prevista_limite, ' ', 1) AS data_prevista_limite,
+      c.situacao,
+      c.colaborador
+    FROM contr_execucao_leitura c
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
     WHERE c.data_import = $1 AND c.hora_import = $2
       AND ${FILTRO_LEITURA}
       AND substring(c.etapa from '\\d+') IS NOT NULL
       AND substring(c.etapa from '\\d+')::int BETWEEN 1 AND 19
-    GROUP BY substring(c.etapa from '\\d+'), COALESCE(cl.regional, 'SEM BASE')
     `,
     [dataImport, horaImport],
   );
+
+  const progresso = await obterProgressoPorLivro(db, linhas.map(l => l.livro), dataImport);
+
+  // "DD/MM/YYYY" -> Date local, só pra poder comparar min/max corretamente
+  // (string simples não ordena certo entre meses/anos diferentes).
+  function paraData(dataBr) {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dataBr || '');
+    return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+  }
+
+  const grupos = new Map();
+  for (const linha of linhas) {
+    const chave = `${linha.etapa_num}::${linha.base}`;
+    if (!grupos.has(chave)) {
+      grupos.set(chave, {
+        etapa_num: linha.etapa_num,
+        base: linha.base,
+        livros: new Set(),
+        prazos: [],
+        digitados: 0,
+        nao_digitados: 0,
+        leituristasAtivos: new Set(),
+      });
+    }
+    const g = grupos.get(chave);
+    g.livros.add(linha.livro);
+    const prazo = paraData(linha.data_prevista_limite);
+    if (prazo) g.prazos.push(prazo);
+    const p = progresso.get(linha.livro);
+    if (p) {
+      g.digitados += p.digitados;
+      g.nao_digitados += p.naoDigitados;
+    }
+    if (linha.situacao === 'Em Execução' && linha.colaborador) g.leituristasAtivos.add(linha.colaborador);
+  }
+
+  const atual = [...grupos.values()].map(g => ({
+    etapa_num: g.etapa_num,
+    base: g.base,
+    prazo_min: g.prazos.length ? g.prazos.reduce((a, b) => (a < b ? a : b)) : null,
+    prazo_max: g.prazos.length ? g.prazos.reduce((a, b) => (a > b ? a : b)) : null,
+    livros: g.livros.size,
+    digitados: g.digitados,
+    nao_digitados: g.nao_digitados,
+    leituristas_ativos: g.leituristasAtivos.size,
+  }));
 
   const { rows: historico } = await db.query(`
     SELECT DISTINCT substring(c.etapa from '\\d+') AS etapa_num, COALESCE(cl.regional, 'SEM BASE') AS base

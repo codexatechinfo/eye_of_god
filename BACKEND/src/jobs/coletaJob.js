@@ -1,7 +1,16 @@
 const { executarColetaCopel } = require('../services/coletaCopelService');
 const { abrirContextoTenant, fecharContextoTenant } = require('../config/db');
+const { log, logWarn, logErro } = require('../utils/logTempo');
 
-const PAUSA_ENTRE_CICLOS_MS = 5000; // pequena folga entre um ciclo e o próximo
+// 5s (valor original) fazia sentido quando o ciclo levava 35-50min — virou
+// problema real depois que o scraper parou de abrir OS e passou a levar
+// 30s-3min (ver ADR 0028): buscar de novo quase sem intervalo faz o site
+// carregar a lista de etapas incompleta (achado ao vivo: 37 etapas
+// existem no calendário de setembro, mas ciclos voltando a cada 5s
+// consistentemente só achavam 2 — mesma instabilidade do site que causava
+// "sessão perdida" ao abrir OS repetidamente, agora manifestada como
+// lazy-load de etapa incompleto). 3min dá folga real entre buscas.
+const PAUSA_ENTRE_CICLOS_MS = 3 * 60 * 1000;
 
 // Job roda fora de requisição HTTP, sem token — usa a empresa configurada em
 // EMPRESA_PRINCIPAL_ID como identidade fixa (ver docs/adr/0003-rbac-multi-tenant.md).
@@ -12,11 +21,11 @@ let loopAtivo = false;
 
 async function executarUmCiclo() {
   if (emAndamento) {
-    console.log('[Coleta Acomp] ⏭️ Já em andamento, ignorando chamada concorrente.');
+    log('[Coleta Acomp] ⏭️ Já em andamento, ignorando chamada concorrente.');
     return;
   }
   emAndamento = true;
-  console.log('[Coleta Acomp] ⏰ Iniciando ciclo...');
+  log('[Coleta Acomp] ⏰ Iniciando ciclo...');
   // abrirContextoTenant() também dentro do try: se ela lançar (ex.: erro
   // transitório de conexão), a exceção escapava do try/catch, propagava pra
   // fora do while em loopContinuo() e travava o loop pro resto do dia sem
@@ -29,7 +38,7 @@ async function executarUmCiclo() {
     await executarColetaCopel(client, EMPRESA_JOB_ID);
     await fecharContextoTenant(client, true);
   } catch (erro) {
-    console.error('[Coleta Acomp] ❌ Erro na coleta:', erro);
+    logErro('[Coleta Acomp] ❌ Erro na coleta:', erro);
     if (client) await fecharContextoTenant(client, false);
   } finally {
     emAndamento = false;
@@ -43,7 +52,7 @@ async function executarUmCiclo() {
 async function loopContinuo() {
   if (loopAtivo) return;
   loopAtivo = true;
-  console.log('[Coleta Acomp] 🔁 Iniciando loop contínuo (24h, sem janela de horário).');
+  log('[Coleta Acomp] 🔁 Iniciando loop contínuo (24h, sem janela de horário).');
 
   while (true) {
     await executarUmCiclo();
@@ -59,14 +68,14 @@ const INTERVALO_WATCHDOG_MS = 2 * 60 * 1000;
 
 function iniciarJobColeta() {
   if (!EMPRESA_JOB_ID) {
-    console.error('[Coleta Acomp] ❌ EMPRESA_PRINCIPAL_ID não definido no .env — job não iniciado.');
+    logErro('[Coleta Acomp] ❌ EMPRESA_PRINCIPAL_ID não definido no .env — job não iniciado.');
     return;
   }
   loopContinuo();
 
   setInterval(() => {
     if (!loopAtivo && !emAndamento) {
-      console.warn('[Coleta Acomp] 🩹 Watchdog: loop não estava rodando — reiniciando.');
+      logWarn('[Coleta Acomp] 🩹 Watchdog: loop não estava rodando — reiniciando.');
       loopContinuo();
     }
   }, INTERVALO_WATCHDOG_MS);

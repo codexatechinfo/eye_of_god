@@ -121,3 +121,44 @@ texto) sem nenhuma referência na query depois da reescrita do roster — Postgr
 inferir o tipo de um parâmetro nunca usado ("could not determine data type of parameter $1"),
 erro reproduzido ao vivo (falha no recálculo do painel Leitura Urbana) e corrigido removendo o
 parâmetro morto e renumerando.
+
+## Adendo 1 (2026-09-03) — lista de ETAPAs travando em 2; logs dos 3 jobs sem separação visual
+
+Depois da decisão principal em produção, dois problemas achados ao vivo na mesma sessão:
+
+### Lista de ETAPAs carregava só 2, mesmo existindo mais com dado real
+
+`aguardarTodasEtapasCarregadas` ([copelScraperService.js](../../BACKEND/src/services/copelScraperService.js))
+rola a página em passos até a contagem de links `ETAPA` estabilizar — mecanismo correto (não
+depende de calendário nenhum, só do que a página carrega). Duas causas, achadas com debug ao
+vivo e confirmadas com print do portal (ETAPA01-(261) batendo exato com o scraper, mas
+ETAPA03/04/21+ nunca aparecendo):
+
+1. **`stylesheet` bloqueado** no `context.route()` fazia a página, sem CSS, colapsar pra caber
+   na altura da viewport (`document.body.scrollHeight == window.innerHeight`) — `scrollBy()`
+   ficava sem nada pra rolar. Tirado do bloqueio (continua bloqueando `image`/`font`/`media`).
+2. **Ciclos voltando a cada 5s** (intervalo herdado de quando o ciclo levava 35-50min, ADR 0028
+   principal) não davam folga pro site terminar de montar a lista antes do próximo login. Pausa
+   entre ciclos subiu pra 3min (`coletaJob.js`).
+
+Verificação: dois ciclos ao vivo consecutivos depois do fix encontraram 1949 e depois 2028
+livros em 12 etapas (antes: travava consistentemente em 2 etapas). Confirmação exaustiva de que
+12 é o total exato pro filtro concessionária/empreiteira em uso fica pendente de conferência
+manual no portal — o que já está comprovado é que a lista deixou de travar cedo.
+
+### Logs dos 3 jobs concorrentes (`Massivas`, `Coleta Acomp`, `Controle Empreiteiras`) sem separação visual
+
+Os 3 loops rodam concorrentes e escrevem no mesmo terminal, intercalando linha a linha — usuário
+reportou confusão ao vivo ("está colocando todo mundo no mesmo bolo"). Duas causas:
+
+1. Nem todo log passava por `log()`/`logWarn()`/`logErro()` de `logTempo.js` (timestamp
+   `hh:mm:ss.mmm`) — os wrappers de job (`coletaJob.js`, `coletaMassivasJob.js`,
+   `coletaMassivasService.js`) e o scraper de Massivas/Controle de Empreiteiras usavam
+   `console.log`/`warn`/`error` direto, sem hora, dificultando correlacionar a ordem real entre
+   jobs. Unificado: todo log de job agora passa por `logTempo.js`.
+2. Nada distinguia visualmente de qual job veio cada linha além do texto do prefixo. `logTempo.js`
+   agora colore automaticamente o prefixo `[Nome do Job]` de cada linha (ciano pra Massivas,
+   verde pra Coleta Acomp, amarelo pra Controle de Empreiteiras) — sem precisar mudar nada nos
+   pontos de chamada além de trocar `console.*` por `log`/`logWarn`/`logErro`. Mensagem
+   `[Massivas] ✅ Coleta de massivas finalizada.` também renomeada pra deixar explícito que cobre
+   o Controle de Empreiteiras encadeado, não só a parte de massivas.

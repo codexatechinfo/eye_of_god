@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const { Readable } = require('stream');
 const ExcelJS = require('exceljs');
+const { log } = require('../utils/logTempo');
 
 // Porta o script Python fornecido pelo usuário (Playwright + csv + psycopg2,
 // já validado ao vivo contra o portal Copel) — mesmos seletores, mesma
@@ -286,7 +287,7 @@ async function exportarRelatorio(page, destino) {
 // objeto `Date`); quem chama decide se roda pra ontem, hoje, ou ambos.
 async function extrairControleEmpreiteiras(page, dataAlvo, { concessionaria, empreiteira }) {
   const dataFmt = `${String(dataAlvo.getDate()).padStart(2, '0')}/${String(dataAlvo.getMonth() + 1).padStart(2, '0')}/${dataAlvo.getFullYear()}`;
-  console.log(`[Controle Empreiteiras] 🔎 Acessando relatório pra ${dataFmt}...`);
+  log(`[Controle Empreiteiras] 🔎 Acessando relatório pra ${dataFmt}...`);
 
   await page.waitForSelector("a[href='/lis/relatorioControleEmpreiteirasAction.do']", { timeout: 15000 });
   await page.locator("a[href='/lis/relatorioControleEmpreiteirasAction.do']").click();
@@ -301,16 +302,16 @@ async function extrairControleEmpreiteiras(page, dataAlvo, { concessionaria, emp
   await page.waitForTimeout(500);
 
   await selecionarPeriodo(page, dataAlvo);
-  console.log(`[Controle Empreiteiras] 📅 Período selecionado: ${dataFmt}`);
+  log(`[Controle Empreiteiras] 📅 Período selecionado: ${dataFmt}`);
 
   const destino = path.join(os.tmpdir(), `controle_empreiteiras_${dataAlvo.getTime()}_${Date.now()}.csv`);
   await exportarRelatorio(page, destino);
-  console.log(`[Controle Empreiteiras] 📥 Exportado (${dataFmt}).`);
+  log(`[Controle Empreiteiras] 📥 Exportado (${dataFmt}).`);
 
   try {
     const linhasCru = await lerCsvComEncodingDetectado(destino);
     const registros = normalizarLinhas(linhasCru, concessionaria, empreiteira);
-    console.log(`[Controle Empreiteiras] ✅ ${registros.length} linha(s) válida(s) pra ${dataFmt}.`);
+    log(`[Controle Empreiteiras] ✅ ${registros.length} linha(s) válida(s) pra ${dataFmt}.`);
     return registros;
   } finally {
     fs.unlink(destino, () => {}); // best-effort — não bloqueia o fluxo se falhar

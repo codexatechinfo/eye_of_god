@@ -18,16 +18,42 @@ function horaAgora() {
   );
 }
 
+// Colore só o prefixo "[Nome do Job]" de cada linha — os 3 loops (Massivas,
+// Coleta Acomp, Controle Empreiteiras) rodam concorrentes e escrevem no
+// mesmo terminal, intercalando linha a linha; sem cor, fica tudo "no mesmo
+// bolo" e difícil de acompanhar de qual job veio cada linha (usuário
+// reportou a confusão ao vivo). Mapeamento fixo (não por hash) pra cor não
+// mudar de execução pra execução.
+const CORES_JOB = {
+  '[Massivas]': '\x1b[36m', // ciano
+  '[Coleta Acomp]': '\x1b[32m', // verde
+  '[Controle Empreiteiras]': '\x1b[33m', // amarelo
+};
+const RESET_COR = '\x1b[0m';
+
+function colorirPrefixo(valor) {
+  if (typeof valor !== 'string') return valor;
+  for (const [tag, cor] of Object.entries(CORES_JOB)) {
+    if (valor.startsWith(tag)) {
+      return `${cor}${tag}${RESET_COR}${valor.slice(tag.length)}`;
+    }
+  }
+  return valor;
+}
+
 function log(...args) {
-  console.log(`[${horaAgora()}]`, ...args);
+  const [primeiro, ...resto] = args;
+  console.log(`[${horaAgora()}]`, colorirPrefixo(primeiro), ...resto);
 }
 
 function logWarn(...args) {
-  console.warn(`[${horaAgora()}]`, ...args);
+  const [primeiro, ...resto] = args;
+  console.warn(`[${horaAgora()}]`, colorirPrefixo(primeiro), ...resto);
 }
 
 function logErro(...args) {
-  console.error(`[${horaAgora()}]`, ...args);
+  const [primeiro, ...resto] = args;
+  console.error(`[${horaAgora()}]`, colorirPrefixo(primeiro), ...resto);
 }
 
 module.exports = { horaAgora, log, logWarn, logErro };

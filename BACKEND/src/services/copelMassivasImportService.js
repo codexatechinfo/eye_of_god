@@ -1,3 +1,5 @@
+const { log } = require('../utils/logTempo');
+
 async function inserirEmMassa(db, tabela, linhas, empresaId) {
   if (!linhas.length) return 0;
 
@@ -19,17 +21,17 @@ async function importarMassivas(db, { pendentes, atribuidas, emExecucao }, empre
 
   if (pendentes.length) {
     resultado.pendentes = await inserirEmMassa(db, 'pendentes_im', pendentes, empresaId);
-    console.log(`[Massivas] ${resultado.pendentes} linhas importadas em 'pendentes_im'`);
+    log(`[Massivas] ${resultado.pendentes} linhas importadas em 'pendentes_im'`);
   }
 
   if (atribuidas.length) {
     resultado.atribuidas = await inserirEmMassa(db, 'atribuidas_im', atribuidas, empresaId);
-    console.log(`[Massivas] ${resultado.atribuidas} linhas importadas em 'atribuidas_im'`);
+    log(`[Massivas] ${resultado.atribuidas} linhas importadas em 'atribuidas_im'`);
   }
 
   if (emExecucao.length) {
     resultado.emExecucao = await inserirEmMassa(db, 'em_execucao_im', emExecucao, empresaId);
-    console.log(`[Massivas] ${resultado.emExecucao} linhas importadas em 'em_execucao_im'`);
+    log(`[Massivas] ${resultado.emExecucao} linhas importadas em 'em_execucao_im'`);
   }
 
   return resultado;

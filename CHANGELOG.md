@@ -7,6 +7,19 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Coleta de Acompanhamento: lista de ETAPAs travava em 2, mesmo existindo mais com dado real no
+  portal — sem `stylesheet`, a página colapsava pra caber na viewport e a rolagem que carrega
+  mais etapas ficava sem efeito; ciclos voltando a cada 5s também não davam folga pro site
+  terminar de montar a lista. `stylesheet` tirado do bloqueio de recursos e pausa entre ciclos
+  subiu pra 3min. Ver Adendo 1 da [ADR
+  0028](docs/adr/0028-acompanhamento-sem-abrir-os-roster-coordenadas-mineradas.md).
+
+- Logs dos jobs Massivas/Coleta Acomp/Controle de Empreiteiras (rodam concorrentes, escrevem no
+  mesmo terminal) sem separação visual — parte sem timestamp, nenhuma distinção além do texto do
+  prefixo. Todo log de job unificado em `logTempo.js`, com o prefixo `[Nome do Job]` colorido por
+  job. Ver Adendo 1 da [ADR
+  0028](docs/adr/0028-acompanhamento-sem-abrir-os-roster-coordenadas-mineradas.md).
+
 - Importação por planilha de `calendario_leitura`: célula de data no Excel gravava `mes_ref`
   (e, achado no caminho, também `prazo_leitura`/`prazo_massiva`) no formato `DD/MM/YYYY` em vez
   do `YYYY-MM-DD` que essas 3 colunas específicas exigem — quebrava a aba Monitoramento de

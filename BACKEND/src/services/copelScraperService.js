@@ -178,10 +178,19 @@ async function coletarDadosAcompanhamento() {
 
     // Bloqueia imagem/CSS/fonte/mídia — a extração só lê texto/atributo via
     // innerText/getAttribute, nunca depende do visual renderizado.
+    // 'stylesheet' tirado do bloqueio (investigação ao vivo, 2026-09-03):
+    // sem CSS a página colapsa pra caber inteira na viewport
+    // (document.body.scrollHeight == window.innerHeight, confirmado com
+    // debug ao vivo), o que deixa window.scrollBy() sem nada pra rolar — e
+    // a lista de ETAPA (que carrega via scroll, ver
+    // aguardarTodasEtapasCarregadas) trava sempre em 2 etapas mesmo
+    // existindo 11+ com dado real (usuário confirmou com print do portal:
+    // ETAPA01-(261) batendo exato com o que o scraper achava, mas
+    // ETAPA03-(753)/ETAPA04-(479)/ETAPA21 em diante nunca apareciam).
     await context.route('**/*', route => {
       const tipo = route.request().resourceType();
       const url = route.request().url();
-      if (['image', 'stylesheet', 'font', 'media'].includes(tipo)) {
+      if (['image', 'font', 'media'].includes(tipo)) {
         return route.abort();
       }
       if (tipo === 'script' && /\/tags\/calendar/i.test(url)) {

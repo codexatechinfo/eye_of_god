@@ -1,5 +1,6 @@
 const { executarColetaMassivas } = require('../services/coletaMassivasService');
 const { abrirContextoTenant, fecharContextoTenant } = require('../config/db');
+const { log, logWarn, logErro } = require('../utils/logTempo');
 
 const PAUSA_ENTRE_CICLOS_MS = 5000;
 
@@ -10,11 +11,11 @@ let loopAtivo = false;
 
 async function executarUmCiclo() {
   if (emAndamento) {
-    console.log('[Massivas] ⏭️ Já em andamento, ignorando chamada concorrente.');
+    log('[Massivas] ⏭️ Já em andamento, ignorando chamada concorrente.');
     return;
   }
   emAndamento = true;
-  console.log('[Massivas] ⏰ Iniciando ciclo...');
+  log('[Massivas] ⏰ Iniciando ciclo...');
   // abrirContextoTenant() também dentro do try — ver mesmo comentário em
   // coletaJob.js (evita travar o loop pro resto do dia se a conexão falhar
   // de forma transitória).
@@ -24,7 +25,7 @@ async function executarUmCiclo() {
     await executarColetaMassivas(client, EMPRESA_JOB_ID);
     await fecharContextoTenant(client, true);
   } catch (erro) {
-    console.error('[Massivas] ❌ Erro na coleta:', erro);
+    logErro('[Massivas] ❌ Erro na coleta:', erro);
     if (client) await fecharContextoTenant(client, false);
   } finally {
     emAndamento = false;
@@ -38,7 +39,7 @@ async function executarUmCiclo() {
 async function loopContinuo() {
   if (loopAtivo) return;
   loopAtivo = true;
-  console.log('[Massivas] 🔁 Iniciando loop contínuo (24h, sem janela de horário).');
+  log('[Massivas] 🔁 Iniciando loop contínuo (24h, sem janela de horário).');
 
   while (true) {
     await executarUmCiclo();
@@ -54,14 +55,14 @@ const INTERVALO_WATCHDOG_MS = 2 * 60 * 1000;
 
 function iniciarJobMassivas() {
   if (!EMPRESA_JOB_ID) {
-    console.error('[Massivas] ❌ EMPRESA_PRINCIPAL_ID não definido no .env — job não iniciado.');
+    logErro('[Massivas] ❌ EMPRESA_PRINCIPAL_ID não definido no .env — job não iniciado.');
     return;
   }
   loopContinuo();
 
   setInterval(() => {
     if (!loopAtivo && !emAndamento) {
-      console.warn('[Massivas] 🩹 Watchdog: loop não estava rodando — reiniciando.');
+      logWarn('[Massivas] 🩹 Watchdog: loop não estava rodando — reiniciando.');
       loopContinuo();
     }
   }, INTERVALO_WATCHDOG_MS);

@@ -2,6 +2,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const { extrairControleEmpreiteiras } = require('./copelControleEmpreiteirasScraperService');
+const { log, logErro } = require('../utils/logTempo');
 
 // Mesmos valores default do script Python fornecido pelo usuário — sem
 // exigir editar .env pra funcionar já. COPEL_CONCESSIONARIA/COPEL_EMPREITEIRA
@@ -21,9 +22,9 @@ async function salvarDiagnostico(page, motivo) {
     const textoVisivel = await page.evaluate(() => document.body.innerText.slice(0, 3000));
     fs.writeFileSync(`${base}.txt`, `URL: ${page.url()}\n\n${textoVisivel}`, 'utf-8');
 
-    console.log(`[Massivas] 📸 Diagnóstico salvo: ${base}.png / .txt`);
+    log(`[Massivas] 📸 Diagnóstico salvo: ${base}.png / .txt`);
   } catch (erroDiagnostico) {
-    console.error('[Massivas] ⚠️ Não foi possível salvar diagnóstico:', erroDiagnostico.message);
+    logErro('[Massivas] ⚠️ Não foi possível salvar diagnóstico:', erroDiagnostico.message);
   }
 }
 
@@ -60,13 +61,13 @@ async function aguardarOpcao(page, seletorSelect, valor, timeoutMs = 15000) {
 }
 
 async function selecionarFiltros(page) {
-  console.log('Aplicando filtros...');
+  log('[Massivas] Aplicando filtros...');
   await page.selectOption("select[name='searchConcessionariaId']", { value: '2' });
   await aguardarOpcao(page, "select[name='searchEmpreiteiraId']", '24');
   await page.selectOption("select[name='searchEmpreiteiraId']", { value: '24' });
   await aguardarOpcao(page, "select[name='searchTipoTarefasId']", '16');
   await page.selectOption("select[name='searchTipoTarefasId']", { value: '16' });
-  console.log('Filtros aplicados');
+  log('[Massivas] Filtros aplicados');
 }
 
 // Tabela pode popular as linhas de forma assíncrona depois do elemento
@@ -92,19 +93,19 @@ async function aguardarEstabilizar(page, seletorLinhas, { intervaloMs = 500, tim
 
 async function buscarComTentativas(page, seletorEspera, maxTentativas = 3, timeoutMs = 30000) {
   for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
-    console.log(`Buscando... (tentativa ${tentativa}/${maxTentativas})`);
+    log(`[Massivas] Buscando... (tentativa ${tentativa}/${maxTentativas})`);
     await page.locator('#botaoBuscar').click();
     try {
       await page.waitForSelector(seletorEspera, { timeout: timeoutMs });
       return true;
     } catch (erro) {
-      console.log(`Nenhum resultado apareceu na tentativa ${tentativa}.`);
+      log(`[Massivas] Nenhum resultado apareceu na tentativa ${tentativa}.`);
       // Pequena folga ANTES de tentar buscar de novo (não é espera de
       // carregamento — é intervalo entre retries).
       await page.waitForTimeout(2000);
     }
   }
-  console.log(`Sem resultados após ${maxTentativas} tentativas. Seguindo para a próxima aba.`);
+  log(`[Massivas] Sem resultados após ${maxTentativas} tentativas. Seguindo para a próxima aba.`);
   return false;
 }
 
@@ -176,10 +177,10 @@ async function coletarMassivas() {
   const page = await browser.newPage();
 
   try {
-    console.log('Abrindo site...');
+    log('[Massivas] Abrindo site...');
     await page.goto(URL_LOGIN);
 
-    console.log('Realizando login...');
+    log('[Massivas] Realizando login...');
     // fill() já espera o campo existir e ficar acionável — sem necessidade
     // de tempo fixo depois do goto.
     await page.fill("input[name='j_username']", process.env.COPEL_USERNAME.toUpperCase());
@@ -192,13 +193,13 @@ async function coletarMassivas() {
     // 5s por esse botão, não atrasa quem não cai nessa tela.
     try {
       await page.locator("input[type='button'][value='Adiar alteração']").click({ timeout: 5000 });
-      console.log('Senha perto de expirar — adiando alteração pra manter o login.');
+      log('[Massivas] Senha perto de expirar — adiando alteração pra manter o login.');
     } catch {
       // não caiu nessa tela, segue o fluxo normal
     }
 
     // Pendentes
-    console.log('Abrindo pendentes...');
+    log('[Massivas] Abrindo pendentes...');
     try {
       // Esse waitForSelector já É a espera real de "login concluído" — o
       // waitForTimeout(8000) fixo que existia antes dele só atrasava sem
@@ -209,7 +210,7 @@ async function coletarMassivas() {
       await salvarDiagnostico(page, 'login_falhou');
       throw erroLogin;
     }
-    console.log('Login concluído. URL:', page.url());
+    log('[Massivas] Login concluído. URL:', page.url());
     await page.locator("a[href='pendentesAction.do']").click();
     await aguardarFormularioFiltros(page);
 
@@ -220,10 +221,10 @@ async function coletarMassivas() {
       await aguardarEstabilizar(page, 'table#item > tbody > tr');
       dadosPendentes = await extrairPendentes(page);
     }
-    console.log(`${dadosPendentes.length} linhas extraídas (pendentes)`);
+    log(`[Massivas] ${dadosPendentes.length} linhas extraídas (pendentes)`);
 
     // Atribuídas
-    console.log('Abrindo atribuídas...');
+    log('[Massivas] Abrindo atribuídas...');
     await page.goto(URL_ATRIBUIDAS);
     await aguardarFormularioFiltros(page);
     await selecionarFiltros(page);
@@ -233,10 +234,10 @@ async function coletarMassivas() {
       await aguardarEstabilizar(page, 'table.tableQuebraEquipe table#item > tbody > tr');
       dadosAtribuidas = await extrairPorColaborador(page);
     }
-    console.log(`${dadosAtribuidas.length} linhas extraídas (atribuídas)`);
+    log(`[Massivas] ${dadosAtribuidas.length} linhas extraídas (atribuídas)`);
 
     // Em execução
-    console.log('Abrindo em execução...');
+    log('[Massivas] Abrindo em execução...');
     await page.goto(URL_EM_EXECUCAO);
     await aguardarFormularioFiltros(page);
     await selecionarFiltros(page);
@@ -246,7 +247,7 @@ async function coletarMassivas() {
       await aguardarEstabilizar(page, 'table.tableQuebraEquipe table#item > tbody > tr');
       dadosEmExecucao = await extrairPorColaborador(page);
     }
-    console.log(`[Massivas] ${dadosEmExecucao.length} linhas extraídas (em execução)`);
+    log(`[Massivas] ${dadosEmExecucao.length} linhas extraídas (em execução)`);
 
     const agora = new Date();
     const dtImport = agora.toLocaleDateString('pt-BR');
@@ -275,14 +276,14 @@ async function coletarMassivas() {
     ontem.setDate(ontem.getDate() - 1);
 
     const controleEmpreiteiras = { ontem: null, hoje: null };
-    console.log('[Controle Empreiteiras] 🟡 Iniciando extração (ontem + hoje)...');
+    log('[Controle Empreiteiras] 🟡 Iniciando extração (ontem + hoje)...');
     try {
       controleEmpreiteiras.ontem = await extrairControleEmpreiteiras(page, ontem, {
         concessionaria: CONTROLE_EMPREITEIRAS_CONCESSIONARIA,
         empreiteira: CONTROLE_EMPREITEIRAS_EMPREITEIRA,
       });
     } catch (erro) {
-      console.error('[Controle Empreiteiras] ❌ Erro na extração de ontem:', erro);
+      logErro('[Controle Empreiteiras] ❌ Erro na extração de ontem:', erro);
       await salvarDiagnostico(page, 'controle_empreiteiras_ontem_falhou');
     }
     try {
@@ -291,7 +292,7 @@ async function coletarMassivas() {
         empreiteira: CONTROLE_EMPREITEIRAS_EMPREITEIRA,
       });
     } catch (erro) {
-      console.error('[Controle Empreiteiras] ❌ Erro na extração de hoje:', erro);
+      logErro('[Controle Empreiteiras] ❌ Erro na extração de hoje:', erro);
       await salvarDiagnostico(page, 'controle_empreiteiras_hoje_falhou');
     }
 

@@ -2,6 +2,7 @@ const { coletarMassivas } = require('./copelMassivasScraperService');
 const { importarMassivas } = require('./copelMassivasImportService');
 const { importarControleEmpreiteiras } = require('./copelControleEmpreiteirasImportService');
 const { comSessaoExclusiva } = require('./copelSessaoLock');
+const { log } = require('../utils/logTempo');
 
 // "DD/MM/YYYY" — mesmo formato de data_da_leitura em base_dados_leitura.
 function formatarDataBr(data) {
@@ -11,7 +12,7 @@ function formatarDataBr(data) {
 }
 
 async function executarColetaMassivas(db, empresaId) {
-  console.log('[Massivas] 🟡 Iniciando coleta de massivas...');
+  log('[Massivas] 🟡 Iniciando coleta de massivas...');
   const dados = await comSessaoExclusiva(() => coletarMassivas());
   const resultado = await importarMassivas(db, dados, empresaId);
 
@@ -37,7 +38,7 @@ async function executarColetaMassivas(db, empresaId) {
     await importarControleEmpreiteiras(db, dados.controleEmpreiteiras.hoje, empresaId, formatarDataBr(hoje));
   }
 
-  console.log('[Massivas] ✅ Coleta de massivas finalizada.');
+  log('[Massivas] ✅ Ciclo concluído (massivas + Controle de Empreiteiras encadeado).');
   return resultado;
 }
 

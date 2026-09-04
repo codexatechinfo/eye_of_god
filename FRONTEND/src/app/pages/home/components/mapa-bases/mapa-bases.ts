@@ -281,7 +281,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   private segmentosRota: L.Polyline[] = [];
   private pontosJornada = new Map<string, L.CircleMarker | L.Marker>();
   private colaboradorComBoundsAplicado: string | null = null;
-  private poligonoSetorPlanejado?: L.Polygon;
+  // Um polígono por LIVRO (não mais um casco convexo do dia inteiro) — se o
+  // colaborador tem mais de um livro em execução hoje, cada um ganha o seu
+  // próprio "setor planejado" (pedido explícito do usuário). Chave = livro.
+  private poligonosSetorPlanejado = new Map<string, L.Polygon>();
   // Última chave (colaborador+data) pra qual "Limites municipais" já buscou
   // dado — evita rebuscar a cada refresh de 60s do mesmo colaborador/dia
   // (ver effect no construtor).
@@ -304,7 +307,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // ngAfterViewInit, não entra no painel Camadas.
   private grupoAgenteAtual = L.layerGroup();
   private nomeAgenteEmDestaque: string | null = null;
-  private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo do dia
+  private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo por livro
   private grupoLimitesMunicipais = L.layerGroup(); // camada 5: contorno IBGE
 
   // Ligadas por padrão (preserva o comportamento atual, sempre visível até
@@ -444,8 +447,11 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   private renderizarLimitesMunicipais(municipios: MunicipioLimite[]): void {
     this.grupoLimitesMunicipais.clearLayers();
     for (const municipio of municipios) {
+      // Linha mais grossa, mais opaca e tracejada — pedido explícito do
+      // usuário pra dar mais destaque (antes era 1px sólido, quase some
+      // sobre qualquer camada de tile).
       L.geoJSON(municipio.geometry as GeoJSON.Geometry, {
-        style: { color: '#0ea5e9', weight: 1, fillOpacity: 0.02 },
+        style: { color: '#0ea5e9', weight: 2.5, opacity: 0.9, fillOpacity: 0.04, dashArray: '8 5' },
       })
         .bindTooltip(municipio.nome)
         .addTo(this.grupoLimitesMunicipais);
@@ -691,8 +697,8 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       this.segmentosRota = [];
       for (const ponto of this.pontosJornada.values()) this.grupoPontos.removeLayer(ponto);
       this.pontosJornada.clear();
-      if (this.poligonoSetorPlanejado) this.grupoSetorPlanejado.removeLayer(this.poligonoSetorPlanejado);
-      this.poligonoSetorPlanejado = undefined;
+      for (const poligono of this.poligonosSetorPlanejado.values()) this.grupoSetorPlanejado.removeLayer(poligono);
+      this.poligonosSetorPlanejado.clear();
       this.colaboradorComBoundsAplicado = null;
       return;
     }
@@ -728,21 +734,38 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       this.segmentosRota.push(linha);
     }
 
-    // Setor planejado (casco convexo de TODAS as UCs válidas do dia, não só
-    // as com sequência) — filtro próprio com Number.isFinite, mais estrito
-    // que o truthy-string acima (ver comentário de cascoConvexo).
-    const hull = cascoConvexo(this.pontosValidosDoDia(pontos));
-    if (hull.length >= 3) {
-      if (this.poligonoSetorPlanejado) {
-        this.poligonoSetorPlanejado.setLatLngs(hull);
+    // Setor planejado: um casco convexo POR LIVRO (não mais um só pro dia
+    // inteiro) — se o colaborador tem mais de um livro em execução hoje,
+    // cada um aparece com o seu próprio polígono. Mesmo filtro
+    // Number.isFinite de pontosValidosDoDia, mas aplicado dentro de cada
+    // grupo de livro separadamente (ver comentário de cascoConvexo).
+    const pontosPorLivro = new Map<string, PontoJornada[]>();
+    for (const item of pontos) {
+      const lista = pontosPorLivro.get(item.livro);
+      if (lista) lista.push(item);
+      else pontosPorLivro.set(item.livro, [item]);
+    }
+    const livrosVistos = new Set<string>();
+    for (const [livro, pontosDoLivro] of pontosPorLivro) {
+      const hull = cascoConvexo(this.pontosValidosDoDia(pontosDoLivro));
+      if (hull.length < 3) continue;
+      livrosVistos.add(livro);
+      const existente = this.poligonosSetorPlanejado.get(livro);
+      if (existente) {
+        existente.setLatLngs(hull);
       } else {
-        this.poligonoSetorPlanejado = L.polygon(hull, { color: '#8b5cf6', weight: 2, fillOpacity: 0.08 }).addTo(
+        const poligono = L.polygon(hull, { color: '#8b5cf6', weight: 2, fillOpacity: 0.08 }).addTo(
           this.grupoSetorPlanejado,
         );
+        poligono.bindTooltip(`Setor planejado — Livro ${livro}`);
+        this.poligonosSetorPlanejado.set(livro, poligono);
       }
-    } else if (this.poligonoSetorPlanejado) {
-      this.grupoSetorPlanejado.removeLayer(this.poligonoSetorPlanejado);
-      this.poligonoSetorPlanejado = undefined;
+    }
+    for (const [livro, poligono] of this.poligonosSetorPlanejado) {
+      if (!livrosVistos.has(livro)) {
+        this.grupoSetorPlanejado.removeLayer(poligono);
+        this.poligonosSetorPlanejado.delete(livro);
+      }
     }
 
     if (latLngs.length && this.colaboradorComBoundsAplicado !== colaboradorAberto) {

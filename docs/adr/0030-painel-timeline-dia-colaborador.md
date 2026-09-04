@@ -297,3 +297,24 @@ Verificado visualmente com o mesmo preview local (HTML isolado + `python -m http
 screenshot) — dessa vez sem nenhuma aproximação: os SVGs renderizados são pixel-a-pixel os
 arquivos que o usuário mandou, só recoloridos. Legível tanto ampliado quanto na miniatura 30px
 sobre fundo escuro simulando o mapa. `ng build` sem erro.
+
+## Adendo 8 (2026-09-04) — setor planejado por livro; limites municipais mais destacados
+
+Dois ajustes nas camadas do mapa:
+
+- **Setor planejado**: era um casco convexo só, cobrindo TODOS os pontos do dia do colaborador
+  (todos os livros misturados num polígono só). Usuário pediu pra separar por livro — se o
+  colaborador tem mais de um livro em execução hoje, cada um ganha o seu próprio polígono. Campo
+  `poligonoSetorPlanejado?: L.Polygon` virou `poligonosSetorPlanejado = new Map<string,
+  L.Polygon>()` (chave = livro); `atualizarRotaJornada` agrupa `pontos` por `livro` antes de
+  chamar `cascoConvexo`, e cada polígono resultante ganha um tooltip ("Setor planejado — Livro
+  X") pra identificar qual é qual quando há mais de um. Mesmo padrão de diff (criar/atualizar/
+  remover) já usado pros pontos por UC (`pontosJornada`).
+- **Limites municipais**: linha era `weight: 1, fillOpacity: 0.02`, quase invisível sobre
+  qualquer camada de tile. Virou `weight: 2.5, opacity: 0.9, fillOpacity: 0.04, dashArray: '8 5'`
+  — mais grossa, mais opaca, tracejada (pedido explícito do usuário).
+
+Mudança de propriedades padrão do Leaflet (`weight`/`dashArray`/etc.) e lógica de agrupamento
+(`Map` por livro, mesmo padrão já usado nos pontos), sem geometria desenhada à mão — risco visual
+bem menor que os ícones dos Adendos 4-7, verificação ficou só em `ng build` sem erro (sem
+credencial de teste pro app nesta sessão).

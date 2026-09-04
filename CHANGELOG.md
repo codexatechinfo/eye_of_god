@@ -43,6 +43,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   tem piloto, diferente do que o print da rodada anterior sugeria). Ver Adendo 7 da [ADR
   0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- "Setor planejado" no mapa (aba Trilho) era um polígono só cobrindo todos os livros do dia
+  misturados — agora é um polígono por livro (colaborador com mais de um livro em execução vê
+  cada um separado). Linha de "Limites municipais" ganhou mais destaque (mais grossa, mais opaca)
+  e virou tracejada. Ver Adendo 8 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

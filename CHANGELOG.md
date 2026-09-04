@@ -15,6 +15,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   só informação. Componente renomeado `LivroDetalhe` → `ColaboradorDetalhe`. Ver [ADR
   0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Timeline do dia agora indica quando um livro que o colaborador leu hoje passou pra outro
+  colaborador ou voltou pra "Pendente" — cruza os livros do dia contra o estado atual deles no
+  roster (`contr_execucao_leitura`), não só o que este colaborador leu. Ver Adendo 1 da [ADR
+  0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

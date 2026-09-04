@@ -262,6 +262,13 @@ export interface PontoJornada {
   // um livro só) — usados pelo painel e pelo mapa pra colorir a transição.
   mudou_livro: boolean;
   mudou_municipio: boolean;
+  // Estado ATUAL do livro no roster (contr_execucao_leitura), não o que
+  // este colaborador leu — pode ter mudado depois. null quando o livro não
+  // aparece no roster do dia (situação rara, ver comentário do backend).
+  livro_situacao_atual: string | null;
+  livro_colaborador_atual: string | null;
+  livro_reatribuido: boolean;
+  livro_pendente: boolean;
 }
 
 // Última UC que o colaborador realizou, em qualquer dia — usada pra

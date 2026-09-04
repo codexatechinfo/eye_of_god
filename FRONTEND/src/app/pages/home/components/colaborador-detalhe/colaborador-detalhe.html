@@ -255,6 +255,20 @@
             <span *ngIf="item.localidade"> · {{ item.localidade }}</span>
             <span *ngIf="item.classe_principal"> · {{ item.classe_principal }}</span>
           </div>
+          <!-- Estado ATUAL do livro no roster diverge do que este
+               colaborador leu — livro pode ter passado pra outro
+               colaborador ou voltado pra Pendente depois. Cor neutra
+               (slate), diferente das cores de transição geográfica — é
+               sobre o livro, não sobre o deslocamento. -->
+          <div *ngIf="item.livro_reatribuido || item.livro_pendente" class="pl-1.5 mt-0.5">
+            <span class="inline-flex items-center gap-1 text-[9px] font-semibold text-slate-500 bg-slate-100 rounded-full px-1.5 py-0.5">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 2.1l4 4-4 4" /><path d="M3 12.7V12a4 4 0 0 1 4-4h14" /><path d="M7 21.9l-4-4 4-4" /><path d="M21 11.3V12a4 4 0 0 1-4 4H3" />
+              </svg>
+              <ng-container *ngIf="item.livro_pendente">Livro voltou pra Pendente</ng-container>
+              <ng-container *ngIf="!item.livro_pendente && item.livro_reatribuido">Livro agora com {{ item.livro_colaborador_atual }}</ng-container>
+            </span>
+          </div>
 
           <!-- Card de detalhe expandido — só os campos que o sistema
                realmente tem (sem inventar GPS/OS/setor, ver ADR). -->
@@ -276,6 +290,13 @@
               <div>
                 <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">UC / Livro</div>
                 <div class="text-slate-600 tabular-nums">{{ item.uc }} · Livro {{ item.livro }}<span *ngIf="item.sequencia"> (#{{ item.sequencia }} na rota)</span></div>
+              </div>
+              <div *ngIf="item.livro_reatribuido || item.livro_pendente" class="col-span-2">
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Estado atual do livro</div>
+                <div class="text-slate-600">
+                  {{ item.livro_situacao_atual || '—' }}
+                  <span *ngIf="item.livro_reatribuido"> · com {{ item.livro_colaborador_atual }} agora</span>
+                </div>
               </div>
               <div>
                 <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Equipamento</div>

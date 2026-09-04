@@ -153,17 +153,28 @@ maioria dos pontos está. Cada segmento de `segmentosRota` ganhou um `click` que
 nos 2 pontos daquele segmento (`padding: [60,60]`, `maxZoom: ZOOM_FOCO`) — clicar na linha da
 transição leva direto pra região onde ela aconteceu.
 
-### Em aberto — pedido de indicar troca de colaborador/devolução a Pendente do livro
+### Indicador de troca de colaborador/devolução a Pendente do livro
 
 Usuário perguntou se a timeline indica quando um livro que aparece no dia do colaborador passou
-pra OUTRO colaborador, ou voltou pra "Pendente". Hoje **não indica**: `obterJornadaColaborador`
-filtra só `nome_do_usuario = <este colaborador>` em `base_dados_leitura` — não tem visibilidade do
-que acontece com o livro depois (outro colaborador, ou reversão de status em
-`contr_execucao_leitura`). O antigo `mudancasPorUc` (removido nesta mesma ADR) comparava
-colaborador/situação entre UCs de UM livro só (fonte: `buscarEventosLeitura` por livro, sem filtro
-de colaborador) — não é a mesma coisa que "esse livro específico mudou de dono depois". Precisa de
-query nova (cruzando os livros do dia contra o estado ATUAL deles no roster, não só o que este
-colaborador leu) — não implementado ainda, aguardando confirmação do usuário sobre o desenho exato.
+pra OUTRO colaborador, ou voltou pra "Pendente" — confirmou que não indicava, e pediu pra
+implementar. `obterJornadaColaborador` ganhou uma segunda query, cruzando os livros distintos do
+dia contra o estado ATUAL deles no roster (`contr_execucao_leitura`, o scraper de Acompanhamento
+reescreve a cada ciclo — ADR 0028), independente de quem leu o quê em `base_dados_leitura`:
+`DISTINCT ON (livro::int) ... ORDER BY livro::int, id DESC` pega a linha mais recente por livro
+(join por `livro::int`, não string — mesmo cuidado de formato com/sem zero à esquerda entre as
+duas tabelas, ADR 0025). Cada ponto ganha `livro_situacao_atual`, `livro_colaborador_atual`,
+`livro_reatribuido` (colaborador atual existe e é diferente deste) e `livro_pendente`
+(`situacao === 'Pendente'`). Badge neutro (slate, pra não competir com as cores de transição
+geográfica) na linha colapsada quando qualquer um dos dois é `true`, com detalhe no card
+expandido.
+
+Diferente do antigo `mudancasPorUc` (removido nesta mesma ADR, comparava colaborador/situação
+entre UCs de UM livro só via `buscarEventosLeitura`) — isso é sobre o estado atual do livro
+inteiro no roster, não sobre variação dentro da lista de UCs.
+
+Verificado ao vivo: 506/506 pontos de um colaborador real casaram corretamente com o roster
+(situação e colaborador atual conferidos manualmente pra um ponto) — nenhum caso de reatribuição/
+Pendente na amostra do dia testado (é esperado ser raro, não indica bug).
 
 ## Verificação (Adendo 1)
 

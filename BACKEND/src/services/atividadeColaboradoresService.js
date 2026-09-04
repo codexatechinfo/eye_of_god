@@ -913,6 +913,27 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
 
   if (!rows.length) return { colaborador, data: dataBr, semDado: true };
 
+  // Estado ATUAL de cada livro que aparece na jornada, no roster
+  // (contr_execucao_leitura — o scraper de Acompanhamento reescreve isso a
+  // cada ciclo, ~28-58s desde a ADR 0028), independente de quem leu o quê
+  // em base_dados_leitura hoje. Cruza contra a `colaborador` deste painel:
+  // se o livro está hoje com outro nome, ou voltou pra "Pendente", o
+  // usuário quer isso visível na timeline (achado real ao vivo: livro pode
+  // mudar de dono ou ser devolvido depois do colaborador ter lido parte
+  // dele). Formato de `livro` diverge entre as duas tabelas (com/sem zero à
+  // esquerda, ver ADR 0025) — join por `livro::int`, não string.
+  const livrosDoDia = [...new Set(rows.map(row => row.livro))];
+  const { rows: estadoLivros } = await db.query(
+    `
+    SELECT DISTINCT ON (livro::int) livro::int AS livro_num, situacao, colaborador
+    FROM contr_execucao_leitura
+    WHERE data_import = $1 AND livro::int = ANY($2::int[])
+    ORDER BY livro::int, id DESC
+    `,
+    [dataBr, livrosDoDia],
+  );
+  const estadoPorLivro = new Map(estadoLivros.map(l => [String(l.livro_num), l]));
+
   let trabalhadoSegundos = 0;
   let ociosoSegundos = 0;
   let distanciaMetros = 0;
@@ -920,9 +941,11 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
   // ponto ganha o segmento em relação ao ponto cronologicamente anterior
   // (mesmo padrão de anexarSegmentosDeslocamento em monitoramentoService.js,
   // só que aqui a ordem já É cronológica, não por sequência de rota) mais
-  // duas flags que só fazem sentido cruzando livros: mudou_livro/
-  // mudou_municipio, usadas pelo painel lateral e pelo mapa pra colorir a
-  // transição (ver ColaboradorDetalhe/mapa-bases.ts).
+  // flags que só fazem sentido cruzando livros: mudou_livro/mudou_municipio
+  // (entre pontos consecutivos) e livro_reatribuido/livro_pendente (estado
+  // atual do livro no roster, vs. quando este colaborador o leu) — usadas
+  // pelo painel lateral e pelo mapa pra colorir/marcar a transição (ver
+  // ColaboradorDetalhe/mapa-bases.ts).
   const pontos = rows.map((row, i) => {
     const anterior = i > 0 ? rows[i - 1] : null;
     const segmento = anterior ? calcularSegmento(anterior, row) : null;
@@ -931,6 +954,7 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
       else trabalhadoSegundos += segmento.intervaloSegundos;
       distanciaMetros += segmento.distanciaMetros;
     }
+    const estadoAtual = estadoPorLivro.get(String(Number(row.livro)));
     return {
       uc: row.uc,
       livro: row.livro,
@@ -952,6 +976,10 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
       tipo_intervalo: segmento?.tipo ?? null,
       mudou_livro: anterior ? anterior.livro !== row.livro : false,
       mudou_municipio: anterior && anterior.nom_municipio && row.nom_municipio ? anterior.nom_municipio !== row.nom_municipio : false,
+      livro_situacao_atual: estadoAtual?.situacao ?? null,
+      livro_colaborador_atual: estadoAtual?.colaborador ?? null,
+      livro_reatribuido: !!estadoAtual?.colaborador && estadoAtual.colaborador !== colaborador,
+      livro_pendente: estadoAtual?.situacao === 'Pendente',
     };
   });
 

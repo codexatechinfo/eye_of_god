@@ -49,7 +49,7 @@
       "id": "rls",
       "nome": "tenant_id + RLS",
       "status": "ok",
-      "detalhe": "Reclassificado pra saas-multi-cliente (ADR 0003). `empresa_id` + RLS enable/force, policy ROOT-vê-tudo/demais-só-própria-empresa, índice por empresa_id, testado em BACKEND/test/isolamento_tenant.test.js (6/6 passando). Banco local podado de 56 pra 15 tabelas — só o que o app usa (ADR 0004)"
+      "detalhe": "Reclassificado pra saas-multi-cliente (ADR 0003). `empresa_id` + RLS enable/force, policy ROOT-vê-tudo/demais-só-própria-empresa, índice por empresa_id, testado em BACKEND/test/isolamento_tenant.test.js (12/12 passando). Banco local podado de 56 pra 15 na ADR 0004 — hoje 19 tabelas no total (15 de negócio + empresas/tenant_features/audit_log + spatial_ref_sys do PostGIS), depois de adições/remoções pontuais (ADR 0007, 0022, 0024)"
     },
     {
       "id": "segredos",

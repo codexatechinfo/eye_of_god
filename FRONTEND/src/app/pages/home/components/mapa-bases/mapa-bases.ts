@@ -52,39 +52,59 @@ function normalizarParaComparacao(texto: string): string {
     .trim();
 }
 
-// Icones do colaborador no mapa - pino de mapa (marker), mesmas cores de
-// antes (moto = azul, pedestre = laranja, pedido explicito do usuario:
-// "troca os icones de moto e boneco por markers e mantem as cores"). Cabeca
-// branca com o glifo (moto/pessoa) na cor, corpo do pino preenchido na
-// mesma cor com contorno branco pra ficar legivel sobre qualquer camada de
-// tile (ruas/satelite/topografico). Ancora na PONTA do pino (base), não no
-// centro como o badge circular antigo — é a ponta que aponta pra
-// coordenada real no mapa.
-function iconeColaborador(cor: string, caminhoSvg: string): L.DivIcon {
+// Icones do colaborador no mapa - silhueta sólida (sem fundo, sem pino),
+// mesmas cores de antes (moto = azul, pedestre = laranja) — pedido
+// explícito do usuário com print de referência: "muda pra esses ao invés
+// do marker e quero sem fundo só o ícone mesmo cada um na sua cor". Cada
+// ícone é composto de formas simples (círculos/retângulos rotacionados),
+// não um path único traçado à mão — mais fácil de ajustar proporção sem
+// quebrar o desenho. Ancorado no CENTRO (não tem "ponta" como um pino).
+function iconeColaborador(svgInterno: string, viewBox: string, largura: number, altura: number): L.DivIcon {
   return L.divIcon({
     html: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="30" height="39" viewBox="0 0 24 31" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))">
-        <path d="M12 0C6.48 0 2 4.48 2 10c0 7.5 10 21 10 21s10-13.5 10-21C22 4.48 17.52 0 12 0z" fill="${cor}" stroke="#fff" stroke-width="1.2" />
-        <circle cx="12" cy="10" r="6.5" fill="#fff" />
-        <g transform="translate(12,10) scale(0.42) translate(-12,-12)" stroke="${cor}" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
-          ${caminhoSvg}
-        </g>
+      <svg xmlns="http://www.w3.org/2000/svg" width="${largura}" height="${altura}" viewBox="${viewBox}" style="filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))">
+        ${svgInterno}
       </svg>
     `,
     className: '',
-    iconSize: [30, 39],
-    iconAnchor: [15, 39],
+    iconSize: [largura, altura],
+    iconAnchor: [largura / 2, altura / 2],
   });
 }
 
+// Duas rodas + corpo (tanque/banco) + piloto sentado (cabeça, tronco
+// inclinado pra frente, braço no guidão, perna na pedaleira) — todas as
+// formas na mesma cor, sem contorno/fundo.
 const ICONE_MOTO = iconeColaborador(
-  '#2563eb',
-  '<circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6h4l2 6.5"/><path d="M9 17.5H5.5L7 12h5l3 5.5H15"/><path d="M7 12l3.5-5.5H14"/>',
+  `<g fill="#2563eb">
+    <circle cx="5.5" cy="17.3" r="3.3"/>
+    <circle cx="19" cy="17.3" r="3.3"/>
+    <rect x="5.5" y="15" width="13.5" height="1.8" rx="0.9"/>
+    <rect x="8.5" y="11.5" width="6" height="4" rx="2"/>
+    <rect x="12.5" y="8.5" width="4" height="1.6" rx="0.8" transform="rotate(-12 14.5 9.3)"/>
+    <circle cx="9.8" cy="6" r="2.2"/>
+    <rect x="9" y="7.8" width="2.6" height="5.5" rx="1.3" transform="rotate(20 10.3 7.8)"/>
+    <rect x="11.2" y="7.6" width="1.7" height="4.5" rx="0.85" transform="rotate(-32 12.1 7.6)"/>
+    <rect x="9.5" y="12" width="1.9" height="4.2" rx="0.95" transform="rotate(18 10.5 12)"/>
+  </g>`,
+  '0 0 26 22',
+  36,
+  30,
 );
 
+// Cabeça + tronco + 2 braços + 2 pernas em ângulos opostos (meio do passo).
 const ICONE_PEDESTRE = iconeColaborador(
-  '#ea580c',
-  '<circle cx="12" cy="4" r="2"/><path d="M12 6v6l-3 8"/><path d="M12 12l3 8"/><path d="M9 10 6 12"/><path d="M15 10l3 2"/>',
+  `<g fill="#ea580c">
+    <circle cx="12" cy="3.3" r="2.1"/>
+    <rect x="10.7" y="6" width="2.6" height="6" rx="1.3"/>
+    <rect x="11.35" y="6.3" width="1.3" height="4.8" rx="0.65" transform="rotate(-30 12 6.3)"/>
+    <rect x="11.35" y="6.3" width="1.3" height="4.8" rx="0.65" transform="rotate(28 12 6.3)"/>
+    <rect x="11.15" y="11.8" width="1.7" height="6.8" rx="0.85" transform="rotate(-24 12 11.8)"/>
+    <rect x="11.15" y="11.8" width="1.7" height="6.5" rx="0.85" transform="rotate(22 12 11.8)"/>
+  </g>`,
+  '0 0 24 24',
+  28,
+  28,
 );
 
 // Ponto de pausa (>limite por etapa desde o ponto anterior) — mesmo ícone
@@ -593,9 +613,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         .addTo(grupoAlvo)
         .bindTooltip(`${colaborador.colaborador} - última leitura em ${loc.data_import} ${loc.hora_import}`, {
           direction: 'top',
-          // Ancora do ícone agora é a ponta do pino (base), não mais o
-          // centro — offset sobe até acima do topo do pino (altura 39px).
-          offset: [0, -39],
+          // Ícone ancorado no centro (silhueta sem pino) — offset sobe até
+          // acima do topo do ícone.
+          offset: [0, -16],
         });
 
       // Abre a timeline do DIA inteiro do colaborador (não mais um livro

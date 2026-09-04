@@ -228,3 +228,26 @@ foi ajustado junto (`[0,-14]` → `[0,-39]`) pra continuar aparecendo acima do p
 Não verificado visualmente no navegador nesta sessão (sem servidor local disponível pra
 renderizar o SVG isolado) — path matemático conferido (fórmula padrão de map-marker, transform de
 centralização/escala do glifo interno padrão), `ng build` sem erro.
+
+## Adendo 5 (2026-09-04) — pino substituído por silhueta sólida (sem fundo), com print de referência
+
+Usuário mandou print de referência (silhueta de motociclista e de pedestre, estilo ícone sólido,
+sem fundo/moldura) e pediu pra substituir o pino do Adendo 4 por isso — "sem fundo só o ícone
+mesmo cada um na sua cor". `iconeColaborador` reescrita: assinatura mudou de
+`(cor, caminhoSvg)` pra `(svgInterno, viewBox, largura, altura)` — cada ícone agora é montado com
+formas simples (círculos + retângulos rotacionados, mesma cor, sem contorno/fundo) em vez de um
+path único traçado à mão ou de um badge/pino.
+
+- **Moto**: 2 rodas (círculos) + barra ligando os topos + tanque/banco (retângulo arredondado) +
+  guidão + piloto sentado (cabeça, tronco inclinado, braço no guidão, perna na pedaleira).
+- **Pedestre**: cabeça + tronco + 2 braços e 2 pernas em ângulos opostos (meio do passo).
+
+Âncora voltou pro CENTRO (`iconAnchor: [largura/2, altura/2]`, não tem mais "ponta" de pino) —
+offset do tooltip do marcador voltou junto (`[0,-39]` → `[0,-16]`).
+
+**Verificado visualmente de fato nesta sessão** (diferente do Adendo 4): sem conseguir logar no
+app, montado um HTML isolado com os mesmos SVGs e servido via `python -m http.server` local,
+aberto e testado no navegador via screenshot — 2 iterações até o ícone da moto ficar reconhecível
+(1ª tentativa não lia como motocicleta; guidão da 2ª tentativa flutuava perto da cabeça, parecendo
+solto; versão final lê claramente como moto+piloto e pedestre andando, testado também em miniatura
+30px sobre fundo escuro simulando o mapa). `ng build` sem erro.

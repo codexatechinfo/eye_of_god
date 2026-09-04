@@ -54,11 +54,13 @@ function normalizarParaComparacao(texto: string): string {
 
 // Icones do colaborador no mapa - silhueta sólida (sem fundo, sem pino),
 // mesmas cores de antes (moto = azul, pedestre = laranja) — pedido
-// explícito do usuário com print de referência: "muda pra esses ao invés
-// do marker e quero sem fundo só o ícone mesmo cada um na sua cor". Cada
-// ícone é composto de formas simples (círculos/retângulos rotacionados),
-// não um path único traçado à mão — mais fácil de ajustar proporção sem
-// quebrar o desenho. Ancorado no CENTRO (não tem "ponta" como um pino).
+// explícito do usuário com 2 rodadas de print de referência: a 1ª pedia
+// "marker" (pino), a 2ª rejeitou o piloto sentado ("não seguiu o modelo")
+// e trocou a referência por uma moto SEM piloto (só o veículo) + um
+// pedestre em passada mais dinâmica. Cada ícone é composto de formas
+// simples (círculos/retângulos rotacionados/path com curvas por pontos
+// médios), não um path único traçado cru à mão. Ancorado no CENTRO (não
+// tem "ponta" como um pino).
 function iconeColaborador(svgInterno: string, viewBox: string, largura: number, altura: number): L.DivIcon {
   return L.divIcon({
     html: `
@@ -72,35 +74,35 @@ function iconeColaborador(svgInterno: string, viewBox: string, largura: number, 
   });
 }
 
-// Duas rodas + corpo (tanque/banco) + piloto sentado (cabeça, tronco
-// inclinado pra frente, braço no guidão, perna na pedaleira) — todas as
-// formas na mesma cor, sem contorno/fundo.
+// Duas rodas + corpo (banco baixo atrás, tanque/carenagem mais alto na
+// frente, com reentrância entre os dois) — sem piloto, conforme a
+// referência do usuário (2ª rodada). Corpo desenhado como um polígono de
+// 9 pontos suavizado passando pelos pontos médios de cada aresta (técnica
+// de "polígono arredondado"), não uma curva bezier traçada direto — mais
+// fácil de garantir que os dois calombos (banco/tanque) fiquem visíveis
+// em vez de virar um blob liso.
 const ICONE_MOTO = iconeColaborador(
   `<g fill="#2563eb">
-    <circle cx="5.5" cy="17.3" r="3.3"/>
-    <circle cx="19" cy="17.3" r="3.3"/>
-    <rect x="5.5" y="15" width="13.5" height="1.8" rx="0.9"/>
-    <rect x="8.5" y="11.5" width="6" height="4" rx="2"/>
-    <rect x="12.5" y="8.5" width="4" height="1.6" rx="0.8" transform="rotate(-12 14.5 9.3)"/>
-    <circle cx="9.8" cy="6" r="2.2"/>
-    <rect x="9" y="7.8" width="2.6" height="5.5" rx="1.3" transform="rotate(20 10.3 7.8)"/>
-    <rect x="11.2" y="7.6" width="1.7" height="4.5" rx="0.85" transform="rotate(-32 12.1 7.6)"/>
-    <rect x="9.5" y="12" width="1.9" height="4.2" rx="0.95" transform="rotate(18 10.5 12)"/>
+    <circle cx="6" cy="13.5" r="3.6"/>
+    <circle cx="21" cy="13.5" r="3.6"/>
+    <path d="M5.25,10 Q5.5,8.5 6.75,7.5 Q8,6.5 8.75,7.75 Q9.5,9 10.5,7.5 Q11.5,6 13,5 Q14.5,4 16.25,4.25 Q18,4.5 19,5.75 Q20,7 20.5,9.25 Q21,11.5 13,11.5 Q5,11.5 5.25,10 Z"/>
   </g>`,
-  '0 0 26 22',
+  '0 0 26 18',
   36,
-  30,
+  25,
 );
 
-// Cabeça + tronco + 2 braços + 2 pernas em ângulos opostos (meio do passo).
+// Cabeça + tronco levemente inclinado + 2 braços e 2 pernas em ângulos bem
+// opostos (passada mais dinâmica/alongada, conforme a referência do
+// usuário na 2ª rodada — braço/perna de trás mais abertos que a 1ª versão).
 const ICONE_PEDESTRE = iconeColaborador(
   `<g fill="#ea580c">
     <circle cx="12" cy="3.3" r="2.1"/>
     <rect x="10.7" y="6" width="2.6" height="6" rx="1.3"/>
-    <rect x="11.35" y="6.3" width="1.3" height="4.8" rx="0.65" transform="rotate(-30 12 6.3)"/>
-    <rect x="11.35" y="6.3" width="1.3" height="4.8" rx="0.65" transform="rotate(28 12 6.3)"/>
-    <rect x="11.15" y="11.8" width="1.7" height="6.8" rx="0.85" transform="rotate(-24 12 11.8)"/>
-    <rect x="11.15" y="11.8" width="1.7" height="6.5" rx="0.85" transform="rotate(22 12 11.8)"/>
+    <rect x="11.35" y="6.3" width="1.3" height="4.8" rx="0.65" transform="rotate(-45 12 6.3)"/>
+    <rect x="11.35" y="6.3" width="1.3" height="4.8" rx="0.65" transform="rotate(45 12 6.3)"/>
+    <rect x="11.15" y="11.8" width="1.7" height="6.8" rx="0.85" transform="rotate(-30 12 11.8)"/>
+    <rect x="11.15" y="11.8" width="1.7" height="6.5" rx="0.85" transform="rotate(55 12 11.8)"/>
   </g>`,
   '0 0 24 24',
   28,

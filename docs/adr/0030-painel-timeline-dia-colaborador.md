@@ -251,3 +251,27 @@ aberto e testado no navegador via screenshot — 2 iterações até o ícone da 
 (1ª tentativa não lia como motocicleta; guidão da 2ª tentativa flutuava perto da cabeça, parecendo
 solto; versão final lê claramente como moto+piloto e pedestre andando, testado também em miniatura
 30px sobre fundo escuro simulando o mapa). `ng build` sem erro.
+
+## Adendo 6 (2026-09-04) — moto perde o piloto; pedestre ganha passada mais dinâmica
+
+Usuário rejeitou o resultado do Adendo 5 ("tá horrível não seguiu o modelo") e mandou 2 novas
+referências mais claras: uma moto **sem piloto** (só o veículo) e um pedestre numa passada bem
+mais dinâmica (braço da frente dobrado pra baixo/frente, braço de trás e perna de trás bem
+abertos pra trás). Com o preview local do Adendo 5 ainda de pé, refeito por iteração visual real
+(screenshot a cada mudança, não só matemática) até convergir:
+
+- **Moto**: perdeu completamente o piloto (cabeça/tronco/braço/perna/guidão removidos). Corpo
+  reescrito 3 vezes até ficar certo — 1ª tentativa (arco liso único) lia como carro arredondado,
+  não moto; 2ª tentativa (duas elipses separadas pro banco/tanque) virou uma "nuvem de bolhas"
+  desconectada; versão final é um polígono de 9 pontos (banco baixo → reentrância → tanque/
+  carenagem mais alto) suavizado passando pelos pontos médios de cada aresta (arredonda os cantos
+  sem apagar os dois calombos, diferente de uma curva bezier lisa direto nos vértices, que
+  suavizava demais e escondia a reentrância).
+- **Pedestre**: mesma estrutura de círculo+retângulos do Adendo 5, só com os ângulos do braço e
+  perna de trás aumentados (`rotate(28→45)` no braço, `rotate(22→55)` na perna) pra dar a
+  aparência de passada mais alongada/dinâmica da referência nova.
+
+Mesma técnica de verificação do Adendo 5 (HTML isolado + `python -m http.server` local +
+screenshot no navegador), mas desta vez com MAIS iterações (5 rodadas de captura, não 2) — o
+resultado anterior tinha sido validado rápido demais e não bateu com a expectativa do usuário.
+`ng build` sem erro.

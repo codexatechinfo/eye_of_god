@@ -52,15 +52,15 @@ function normalizarParaComparacao(texto: string): string {
     .trim();
 }
 
-// Icones do colaborador no mapa - silhueta sólida (sem fundo, sem pino),
-// mesmas cores de antes (moto = azul, pedestre = laranja) — pedido
-// explícito do usuário com 2 rodadas de print de referência: a 1ª pedia
-// "marker" (pino), a 2ª rejeitou o piloto sentado ("não seguiu o modelo")
-// e trocou a referência por uma moto SEM piloto (só o veículo) + um
-// pedestre em passada mais dinâmica. Cada ícone é composto de formas
-// simples (círculos/retângulos rotacionados/path com curvas por pontos
-// médios), não um path único traçado cru à mão. Ancorado no CENTRO (não
-// tem "ponta" como um pino).
+// Icones do colaborador no mapa — SVGs exatos enviados pelo usuário
+// (39131.svg pra moto, 304880.svg pro pedestre — traçados via potrace a
+// partir das imagens de referência que ele mandou), usados aqui com o MESMO
+// path data dos arquivos originais, só trocando fill="#000000" pela cor de
+// cada tipo (moto azul, pedestre laranja). Nenhuma forma desenhada à mão
+// aqui — as 3 rodadas anteriores (badge, pino, silhueta aproximada por
+// primitivas) nunca bateram com a referência real do usuário; isto substitui
+// todas elas com fidelidade exata. Ancorado no CENTRO (não tem "ponta" como
+// um pino).
 function iconeColaborador(svgInterno: string, viewBox: string, largura: number, altura: number): L.DivIcon {
   return L.divIcon({
     html: `
@@ -74,39 +74,83 @@ function iconeColaborador(svgInterno: string, viewBox: string, largura: number, 
   });
 }
 
-// Duas rodas + corpo (banco baixo atrás, tanque/carenagem mais alto na
-// frente, com reentrância entre os dois) — sem piloto, conforme a
-// referência do usuário (2ª rodada). Corpo desenhado como um polígono de
-// 9 pontos suavizado passando pelos pontos médios de cada aresta (técnica
-// de "polígono arredondado"), não uma curva bezier traçada direto — mais
-// fácil de garantir que os dois calombos (banco/tanque) fiquem visíveis
-// em vez de virar um blob liso.
+// 39131.svg — viewBox e transform (translate/scale) idênticos ao arquivo
+// original, só o fill do <g> trocado de #000000 pra azul.
 const ICONE_MOTO = iconeColaborador(
-  `<g fill="#2563eb">
-    <circle cx="6" cy="13.5" r="3.6"/>
-    <circle cx="21" cy="13.5" r="3.6"/>
-    <path d="M5.25,10 Q5.5,8.5 6.75,7.5 Q8,6.5 8.75,7.75 Q9.5,9 10.5,7.5 Q11.5,6 13,5 Q14.5,4 16.25,4.25 Q18,4.5 19,5.75 Q20,7 20.5,9.25 Q21,11.5 13,11.5 Q5,11.5 5.25,10 Z"/>
-  </g>`,
-  '0 0 26 18',
-  36,
-  25,
+  `<g transform="translate(0,1034) scale(0.1,-0.1)" fill="#2563eb" stroke="none">
+<path d="M6120 10315 c-502 -106 -822 -361 -943 -750 -26 -85 -52 -213 -45
+-220 2 -3 188 26 412 63 224 37 409 66 412 63 8 -8 4 -571 -4 -571 -12 0 -740
+-98 -779 -105 l-33 -6 0 -359 c0 -281 3 -360 13 -360 6 0 111 14 232 30 121
+16 223 30 226 30 3 0 54 40 113 89 244 203 471 324 708 377 99 23 327 23 428
+1 123 -27 209 -56 323 -110 l109 -51 19 24 c34 44 116 213 143 293 43 127 59
+253 53 407 -6 153 -22 238 -67 360 -187 509 -466 744 -945 799 -202 23 -253
+22 -375 -4z"/>
+<path d="M6450 8440 c-92 -19 -187 -53 -265 -93 -28 -14 -583 -428 -1235 -921
+-861 -651 -1186 -891 -1188 -878 -1 9 -8 90 -16 180 -7 89 -15 164 -18 167 -3
+3 -54 -13 -114 -36 -60 -22 -221 -81 -359 -131 -383 -138 -638 -241 -822 -333
+-456 -226 -697 -468 -799 -800 -26 -85 -28 -101 -28 -280 0 -174 2 -200 28
+-310 33 -140 91 -302 167 -467 54 -117 54 -117 89 -118 78 -1 322 -21 424 -35
+1182 -164 1889 -910 2182 -2302 l17 -83 93 -90 c288 -279 740 -437 1439 -505
+325 -31 469 -36 1350 -45 495 -5 940 -12 989 -16 l89 -6 -7 68 c-3 38 -13 123
+-21 189 -34 275 -30 697 10 972 140 958 741 1562 1762 1772 289 59 521 81 945
+88 l347 6 42 56 c142 190 168 423 68 612 -17 31 -46 73 -64 93 l-33 36 -1026
+0 -1026 0 0 23 c0 36 -36 133 -76 206 -52 95 -117 188 -299 431 -88 118 -185
+250 -214 293 -30 43 -58 80 -62 83 -4 2 -311 -232 -681 -522 l-673 -526 -1000
+3 c-1071 2 -1041 4 -1153 -48 -108 -51 -196 -173 -240 -338 -13 -49 -23 -69
+-33 -67 -86 20 -371 160 -506 248 -223 145 -422 350 -523 538 -31 58 -33 67
+-20 80 8 8 471 363 1029 790 1012 774 1014 775 1031 753 11 -15 1278 -1776
+1304 -1814 2 -2 1349 1006 1363 1020 9 9 -20 54 -129 197 -77 102 -273 365
+-436 585 -585 788 -813 1060 -962 1143 -238 133 -509 182 -740 132z"/>
+<path d="M1935 4190 c-523 -44 -999 -271 -1357 -649 -420 -442 -628 -1044
+-568 -1642 52 -508 268 -953 636 -1309 820 -793 2128 -780 2935 29 432 434
+652 1019 609 1623 -49 687 -420 1294 -1010 1654 -360 219 -825 329 -1245 294z
+m465 -754 c557 -129 970 -576 1055 -1141 40 -268 -2 -538 -124 -790 -75 -154
+-159 -270 -279 -387 -195 -189 -418 -306 -692 -365 -120 -26 -411 -25 -530 1
+-374 81 -684 293 -885 604 -256 397 -287 914 -81 1337 202 414 598 702 1051
+764 121 17 365 5 485 -23z"/>
+<path d="M10414 4174 c-838 -114 -1531 -733 -1743 -1557 -48 -183 -63 -311
+-63 -517 0 -345 61 -615 207 -915 444 -916 1473 -1378 2459 -1105 606 168
+1116 620 1361 1205 534 1273 -293 2713 -1658 2890 -145 18 -423 18 -563 -1z
+m556 -734 c138 -28 204 -51 345 -120 374 -184 641 -532 732 -953 28 -126 25
+-440 -5 -563 -115 -485 -452 -855 -914 -1008 -141 -47 -265 -66 -428 -66 -221
+0 -404 41 -595 134 -496 242 -798 750 -771 1296 17 351 153 658 401 905 222
+222 495 355 811 395 104 13 308 4 424 -20z"/>
+</g>`,
+  '0 0 1280 1034',
+  34,
+  27,
 );
 
-// Cabeça + tronco levemente inclinado + 2 braços e 2 pernas em ângulos bem
-// opostos (passada mais dinâmica/alongada, conforme a referência do
-// usuário na 2ª rodada — braço/perna de trás mais abertos que a 1ª versão).
+// 304880.svg — viewBox e transform idênticos ao arquivo original, só o fill
+// do <g> trocado de #000000 pra laranja.
 const ICONE_PEDESTRE = iconeColaborador(
-  `<g fill="#ea580c">
-    <circle cx="12" cy="3.3" r="2.1"/>
-    <rect x="10.7" y="6" width="2.6" height="6" rx="1.3"/>
-    <rect x="11.35" y="6.3" width="1.3" height="4.8" rx="0.65" transform="rotate(-45 12 6.3)"/>
-    <rect x="11.35" y="6.3" width="1.3" height="4.8" rx="0.65" transform="rotate(45 12 6.3)"/>
-    <rect x="11.15" y="11.8" width="1.7" height="6.8" rx="0.85" transform="rotate(-30 12 11.8)"/>
-    <rect x="11.15" y="11.8" width="1.7" height="6.5" rx="0.85" transform="rotate(55 12 11.8)"/>
-  </g>`,
-  '0 0 24 24',
-  28,
-  28,
+  `<g transform="translate(0,1280) scale(0.1,-0.1)" fill="#ea580c" stroke="none">
+<path d="M4440 12794 c-14 -2 -59 -9 -100 -15 -88 -13 -259 -68 -344 -111
+-279 -141 -496 -384 -598 -668 -58 -160 -82 -389 -59 -551 96 -661 721 -1115
+1399 -1015 602 89 1042 585 1042 1175 0 641 -524 1165 -1185 1186 -71 2 -141
+2 -155 -1z"/>
+<path d="M4300 10199 c-157 -26 -310 -76 -458 -152 -122 -62 -2553 -1739
+-2605 -1797 -71 -79 -94 -135 -162 -392 -35 -134 -114 -434 -175 -668 -61
+-234 -145 -551 -185 -705 -132 -502 -128 -482 -122 -569 19 -290 352 -497 676
+-421 108 26 188 71 272 155 97 96 116 138 185 403 30 117 77 298 104 402 27
+105 106 408 174 674 69 267 131 490 138 497 24 22 831 574 835 570 2 -2 -188
+-725 -422 -1607 -545 -2052 -764 -2878 -825 -3108 -27 -101 -57 -195 -66 -210
+-10 -14 -354 -506 -766 -1093 -411 -587 -766 -1095 -787 -1128 -57 -87 -101
+-218 -108 -315 -11 -175 56 -344 191 -480 168 -170 370 -249 631 -249 160 0
+276 26 398 88 111 57 181 110 256 193 74 83 1704 2417 1811 2593 87 144 50 18
+326 1102 l167 658 46 -43 c25 -23 420 -390 877 -814 773 -718 832 -775 842
+-815 6 -24 131 -578 277 -1233 147 -655 277 -1215 290 -1246 88 -218 295 -391
+550 -460 119 -33 335 -33 460 0 175 45 312 125 425 248 111 121 177 304 167
+459 -5 75 -576 2652 -607 2741 -10 30 -31 76 -46 101 -17 30 -418 439 -1108
+1130 -704 705 -1080 1089 -1079 1101 3 24 531 2001 542 2026 6 16 29 -17 124
+-178 65 -108 170 -286 234 -394 84 -143 132 -213 172 -253 46 -45 217 -149
+971 -590 503 -294 944 -546 980 -561 229 -93 478 -53 645 103 187 174 191 434
+11 611 -52 52 -182 131 -909 556 l-849 496 -613 1035 c-591 997 -617 1038
+-700 1128 -201 214 -474 361 -755 407 -104 16 -339 19 -430 4z"/>
+</g>`,
+  '0 0 869 1280',
+  22,
+  32,
 );
 
 // Ponto de pausa (>limite por etapa desde o ponto anterior) — mesmo ícone

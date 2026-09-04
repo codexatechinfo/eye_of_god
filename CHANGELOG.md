@@ -38,6 +38,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   uma passada mais aberta/dinâmica — a 1ª tentativa da silhueta (Adendo 5) não bateu com o que o
   usuário esperava. Ver Adendo 6 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Ícones de moto/pedestre do mapa trocados pelos SVGs reais que o usuário mandou (não mais uma
+  aproximação desenhada à mão) — fidelidade exata às referências, moto com piloto (o arquivo real
+  tem piloto, diferente do que o print da rodada anterior sugeria). Ver Adendo 7 da [ADR
+  0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

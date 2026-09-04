@@ -275,3 +275,25 @@ Mesma técnica de verificação do Adendo 5 (HTML isolado + `python -m http.serv
 screenshot no navegador), mas desta vez com MAIS iterações (5 rodadas de captura, não 2) — o
 resultado anterior tinha sido validado rápido demais e não bateu com a expectativa do usuário.
 `ng build` sem erro.
+
+## Adendo 7 (2026-09-04) — SVGs reais do usuário substituem toda tentativa desenhada à mão
+
+Usuário mandou os arquivos `.svg` de verdade das duas referências (`39131.svg` — moto,
+`304880.svg` — pedestre; traçados via `potrace` a partir das imagens originais, formato típico de
+banco de ícone tipo Flaticon). Isso torna os Adendos 4-6 (badge → pino → silhueta aproximada por
+primitivas geométricas, 3 rodadas de tentar redesenhar à mão sem acertar) obsoletos — em vez de
+aproximar, `iconeColaborador` agora embute o path data EXATO dos dois arquivos, só trocando
+`fill="#000000"` pela cor de cada tipo (moto azul `#2563eb`, pedestre laranja `#ea580c`) no `<g>`
+que envolve os paths — viewBox e `transform="translate(...) scale(0.1,-0.1)"` idênticos aos
+arquivos originais (não precisou entender a geometria do potrace pra usar, só copiar). Curiosidade:
+o SVG real da moto (`39131.svg`) tem piloto sentado — a referência em print da 2ª rodada (Adendo 6)
+tinha sugerido "sem piloto", mas o arquivo de verdade que o usuário mandou é a fonte da verdade
+agora, prevalece sobre a leitura anterior do print.
+
+Tamanho de exibição escolhido preservando a proporção de cada viewBox original (moto 1280×1034 →
+34×27px; pedestre 869×1280 → 22×32px), ambos ancorados no centro.
+
+Verificado visualmente com o mesmo preview local (HTML isolado + `python -m http.server` +
+screenshot) — dessa vez sem nenhuma aproximação: os SVGs renderizados são pixel-a-pixel os
+arquivos que o usuário mandou, só recoloridos. Legível tanto ampliado quanto na miniatura 30px
+sobre fundo escuro simulando o mapa. `ng build` sem erro.

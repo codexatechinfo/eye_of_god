@@ -29,6 +29,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   vermelho passando do mesmo limite que já decide Ativo/Sem sincronismo (30min). Ver Adendo 3 da
   [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Ícones de moto/pedestre no mapa (aba Trilho) eram um badge circular — agora são um marker (pino
+  de mapa), mesmas cores de antes. Ver Adendo 4 da [ADR
+  0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

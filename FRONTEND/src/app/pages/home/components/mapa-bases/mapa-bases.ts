@@ -52,23 +52,28 @@ function normalizarParaComparacao(texto: string): string {
     .trim();
 }
 
-// Icones do colaborador no mapa - mesmo padrao do resto do app (SVG inline,
-// stroke=currentColor via a cor fixada no proprio elemento). Moto para
-// motoqueiro/monitor, pessoa a pe para pedestre (pedido explicito do
-// usuario). Fundo branco + borda colorida pra ficar legivel sobre qualquer
-// camada de tile (ruas/satelite/topografico).
+// Icones do colaborador no mapa - pino de mapa (marker), mesmas cores de
+// antes (moto = azul, pedestre = laranja, pedido explicito do usuario:
+// "troca os icones de moto e boneco por markers e mantem as cores"). Cabeca
+// branca com o glifo (moto/pessoa) na cor, corpo do pino preenchido na
+// mesma cor com contorno branco pra ficar legivel sobre qualquer camada de
+// tile (ruas/satelite/topografico). Ancora na PONTA do pino (base), não no
+// centro como o badge circular antigo — é a ponta que aponta pra
+// coordenada real no mapa.
 function iconeColaborador(cor: string, caminhoSvg: string): L.DivIcon {
   return L.divIcon({
     html: `
-      <div style="width:28px;height:28px;border-radius:9999px;background:#fff;border:2px solid ${cor};display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.35);">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${cor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="30" height="39" viewBox="0 0 24 31" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))">
+        <path d="M12 0C6.48 0 2 4.48 2 10c0 7.5 10 21 10 21s10-13.5 10-21C22 4.48 17.52 0 12 0z" fill="${cor}" stroke="#fff" stroke-width="1.2" />
+        <circle cx="12" cy="10" r="6.5" fill="#fff" />
+        <g transform="translate(12,10) scale(0.42) translate(-12,-12)" stroke="${cor}" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
           ${caminhoSvg}
-        </svg>
-      </div>
+        </g>
+      </svg>
     `,
     className: '',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    iconSize: [30, 39],
+    iconAnchor: [15, 39],
   });
 }
 
@@ -588,7 +593,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         .addTo(grupoAlvo)
         .bindTooltip(`${colaborador.colaborador} - última leitura em ${loc.data_import} ${loc.hora_import}`, {
           direction: 'top',
-          offset: [0, -14],
+          // Ancora do ícone agora é a ponta do pino (base), não mais o
+          // centro — offset sobe até acima do topo do pino (altura 39px).
+          offset: [0, -39],
         });
 
       // Abre a timeline do DIA inteiro do colaborador (não mais um livro

@@ -210,3 +210,21 @@ Novo método `semSincronizarCritico(minutos)` (`lista-colaboradores.ts`, card ex
 `[ngClass]` quando `minutos >= LIMITE_PARADO_MINUTOS`. Texto inline sob o nome na lista (sempre
 visível, fora do card expandido) não mudou — usuário apontou especificamente "esse card" (o
 card com ícone, não o texto solto).
+
+## Adendo 4 (2026-09-04) — ícones do colaborador no mapa viram marker (pino), cores mantidas
+
+`iconeColaborador` (`mapa-bases.ts`) desenhava um badge circular (círculo branco, borda colorida,
+glifo dentro) pros ícones de moto/pedestre no mapa. Usuário pediu pra trocar por um marker
+(pino de mapa), mantendo as mesmas cores (moto azul `#2563eb`, pedestre laranja `#ea580c`).
+Path do pino é o formato padrão "map marker" (mesmo usado no Material Design Icons/Google Maps):
+cabeça circular branca no topo com o glifo dentro (mesmo SVG de antes, só reposicionado/escalado
+pra caber no círculo menor), corpo preenchido na cor com contorno branco, ponta embaixo.
+
+Mudança importante: a âncora do ícone (`iconAnchor`) passou do CENTRO (badge circular, `[14,14]`)
+pra PONTA DO PINO (base, `[15,39]`) — é a ponta que aponta pra coordenada real no mapa, mesmo
+comportamento de qualquer marker de mapa padrão. O offset do tooltip do marcador de colaborador
+foi ajustado junto (`[0,-14]` → `[0,-39]`) pra continuar aparecendo acima do pino, não no meio dele.
+
+Não verificado visualmente no navegador nesta sessão (sem servidor local disponível pra
+renderizar o SVG isolado) — path matemático conferido (fórmula padrão de map-marker, transform de
+centralização/escala do glifo interno padrão), `ng build` sem erro.

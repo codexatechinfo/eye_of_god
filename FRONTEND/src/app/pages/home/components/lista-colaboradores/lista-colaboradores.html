@@ -205,19 +205,32 @@
             </div>
           </div>
 
-          <!-- Último sincronismo -->
-          <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
-            <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+          <!-- Sem sincronizar há — vira vermelho passando de LIMITE_PARADO_MINUTOS
+               (mesmo limite que já decide Ativo/Sem sincronismo). -->
+          <div
+            class="flex items-center gap-1.5 rounded-lg border px-2 py-1.5"
+            [ngClass]="semSincronizarCritico(a.minutosParado) ? 'border-red-100 bg-gradient-to-br from-red-100/20 to-red-50' : 'border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50'"
+          >
+            <div
+              class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+              [ngClass]="semSincronizarCritico(a.minutosParado) ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'"
+            >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9" />
                 <polyline points="12 7 12 12 15 14" />
               </svg>
             </div>
             <div class="min-w-0 leading-tight">
-              <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">
+              <div
+                class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
+                [ngClass]="semSincronizarCritico(a.minutosParado) ? 'text-red-400' : 'text-blue-400'"
+              >
                 Sem sincronizar há
               </div>
-              <div class="text-xs font-bold text-blue-700 tabular-nums">
+              <div
+                class="text-xs font-bold tabular-nums"
+                [ngClass]="semSincronizarCritico(a.minutosParado) ? 'text-red-700' : 'text-blue-700'"
+              >
                 {{ tempoSemSincronizar(a.minutosParado) }}
               </div>
             </div>

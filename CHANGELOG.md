@@ -25,6 +25,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   23min"), mesmo dado que já decidia o toggle Ativo/Sem sincronismo. Ver Adendo 2 da [ADR
   0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Card "Sem sincronizar há" ficava azul mesmo passando de horas sem sincronizar — agora vira
+  vermelho passando do mesmo limite que já decide Ativo/Sem sincronismo (30min). Ver Adendo 3 da
+  [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

@@ -7,6 +7,7 @@ import {
   formatarDistancia,
   formatarDuracao,
   formatarTempoParado,
+  LIMITE_PARADO_MINUTOS,
   PontoJornada,
 } from '../../../../services/colaboradores.service';
 
@@ -95,6 +96,12 @@ export class ColaboradorDetalhe {
   // sincroniza (pedido explícito do usuário), não mais a hora do relógio.
   tempoSemSincronizar(minutos: number | null | undefined): string {
     return minutos == null ? '--' : formatarTempoParado(minutos);
+  }
+
+  // Card "Sem sincronizar há" vira vermelho passando do mesmo limite que já
+  // decide o toggle Ativo/Sem sincronismo (LIMITE_PARADO_MINUTOS).
+  semSincronizarCritico(minutos: number | null | undefined): boolean {
+    return minutos != null && minutos >= LIMITE_PARADO_MINUTOS;
   }
 
   ehImpedimento(codigo: string | null): boolean {

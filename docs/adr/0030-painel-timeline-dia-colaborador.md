@@ -200,3 +200,13 @@ fórmula que já existia DUPLICADA em `monitoramento-view.ts` (usada no modal "s
 agora só uma implementação; `monitoramento-view.ts` passou a chamar a versão compartilhada.
 Rótulos dos cards mudaram de "Último sincronismo" pra "Sem sincronizar há", valor de
 `ultimaMudancaHora` (hora) pra `minutosParado` formatado (ex. "23min", "1h 30min", "2d").
+
+## Adendo 3 (2026-09-04) — card "Sem sincronizar há" vira vermelho passando do limite
+
+Usuário reportou com print o card em azul mostrando "14h 36min" — quis o card virando vermelho
+quando passa do mesmo limite que já decide Ativo/Sem sincronismo (`LIMITE_PARADO_MINUTOS`, 30min).
+Novo método `semSincronizarCritico(minutos)` (`lista-colaboradores.ts`, card expandido, e
+`colaborador-detalhe.ts`) troca a paleta azul → vermelha (borda/fundo/ícone/rótulo/valor) via
+`[ngClass]` quando `minutos >= LIMITE_PARADO_MINUTOS`. Texto inline sob o nome na lista (sempre
+visível, fora do card expandido) não mudou — usuário apontou especificamente "esse card" (o
+card com ícone, não o texto solto).

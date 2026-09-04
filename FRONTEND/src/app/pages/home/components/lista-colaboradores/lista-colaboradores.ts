@@ -8,6 +8,7 @@ import {
   formatarDistancia,
   formatarDuracao,
   formatarTempoParado,
+  LIMITE_PARADO_MINUTOS,
   normalizarRegional,
   OPCOES_CATEGORIA,
   percentualExecucao,
@@ -65,6 +66,14 @@ export class ListaColaboradores {
   // (LIMITE_PARADO_MINUTOS) e no modal "sem comunicar" de monitoramento-view.
   tempoSemSincronizar(minutos: number | null | undefined): string {
     return minutos == null ? '--' : formatarTempoParado(minutos);
+  }
+
+  // Card "Sem sincronizar há" vira vermelho passando do mesmo limite que já
+  // decide o toggle Ativo/Sem sincronismo (LIMITE_PARADO_MINUTOS) — pedido
+  // explícito do usuário, com print do card em azul mesmo já passando de
+  // 14h sem sincronizar.
+  semSincronizarCritico(minutos: number | null | undefined): boolean {
+    return minutos != null && minutos >= LIMITE_PARADO_MINUTOS;
   }
 
   toggleCategoria(categoria: CategoriaAtividade): void {

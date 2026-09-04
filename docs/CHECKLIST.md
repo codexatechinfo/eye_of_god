@@ -34,7 +34,7 @@ de verdade (antes existia o middleware mas não era usado em nenhuma rota — co
 
 ## Importação de planilha
 
-`POST /importacao/:tabela` — sobe `.xlsx` pras 12 tabelas habilitadas, `ADMINISTRADOR`/`ROOT`
+`POST /importacao/:tabela` — sobe `.xlsx` pras 13 tabelas habilitadas, `ADMINISTRADOR`/`ROOT`
 só, modo `substituir` ou `upsert` por chave composta conforme a tabela (ver
 [ADR 0005](adr/0005-importacao-de-planilha.md)). Aba "Importação" no FRONTEND.
 

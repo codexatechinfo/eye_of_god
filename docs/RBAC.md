@@ -73,7 +73,7 @@ tabelas, `.xlsx`), restrito a `ADMINISTRADOR`/`ROOT`. Pra quem não é `ROOT`, `
 sempre do token, nunca do arquivo ou da URL. `ROOT` não tem empresa própria — precisa
 escolher via `?empresaId=` (ver [ADR 0008](adr/0008-empresa-alvo-importacao-root.md));
 `GET /empresas` (RLS filtra sozinha) alimenta esse seletor no FRONTEND. Desde a
-[ADR 0009](adr/0009-empresa_id-nas-tabelas-de-referencia.md), as 12 tabelas exigem
+[ADR 0009](adr/0009-empresa_id-nas-tabelas-de-referencia.md), as 13 tabelas exigem
 `empresaId` — não há mais tabela compartilhada no catálogo.
 
 ## Em aberto

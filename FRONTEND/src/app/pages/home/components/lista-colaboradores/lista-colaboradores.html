@@ -352,12 +352,12 @@
             Livros {{ colaboradoresService.rotuloDataAtividade() }}
           </div>
           <div class="space-y-1">
+            <!-- Só informativo — livro não abre mais nada ao clicar (a
+                 timeline de execução agora é do DIA do colaborador, não de
+                 um livro isolado; ver app-colaborador-detalhe, aberto ao
+                 clicar no colaborador). -->
             <div *ngFor="let livro of a.livros">
-              <button
-                type="button"
-                (click)="abrirLivro(colaborador.colaborador, livro); $event.stopPropagation()"
-                class="w-full flex items-center justify-between gap-2 text-[11px] rounded-md border border-slate-100 bg-slate-50 hover:bg-slate-100 px-2 py-1.5 transition-colors cursor-pointer"
-              >
+              <div class="w-full flex items-center justify-between gap-2 text-[11px] rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5">
                 <span class="flex items-center gap-1.5 min-w-0">
                   <span
                     class="w-1.5 h-1.5 rounded-full shrink-0"
@@ -386,20 +386,8 @@
                 </span>
                 <span class="flex items-center gap-1.5 shrink-0">
                   <span class="text-slate-400 tabular-nums">{{ livro.digitados }}/{{ livro.naoDigitados }}</span>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-3 w-3 text-slate-400"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
                 </span>
-              </button>
+              </div>
             </div>
           </div>
         </div>

@@ -892,7 +892,8 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
         AND to_date(b.data_da_leitura, 'DD/MM/YYYY') < to_date($2, 'DD/MM/YYYY')
     ), primeira_realizacao AS (
       SELECT DISTINCT ON (b.livro, b.unidade_consumidora)
-        b.unidade_consumidora AS uc, b.livro, b.etapa, b.data_da_leitura AS data_import, b.hora_da_leitura AS hora_import
+        b.unidade_consumidora AS uc, b.livro, b.etapa, b.data_da_leitura AS data_import, b.hora_da_leitura AS hora_import,
+        b.especificacao, b.mensagem, b.equipamento
       FROM base_dados_leitura b
       WHERE b.nome_do_usuario = $1 AND b.data_da_leitura = $2
         AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
@@ -901,7 +902,8 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
       -- de escolherPorUc em monitoramentoService.js).
       ORDER BY b.livro, b.unidade_consumidora, b.hora_da_leitura ASC, (b.especificacao = 'CON') DESC
     )
-    SELECT pr.uc, pr.livro, pr.etapa, pr.data_import, pr.hora_import, m.latitude, m.longitude
+    SELECT pr.uc, pr.livro, pr.etapa, pr.data_import, pr.hora_import, pr.mensagem, pr.equipamento,
+      m.latitude, m.longitude, m.nom_municipio, m.localidade, m.endereco, m.classe_principal, m.sequencia
     FROM primeira_realizacao pr
     LEFT JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = pr.uc
     ORDER BY pr.hora_import ASC
@@ -914,14 +916,44 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
   let trabalhadoSegundos = 0;
   let ociosoSegundos = 0;
   let distanciaMetros = 0;
-
-  for (let i = 1; i < rows.length; i++) {
-    const segmento = calcularSegmento(rows[i - 1], rows[i]);
-    if (!segmento) continue;
-    if (segmento.tipo === 'pausa') ociosoSegundos += segmento.intervaloSegundos;
-    else trabalhadoSegundos += segmento.intervaloSegundos;
-    distanciaMetros += segmento.distanciaMetros;
-  }
+  // Timeline do dia inteiro do colaborador, cruzando todos os livros — cada
+  // ponto ganha o segmento em relação ao ponto cronologicamente anterior
+  // (mesmo padrão de anexarSegmentosDeslocamento em monitoramentoService.js,
+  // só que aqui a ordem já É cronológica, não por sequência de rota) mais
+  // duas flags que só fazem sentido cruzando livros: mudou_livro/
+  // mudou_municipio, usadas pelo painel lateral e pelo mapa pra colorir a
+  // transição (ver ColaboradorDetalhe/mapa-bases.ts).
+  const pontos = rows.map((row, i) => {
+    const anterior = i > 0 ? rows[i - 1] : null;
+    const segmento = anterior ? calcularSegmento(anterior, row) : null;
+    if (segmento) {
+      if (segmento.tipo === 'pausa') ociosoSegundos += segmento.intervaloSegundos;
+      else trabalhadoSegundos += segmento.intervaloSegundos;
+      distanciaMetros += segmento.distanciaMetros;
+    }
+    return {
+      uc: row.uc,
+      livro: row.livro,
+      etapa: row.etapa,
+      codigo: extrairCodigoDeMensagem(row.mensagem),
+      equipamento: row.equipamento,
+      data_import: row.data_import,
+      hora_import: row.hora_import,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      nom_municipio: row.nom_municipio,
+      localidade: row.localidade,
+      endereco: row.endereco,
+      classe_principal: row.classe_principal,
+      sequencia: row.sequencia,
+      intervalo_anterior_segundos: segmento?.intervaloSegundos ?? null,
+      distancia_anterior_metros: segmento?.distanciaMetros ?? null,
+      velocidade_m_por_min: segmento?.velocidadeMetrosPorMinuto ?? null,
+      tipo_intervalo: segmento?.tipo ?? null,
+      mudou_livro: anterior ? anterior.livro !== row.livro : false,
+      mudou_municipio: anterior && anterior.nom_municipio && row.nom_municipio ? anterior.nom_municipio !== row.nom_municipio : false,
+    };
+  });
 
   const total = trabalhadoSegundos + ociosoSegundos;
 
@@ -939,6 +971,7 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
     // ADR). null com uma UC só (sem nenhum segmento calculado ainda).
     ocupacaoPercentual: total > 0 ? Math.round((trabalhadoSegundos / total) * 100) : null,
     totalRealizadas: rows.length,
+    pontos,
   };
 }
 

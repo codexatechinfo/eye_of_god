@@ -4,12 +4,9 @@ import {
   ColaboradoresService,
   corDaUc,
   ehCodigoDeImpedimento,
-  LivroAtividade,
-  LivroSelecionado,
   mapaPrimeiraUcPorCodigo,
   MunicipioLimite,
-  ordenarPorSequencia,
-  TimelineUcItem,
+  PontoJornada,
 } from '../../../../services/colaboradores.service';
 
 // Em telas com escala fracionária (125%/150% no Windows), o posicionamento
@@ -86,6 +83,20 @@ const ICONE_PEDESTRE = iconeColaborador(
   '<circle cx="12" cy="4" r="2"/><path d="M12 6v6l-3 8"/><path d="M12 12l3 8"/><path d="M9 10 6 12"/><path d="M15 10l3 2"/>',
 );
 
+// Ponto de pausa (>limite por etapa desde o ponto anterior) — mesmo ícone
+// de pausa (duas barras) usado no separador de deslocamento da timeline
+// lateral, substituindo o CircleMarker colorido normal só nesse caso.
+const ICONE_PAUSA = L.divIcon({
+  html: `
+    <div style="width:14px;height:14px;border-radius:9999px;background:#f59e0b;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.35);border:1px solid #fff;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+    </div>
+  `,
+  className: '',
+  iconSize: [14, 14],
+  iconAnchor: [7, 7],
+});
+
 // Ícone do controle "Camadas" — checklist (linhas com quadrado marcável),
 // deliberadamente diferente da pilha de quadrados do controle nativo de
 // tipos de mapa (mesma classe CSS leaflet-control-layers-toggle, ícone
@@ -96,14 +107,14 @@ const ICONE_CAMADAS_SVG =
   '<rect x="3" y="15" width="5" height="5" rx="1"/><path d="M12 17.5h9"/>' +
   '</svg>';
 
-// Mesma paleta das 4 cores da timeline do painel (livro-detalhe.html:
+// Mesma paleta das 4 cores da timeline do painel (colaborador-detalhe.html:
 // bg-emerald-400/bg-slate-300/bg-amber-500/bg-red-500), exceto "cinza" —
 // slate-300 (#cbd5e1) é claro demais sobre tile de mapa (rua ou satélite) e
 // o ponto praticamente some visualmente; usuário confirmou o sintoma com
 // print. Trocado por um azul (#3b82f6) que continua reservado (não conflita
-// com o azul da rota planejada, #94a3b8 cinza-azulado, nem com os ícones de
-// colaborador). A cor da lista lateral (livro-detalhe.html) não muda — lá o
-// fundo é branco, slate-300 tem contraste suficiente.
+// com as cores dos segmentos da rota, nem com os ícones de colaborador). A
+// cor da lista lateral (colaborador-detalhe.html) não muda — lá o fundo é
+// branco, slate-300 tem contraste suficiente.
 const CORES_PONTO: Record<'verde' | 'cinza' | 'laranja' | 'vermelho', string> = {
   verde: '#34d399',
   cinza: '#3b82f6',
@@ -111,16 +122,34 @@ const CORES_PONTO: Record<'verde' | 'cinza' | 'laranja' | 'vermelho', string> = 
   vermelho: '#ef4444',
 };
 
-function tooltipDoPonto(item: TimelineUcItem): string {
-  const sequencia = item.sequencia ? `#${item.sequencia} · ` : '';
-  const endereco = item.endereco ? ` — ${item.endereco}` : '';
-  const codigo = item.codigo ? ` · código ${item.codigo}` : ' · pendente';
-  return `${sequencia}${item.uc}${endereco}${codigo}`;
+// Cor de cada trecho entre dois pontos cronologicamente consecutivos da
+// jornada — prioridade pausa > mudança de livro > mudança de município >
+// deslocamento normal (mesma prioridade usada no indicador da timeline
+// lateral, ver ColaboradorDetalhe). Cores dedicadas (fúcsia/teal) pra não
+// repetir nada já usado nos pontos (verde/azul/laranja/vermelho) nem no
+// polígono "Setor planejado" (violeta) — ver ADR.
+const COR_SEGMENTO_PAUSA = '#f59e0b';
+const COR_SEGMENTO_MUDOU_LIVRO = '#c026d4';
+const COR_SEGMENTO_MUDOU_MUNICIPIO = '#0d9488';
+const COR_SEGMENTO_NORMAL = '#94a3b8';
+
+function corDoSegmento(item: PontoJornada): string {
+  if (item.tipo_intervalo === 'pausa') return COR_SEGMENTO_PAUSA;
+  if (item.mudou_livro) return COR_SEGMENTO_MUDOU_LIVRO;
+  if (item.mudou_municipio) return COR_SEGMENTO_MUDOU_MUNICIPIO;
+  return COR_SEGMENTO_NORMAL;
 }
 
-// Andrew's monotone chain — casco convexo dos pontos válidos do livro
+function tooltipDoPonto(item: PontoJornada): string {
+  const livro = ` · Livro ${item.livro}`;
+  const endereco = item.endereco ? ` — ${item.endereco}` : '';
+  const codigo = item.codigo ? ` · código ${item.codigo}` : ' · pendente';
+  return `${item.uc}${livro}${endereco}${codigo}`;
+}
+
+// Andrew's monotone chain — casco convexo dos pontos válidos do dia
 // (camada "Setor planejado"). Não reaproveita o filtro truthy-string
-// (item.latitude && item.longitude) usado em pontosLivro/rotaLivro logo
+// (item.latitude && item.longitude) usado em pontosJornada/rotaJornada logo
 // abaixo: o hull é sensível a qualquer coordenada que vire NaN depois de
 // Number(...) (comparação <, > com NaN é sempre false, sem lançar erro —
 // corrompe o polígono inteiro em silêncio), por isso quem chama esta função
@@ -171,41 +200,41 @@ export class MapaBases implements AfterViewInit, OnDestroy {
 
   private marcadoresColaboradores = new Map<string, L.Marker>();
 
-  // Rota planejada do livro aberto (linha ligando as UCs na ordem de
-  // sequencia) + um ponto colorido por UC (verde/cinza/âmbar/vermelho, mesma
-  // regra de corDaUc do painel lateral) + linhas de desvio quando a ordem
-  // REAL de execução (timelineLivro, cronológica) pula pra uma UC que não é
-  // a próxima da sequencia. Tudo atualizado em cima da instância existente
-  // (nunca recriado do zero) porque atuaisLivro/timelineLivro são
-  // atualizados a cada 60s enquanto o painel está aberto — recriar a cada
-  // ciclo causaria flicker.
-  private rotaLivro?: L.Polyline;
-  private pontosLivro = new Map<string, L.CircleMarker>();
-  private linhasDesvio: L.Polyline[] = [];
-  private livroComBoundsAplicado: string | null = null;
+  // Trajetória do DIA do colaborador aberto (cruza todos os livros dele) —
+  // um segmento de linha por par de pontos cronologicamente consecutivos
+  // (não uma polyline só, porque cada trecho pode ter cor diferente — ver
+  // corDoSegmento) + um marcador por UC (CircleMarker colorido normal, ou
+  // ícone de pausa quando o intervalo anterior excedeu o limite). Tudo
+  // atualizado em cima da instância existente (nunca recriado do zero)
+  // porque a jornada é atualizada a cada 60s enquanto o painel está aberto
+  // — recriar a cada ciclo causaria flicker.
+  private segmentosRota: L.Polyline[] = [];
+  private pontosJornada = new Map<string, L.CircleMarker | L.Marker>();
+  private colaboradorComBoundsAplicado: string | null = null;
   private poligonoSetorPlanejado?: L.Polygon;
-  // Último livro pro qual "Limites municipais" já buscou dado — evita
-  // rebuscar a cada refresh de 60s do mesmo livro (ver effect no construtor).
-  private limitesMunicipaisLivroAtual: string | null = null;
+  // Última chave (colaborador+data) pra qual "Limites municipais" já buscou
+  // dado — evita rebuscar a cada refresh de 60s do mesmo colaborador/dia
+  // (ver effect no construtor).
+  private limitesMunicipaisChaveAtual: string | null = null;
 
   // Grupos do painel "CAMADAS" — cada checkbox só liga/desliga o grupo
   // inteiro (mapa.addLayer/removeLayer), nunca decide SE algo é desenhado.
-  // Os métodos de atualização (atualizarRotaLivro, atualizarMarcadoresColaboradores)
+  // Os métodos de atualização (atualizarRotaJornada, atualizarMarcadoresColaboradores)
   // continuam rodando sempre, mesmo com o grupo fora do mapa — colocar um
   // "if (!camadaLigada()) return" ali reintroduziria o flicker/estado
   // obsoleto que a ADR 0021 Adendo 5/6 já resolveu (o grupo voltaria visível
   // com dado velho até o próximo ciclo de 60s). Ver ADR 0022.
   private grupoPontos = L.layerGroup(); // camada 2: pontos coletados
-  private grupoSequencia = L.layerGroup(); // camada 7: rota planejada + desvios
+  private grupoSequencia = L.layerGroup(); // camada 7: trajetória do dia
   private grupoAgentes = L.layerGroup(); // camada 6: demais agentes (toggle)
-  // Marcador do colaborador dono da rota/livro aberto no momento — sempre no
+  // Marcador do colaborador dono da jornada aberta no momento — sempre no
   // mapa, nunca controlado pelo toggle "Demais agentes" (usuário: desmarcar
   // só deve sumir com quem NÃO corresponde à rota/ponto selecionado). Fica
   // fora de grupoAgentes de propósito: adicionado diretamente ao mapa em
   // ngAfterViewInit, não entra no painel Camadas.
   private grupoAgenteAtual = L.layerGroup();
   private nomeAgenteEmDestaque: string | null = null;
-  private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo do livro
+  private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo do dia
   private grupoLimitesMunicipais = L.layerGroup(); // camada 5: contorno IBGE
 
   // Ligadas por padrão (preserva o comportamento atual, sempre visível até
@@ -230,18 +259,16 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       this.atualizarMarcadoresColaboradores();
     });
     effect(() => {
-      const selecionado = this.colaboradoresService.livroSelecionado();
-      const atuais = this.colaboradoresService.atuaisLivro();
-      const timeline = this.colaboradoresService.timelineLivro();
-      this.atualizarRotaLivro(selecionado, atuais, timeline);
+      const nome = this.colaboradoresService.colaboradorSelecionado();
+      const pontos = nome ? this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos ?? [] : [];
+      this.atualizarRotaJornada(nome, pontos);
     });
-    // Marcador do colaborador da rota aberta sai de grupoAgentes (toggle) e
-    // vai pro grupo sempre-visível — independente do estado de "Demais
+    // Marcador do colaborador da jornada aberta sai de grupoAgentes (toggle)
+    // e vai pro grupo sempre-visível — independente do estado de "Demais
     // agentes". Roda em effect próprio (não dentro do de cima) porque é uma
     // preocupação diferente (membership de grupo, não desenho da rota).
     effect(() => {
-      const selecionado = this.colaboradoresService.livroSelecionado();
-      this.atualizarAgenteEmDestaque(selecionado?.colaboradorNome ?? null);
+      this.atualizarAgenteEmDestaque(this.colaboradoresService.colaboradorSelecionado());
     });
     // "Centralizar no mapa" (botão do card de detalhe de UC, item 4) — voa
     // bem de perto (ZOOM_FOCO) num ponto específico, diferente do
@@ -261,35 +288,37 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     effect(() => this.alternarGrupo(this.grupoSequencia, this.camadaSequencia()));
     effect(() => this.alternarGrupo(this.grupoAgentes, this.camadaAgentes()));
     effect(() => this.alternarGrupo(this.grupoSetorPlanejado, this.camadaSetorPlanejado()));
-    // "Limites municipais" é por LIVRO (só o(s) município(s) que o livro
-    // aberto toca, não a malha inteira do estado — ver ADR 0022 Adendo 2).
-    // Só busca de novo quando o livro muda, não a cada refresh de 60s do
-    // mesmo livro (limitesMunicipaisLivroAtual guarda o último buscado).
-    // A busca em si continua opt-in (só corre com a camada ligada) — isso é
-    // sobre evitar rede desnecessária pra quem nunca liga a camada, não tem
-    // relação com o "não fazer" dos grupos de pontos/agentes (aqueles têm o
-    // dado local sempre pronto; este depende de uma chamada de rede nova).
+    // "Limites municipais" é por DIA do colaborador aberto (só o(s)
+    // município(s) que ele tocou hoje, não a malha inteira do estado — ver
+    // ADR 0022 Adendo 2). Só busca de novo quando o colaborador/data muda,
+    // não a cada refresh de 60s do mesmo dia (limitesMunicipaisChaveAtual
+    // guarda a última chave buscada). A busca em si continua opt-in (só
+    // corre com a camada ligada) — isso é sobre evitar rede desnecessária
+    // pra quem nunca liga a camada, não tem relação com o "não fazer" dos
+    // grupos de pontos/agentes (aqueles têm o dado local sempre pronto;
+    // este depende de uma chamada de rede nova).
     effect(() => {
       const ligado = this.camadaLimitesMunicipais();
       this.alternarGrupo(this.grupoLimitesMunicipais, ligado);
       if (!ligado) return;
 
-      const selecionado = this.colaboradoresService.livroSelecionado();
-      const atuais = this.colaboradoresService.atuaisLivro();
-      if (!selecionado) {
-        this.limitesMunicipaisLivroAtual = null;
+      const nome = this.colaboradoresService.colaboradorSelecionado();
+      if (!nome) {
+        this.limitesMunicipaisChaveAtual = null;
         this.grupoLimitesMunicipais.clearLayers();
         return;
       }
-      if (selecionado.livro.livro === this.limitesMunicipaisLivroAtual) return;
+      const jornada = this.colaboradoresService.jornadaPorColaborador().get(nome);
+      const chave = `${nome}|${jornada?.data ?? ''}`;
+      if (chave === this.limitesMunicipaisChaveAtual) return;
 
-      const pontos = this.pontosValidosDoLivro(atuais);
+      const pontos = this.pontosValidosDoDia(jornada?.pontos ?? []);
       if (!pontos.length) return;
-      this.limitesMunicipaisLivroAtual = selecionado.livro.livro;
-      this.colaboradoresService.carregarLimitesMunicipaisDoLivro(pontos.map(([lat, lng]) => [lat, lng]));
+      this.limitesMunicipaisChaveAtual = chave;
+      this.colaboradoresService.carregarLimitesMunicipais(pontos.map(([lat, lng]) => [lat, lng]));
     });
     // Redesenha (substitui, não acumula) sempre que o resultado da busca
-    // acima chegar — um por livro, nunca a malha inteira acumulada.
+    // acima chegar — um por colaborador/dia, nunca a malha inteira acumulada.
     effect(() => {
       const dados = this.colaboradoresService.limitesMunicipais();
       if (dados === null) return;
@@ -298,11 +327,11 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   }
 
   // Mesmo filtro (Number.isFinite explícito, mais estrito que o
-  // truthy-string de pontosLivro/rotaLivro) usado tanto pelo casco convexo
-  // quanto pela busca de limites municipais — ver comentário de
+  // truthy-string de pontosJornada/rotaJornada) usado tanto pelo casco
+  // convexo quanto pela busca de limites municipais — ver comentário de
   // cascoConvexo sobre por que NaN não pode vazar pra nenhum dos dois.
-  private pontosValidosDoLivro(atuais: TimelineUcItem[]): L.LatLngTuple[] {
-    return atuais
+  private pontosValidosDoDia(pontos: PontoJornada[]): L.LatLngTuple[] {
+    return pontos
       .map((item): L.LatLngTuple => [Number(item.latitude), Number(item.longitude)])
       .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
   }
@@ -417,7 +446,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     itemAtivo('Setor planejado', this.camadaSetorPlanejado);
     itemAtivo('Limites municipais', this.camadaLimitesMunicipais);
     itemAtivo('Demais agentes', this.camadaAgentes);
-    itemAtivo('Sequência planejada', this.camadaSequencia);
+    itemAtivo('Trajetória do dia', this.camadaSequencia);
 
     return container;
   }
@@ -458,9 +487,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       maxZoom: 17,
     });
 
-    // topleft: o painel de detalhe do livro (app-livro-detalhe) cobre o lado
-    // direito da tela quando aberto — no canto padrão (topright) o controle
-    // ficaria escondido atrás dele.
+    // topleft: o painel de detalhe do colaborador (app-colaborador-detalhe)
+    // cobre o lado direito da tela quando aberto — no canto padrão
+    // (topright) o controle ficaria escondido atrás dele.
     L.control
       .layers(
         {
@@ -563,34 +592,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
           offset: [0, -14],
         });
 
-      // Abre exatamente o livro da UC que posicionou esse marcador (loc.livro)
-      // — não "o livro em execução hoje", que podia ser um livro DIFERENTE do
-      // que gerou a posição (ou nem existir, se o colaborador não tiver
-      // atividade hoje). Se esse livro não aparecer em atividadeHoje (ex.:
-      // última execução foi em outro dia), usa um objeto mínimo só com o
-      // número do livro — os cards de resumo do painel ficam em branco nesse
-      // caso, mas a rota/timeline (que é o que importa aqui) carrega normal,
-      // já que dependem só do número do livro (GET /massivas/livro-ucs).
+      // Abre a timeline do DIA inteiro do colaborador (não mais um livro
+      // específico) — mesma reação de clicar nele direto na lista, pedido
+      // explícito do usuário.
       marcador.on('click', () => {
-        const livro: LivroAtividade = this.colaboradoresService
-          .atividadeDe(colaborador.colaborador)
-          ?.livros.find(l => l.livro === loc.livro) ?? {
-          livro: loc.livro,
-          etapa: '',
-          situacaoAtual: '',
-          digitados: 0,
-          naoDigitados: 0,
-          tipoServico: null,
-          diasPrazoRegulatorio: null,
-          primeiraVez: '',
-          ultimaVez: '',
-          ultimaExecucao: null,
-          historico: [],
-        };
-        this.colaboradoresService.abrirLivro(colaborador.colaborador, livro);
-        // Além da rota/timeline à direita, abre o card do colaborador na
-        // lista da esquerda também (destaque + jornada) — mesma reação de
-        // clicar nele direto na lista, pedido explícito do usuário.
         this.colaboradoresService.abrirColaborador(colaborador.colaborador);
       });
 
@@ -598,43 +603,55 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
   }
 
-  // Rota do livro aberto no painel: linha planejada (ordem de sequencia) +
-  // um ponto colorido por UC + linhas de desvio quando a ordem real de
-  // execução pula a sequencia. Só aplica fitBounds na primeira vez que
-  // desenha essa rota específica — nos refreshes automáticos seguintes do
-  // mesmo livro (a cada 60s), só atualiza pontos/linhas, sem mexer no
-  // zoom/pan que o usuário já ajustou manualmente.
-  private atualizarRotaLivro(selecionado: LivroSelecionado | null, atuais: TimelineUcItem[], timeline: TimelineUcItem[]): void {
+  // Trajetória do dia do colaborador aberto no painel: um marcador por UC +
+  // um segmento de linha entre cada par de pontos
+  // cronologicamente consecutivos, colorido pela razão da transição (pausa/
+  // mudou de livro/mudou de município/normal — ver corDoSegmento). Só
+  // aplica fitBounds na primeira vez que desenha a jornada de um
+  // colaborador — nos refreshes automáticos seguintes do mesmo dia (a cada
+  // 60s), só atualiza pontos/linhas, sem mexer no zoom/pan que o usuário já
+  // ajustou manualmente.
+  private atualizarRotaJornada(colaboradorAberto: string | null, pontos: PontoJornada[]): void {
     if (!this.mapa) return;
 
-    if (!selecionado) {
-      if (this.rotaLivro) this.grupoSequencia.removeLayer(this.rotaLivro);
-      this.rotaLivro = undefined;
-      for (const ponto of this.pontosLivro.values()) this.grupoPontos.removeLayer(ponto);
-      this.pontosLivro.clear();
-      for (const linha of this.linhasDesvio) this.grupoSequencia.removeLayer(linha);
-      this.linhasDesvio = [];
+    if (!colaboradorAberto) {
+      for (const linha of this.segmentosRota) this.grupoSequencia.removeLayer(linha);
+      this.segmentosRota = [];
+      for (const ponto of this.pontosJornada.values()) this.grupoPontos.removeLayer(ponto);
+      this.pontosJornada.clear();
       if (this.poligonoSetorPlanejado) this.grupoSetorPlanejado.removeLayer(this.poligonoSetorPlanejado);
       this.poligonoSetorPlanejado = undefined;
-      this.livroComBoundsAplicado = null;
+      this.colaboradorComBoundsAplicado = null;
       return;
     }
 
-    const ordenados = ordenarPorSequencia(atuais).filter(item => item.latitude && item.longitude);
-    const pontosRota: L.LatLngTuple[] = ordenados.map(item => [Number(item.latitude), Number(item.longitude)]);
+    const validos = pontos.filter(item => item.latitude && item.longitude);
+    const latLngs: L.LatLngTuple[] = validos.map(item => [Number(item.latitude), Number(item.longitude)]);
 
-    if (this.rotaLivro) {
-      this.rotaLivro.setLatLngs(pontosRota);
-    } else if (pontosRota.length) {
-      this.rotaLivro = L.polyline(pontosRota, { color: '#94a3b8', weight: 2, opacity: 0.7, dashArray: '2 6' }).addTo(
-        this.grupoSequencia,
-      );
+    // Segmentos: recriados inteiros a cada ciclo (não atualizados em cima da
+    // instância) — diferente dos pontos (que precisam preservar o listener),
+    // o número de segmentos é pequeno e cada um pode mudar de cor entre
+    // refreshes (ex.: um ponto que virou "pausa" porque o próximo lote ainda
+    // não chegou).
+    for (const linha of this.segmentosRota) this.grupoSequencia.removeLayer(linha);
+    this.segmentosRota = [];
+    for (let i = 1; i < validos.length; i++) {
+      const anterior = validos[i - 1];
+      const atual = validos[i];
+      const linha = L.polyline(
+        [
+          [Number(anterior.latitude), Number(anterior.longitude)],
+          [Number(atual.latitude), Number(atual.longitude)],
+        ],
+        { color: corDoSegmento(atual), weight: 3, opacity: 0.8 },
+      ).addTo(this.grupoSequencia);
+      this.segmentosRota.push(linha);
     }
 
-    // Setor planejado (casco convexo de TODAS as instalações do livro, não só
-    // as ordenadas/com sequência) — filtro próprio com Number.isFinite, mais
-    // estrito que o truthy-string acima (ver comentário de cascoConvexo).
-    const hull = cascoConvexo(this.pontosValidosDoLivro(atuais));
+    // Setor planejado (casco convexo de TODAS as UCs válidas do dia, não só
+    // as com sequência) — filtro próprio com Number.isFinite, mais estrito
+    // que o truthy-string acima (ver comentário de cascoConvexo).
+    const hull = cascoConvexo(this.pontosValidosDoDia(pontos));
     if (hull.length >= 3) {
       if (this.poligonoSetorPlanejado) {
         this.poligonoSetorPlanejado.setLatLngs(hull);
@@ -648,85 +665,73 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       this.poligonoSetorPlanejado = undefined;
     }
 
-    if (pontosRota.length && this.rotaLivro && this.livroComBoundsAplicado !== selecionado.livro.livro) {
-      this.mapa.fitBounds(this.rotaLivro.getBounds(), { padding: [40, 40] });
-      this.livroComBoundsAplicado = selecionado.livro.livro;
+    if (latLngs.length && this.colaboradorComBoundsAplicado !== colaboradorAberto) {
+      this.mapa.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
+      this.colaboradorComBoundsAplicado = colaboradorAberto;
     }
 
-    // Pontos: atualiza em cima da instância existente por UC (posição/cor),
-    // cria só as novas, remove as que já não aparecem mais em `ordenados`.
-    const indexPorUc = new Map(ordenados.map((item, i) => [item.uc, i]));
-    const primeiraUcPorCodigo = mapaPrimeiraUcPorCodigo(timeline);
+    // Pontos: atualiza em cima da instância existente por UC (posição/cor/
+    // ícone), cria só as novas, remove as que já não aparecem mais.
+    const primeiraUcPorCodigo = mapaPrimeiraUcPorCodigo(pontos);
     const vistos = new Set<string>();
 
-    for (const item of ordenados) {
+    for (const item of validos) {
       vistos.add(item.uc);
       const latLng: L.LatLngTuple = [Number(item.latitude), Number(item.longitude)];
-      const cor = CORES_PONTO[corDaUc(item, primeiraUcPorCodigo)];
-      const existente = this.pontosLivro.get(item.uc);
+      const existente = this.pontosJornada.get(item.uc);
+      const ehPausa = item.tipo_intervalo === 'pausa';
+
       if (existente) {
         existente.setLatLng(latLng);
-        existente.setStyle({ fillColor: cor });
-        existente.setTooltipContent(tooltipDoPonto(item));
-      } else {
-        const ponto = L.circleMarker(latLng, { radius: 5, color: '#fff', weight: 1, fillColor: cor, fillOpacity: 0.95 })
-          .addTo(this.grupoPontos)
-          .bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
+        if (existente instanceof L.CircleMarker && !ehPausa) {
+          existente.setStyle({ fillColor: CORES_PONTO[corDaUc(item, primeiraUcPorCodigo)] });
+          existente.setTooltipContent(tooltipDoPonto(item));
+        } else if (!(existente instanceof L.CircleMarker) && ehPausa) {
+          existente.setTooltipContent(tooltipDoPonto(item));
+        } else {
+          // Trocou de tipo (virou pausa, ou deixou de ser) — CircleMarker e
+          // Marker não convertem um no outro, recria o marcador desse ponto.
+          this.grupoPontos.removeLayer(existente);
+          this.pontosJornada.delete(item.uc);
+        }
+      }
+
+      if (!this.pontosJornada.has(item.uc)) {
+        const ponto: L.CircleMarker | L.Marker = ehPausa
+          ? L.marker(latLng, { icon: ICONE_PAUSA })
+          : L.circleMarker(latLng, {
+              radius: 5,
+              color: '#fff',
+              weight: 1,
+              fillColor: CORES_PONTO[corDaUc(item, primeiraUcPorCodigo)],
+              fillOpacity: 0.95,
+            });
+        ponto.addTo(this.grupoPontos).bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
         // Clicar no ponto foca E expande a UC na timeline do painel (item 3
         // do pedido) — os dois juntos, sem precisar de um segundo clique na
-        // lista. O circleMarker é reaproveitado entre refreshes (nunca
-        // recriado, ver comentário da classe), então o listener não pode
+        // lista. O marcador é reaproveitado entre refreshes (nunca recriado
+        // a não ser na troca de tipo acima), então o listener não pode
         // fechar sobre `item.codigo` direto — a UC pode ter sido pendente
         // quando o marcador foi criado e virado realizada depois só com
-        // `setStyle` (sem recriar o marcador, sem re-registrar o listener).
-        // Busca o estado ATUAL da UC em atuaisLivro() no momento do clique.
+        // `setStyle`. Busca o estado ATUAL da UC na jornada no momento do clique.
         const uc = item.uc;
+        const nome = colaboradorAberto;
         ponto.on('click', () => {
           this.colaboradoresService.ucFocada.set(uc);
           this.colaboradoresService.ucExpandida.set(uc);
-          const atual = this.colaboradoresService.atuaisLivro().find(a => a.uc === uc);
+          const atual = this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos?.find(p => p.uc === uc);
           if (ehCodigoDeImpedimento(atual?.codigo ?? null)) {
             this.colaboradoresService.carregarRegimeSucessivo(uc);
           }
         });
-        this.pontosLivro.set(item.uc, ponto);
+        this.pontosJornada.set(item.uc, ponto);
       }
     }
-    for (const [uc, ponto] of this.pontosLivro) {
+    for (const [uc, ponto] of this.pontosJornada) {
       if (!vistos.has(uc)) {
         this.grupoPontos.removeLayer(ponto);
-        this.pontosLivro.delete(uc);
+        this.pontosJornada.delete(uc);
       }
-    }
-
-    // Desvios: timeline já vem em ordem cronológica (id ASC, ver
-    // listarTimelineUcsRealizadasDoLivro) — pra cada par consecutivo de UCs
-    // realizadas, se a próxima não é a "próxima da sequencia" da anterior
-    // (índice adjacente em `ordenados`), o colaborador pulou a ordem
-    // planejada: traça uma linha marcando esse trecho. Recriado inteiro a
-    // cada ciclo (não atualizado em cima da instância) — o número de desvios
-    // é tipicamente pequeno, não justifica a complexidade de diffar.
-    for (const linha of this.linhasDesvio) this.grupoSequencia.removeLayer(linha);
-    this.linhasDesvio = [];
-
-    for (let i = 1; i < timeline.length; i++) {
-      const anterior = timeline[i - 1];
-      const atual = timeline[i];
-      if (!anterior.latitude || !anterior.longitude || !atual.latitude || !atual.longitude) continue;
-
-      const indexAnterior = indexPorUc.get(anterior.uc);
-      const indexAtual = indexPorUc.get(atual.uc);
-      if (indexAnterior === undefined || indexAtual === undefined) continue;
-      if (indexAtual === indexAnterior + 1) continue;
-
-      const linha = L.polyline(
-        [
-          [Number(anterior.latitude), Number(anterior.longitude)],
-          [Number(atual.latitude), Number(atual.longitude)],
-        ],
-        { color: '#dc2626', weight: 2.5, opacity: 0.85, dashArray: '6 4' },
-      ).addTo(this.grupoSequencia);
-      this.linhasDesvio.push(linha);
     }
   }
 

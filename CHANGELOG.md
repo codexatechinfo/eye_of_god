@@ -5,6 +5,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Alterado
+
+- Painel lateral de detalhe (aba Trilho): mostrava a timeline de UM livro só, aberto livro por
+  livro. Agora clicar num colaborador (na lista ou no ícone do mapa) abre a timeline do DIA
+  INTEIRO dele, cruzando todos os livros — com indicador de mudança de livro/município entre
+  pontos consecutivos (linha colorida no mapa também) e ícone de pausa no lugar da bolinha quando
+  o intervalo passa do limite. Lista "Livros hoje" no card do colaborador perdeu o clique, virou
+  só informação. Componente renomeado `LivroDetalhe` → `ColaboradorDetalhe`. Ver [ADR
+  0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Filtros de colaborador (aba Trilho): limite de "tempo parado" que decide Ativo/Sem sincronismo

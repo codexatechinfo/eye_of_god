@@ -7,7 +7,6 @@ import {
   ColaboradoresService,
   formatarDistancia,
   formatarDuracao,
-  LivroAtividade,
   normalizarRegional,
   OPCOES_CATEGORIA,
   percentualExecucao,
@@ -73,10 +72,6 @@ export class ListaColaboradores {
     if (cargo === 'LEITURISTA') return 'Pedestre';
     if (cargo === 'MONITOR') return 'Monitor';
     return cargo;
-  }
-
-  abrirLivro(colaboradorNome: string, livro: LivroAtividade): void {
-    this.colaboradoresService.abrirLivro(colaboradorNome, livro);
   }
 
   // Barra de progresso abaixo do nome — mesmo % que agora também ordena a

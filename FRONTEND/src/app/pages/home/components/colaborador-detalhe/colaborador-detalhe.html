@@ -1,10 +1,11 @@
-<!-- Painel com os detalhes do livro selecionado: ocupa a área do mapa, sem
+<!-- Painel com a timeline do DIA do colaborador selecionado (cruza todos os
+     livros dele, não mais um livro isolado): ocupa a área do mapa, sem
      cobrir o header nem a barra de filtros que ficam acima dela -->
-<div *ngIf="colaboradoresService.livroSelecionado() as sel" class="absolute inset-y-0 right-0 w-full max-w-sm z-[1100] bg-white border-l border-slate-200 shadow-2xl flex flex-col">
+<div *ngIf="nomeAberto() as nome" class="absolute inset-y-0 right-0 w-full max-w-sm z-[1100] bg-white border-l border-slate-200 shadow-2xl flex flex-col">
   <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
     <div class="min-w-0">
-      <h3 class="text-sm font-bold text-slate-800 truncate">Livro {{ sel.livro.livro }} - {{ sel.livro.etapa }}</h3>
-      <p class="text-[11px] text-slate-400 truncate">{{ sel.colaboradorNome }}</p>
+      <h3 class="text-sm font-bold text-slate-800 truncate">{{ nome }}</h3>
+      <p class="text-[11px] text-slate-400 truncate">Execução {{ colaboradoresService.rotuloDataAtividade() }}</p>
     </div>
     <button
       type="button"
@@ -21,7 +22,7 @@
   <div class="flex-1 overflow-y-auto px-4 py-3">
     <div class="grid grid-cols-2 gap-1.5 mb-4">
       <!-- Leituras/min — em revisão: o cálculo atual media pelo tempo total
-           visto no livro, não reflete corretamente o ritmo de leitura -->
+           visto, não reflete corretamente o ritmo de leitura -->
       <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
         <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -34,7 +35,7 @@
         </div>
       </div>
 
-      <!-- Em Execução -->
+      <!-- Livros em execução -->
       <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
         <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -42,14 +43,13 @@
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Em Execução</div>
-          <div class="text-xs font-bold text-blue-700 truncate">{{ sel.livro.situacaoAtual === 'Em Execução' ? 'Sim' : 'Não' }}</div>
+          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Livros em execução</div>
+          <div class="text-xs font-bold text-blue-700 truncate">{{ colaboradoresService.atividadeDe(nome)?.totalEmExecucao ?? 0 }}</div>
         </div>
       </div>
 
-      <!-- Improdutivo — em revisão: o cálculo atual mede o livro, não o
-           colaborador (ele pode estar produtivo em outro livro no mesmo
-           intervalo) -->
+      <!-- Improdutivo — em revisão: adiado, sem dado de tempo médio por UC
+           pra separar execução de deslocamento -->
       <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
         <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -63,16 +63,16 @@
         </div>
       </div>
 
-      <!-- Km percorrido — Haversine entre UCs realizadas consecutivas na
-           ordem de rota (não é distância real de trajeto a pé/moto, é linha
+      <!-- Km percorrido — Haversine entre UCs realizadas consecutivas no
+           dia inteiro (não é distância real de trajeto a pé/moto, é linha
            reta entre coordenadas) -->
       <div
         class="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
-        [ngClass]="colaboradoresService.distanciaTotalLivro() !== null ? 'border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50' : 'border border-dashed border-slate-200 bg-slate-50/60'"
+        [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50' : 'border border-dashed border-slate-200 bg-slate-50/60'"
       >
         <div
           class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-          [ngClass]="colaboradoresService.distanciaTotalLivro() !== null ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-300'"
+          [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-300'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 12h4l3-9 4 18 3-9h4" />
@@ -81,12 +81,12 @@
         <div class="min-w-0 leading-tight">
           <div
             class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
-            [ngClass]="colaboradoresService.distanciaTotalLivro() !== null ? 'text-blue-400' : 'text-slate-300'"
+            [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'text-blue-400' : 'text-slate-300'"
           >Km percorrido</div>
           <div
             class="text-xs font-bold truncate"
-            [ngClass]="colaboradoresService.distanciaTotalLivro() !== null ? 'text-blue-700' : 'text-slate-300'"
-          >{{ distanciaFormatada(colaboradoresService.distanciaTotalLivro()) }}</div>
+            [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'text-blue-700' : 'text-slate-300'"
+          >{{ distanciaFormatada(colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros ?? null) }}</div>
         </div>
       </div>
 
@@ -100,7 +100,7 @@
         </div>
         <div class="min-w-0 leading-tight">
           <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Último sincronismo</div>
-          <div class="text-xs font-bold text-blue-700 tabular-nums truncate">{{ sel.livro.ultimaExecucao || '--' }}</div>
+          <div class="text-xs font-bold text-blue-700 tabular-nums truncate">{{ colaboradoresService.atividadeDe(nome)?.ultimaMudancaHora || '--' }}</div>
         </div>
       </div>
 
@@ -114,7 +114,7 @@
         </div>
         <div class="min-w-0 leading-tight">
           <div class="text-[8.5px] font-semibold text-emerald-500 uppercase tracking-wide truncate">Realizadas</div>
-          <div class="text-xs font-bold text-emerald-700 tabular-nums">{{ colaboradoresService.realizadasLivro() }}</div>
+          <div class="text-xs font-bold text-emerald-700 tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalRealizadas ?? 0 }}</div>
         </div>
       </div>
 
@@ -128,11 +128,11 @@
         </div>
         <div class="min-w-0 leading-tight">
           <div class="text-[8.5px] font-semibold text-red-500 uppercase tracking-wide truncate">A realizar</div>
-          <div class="text-xs font-bold text-red-700 tabular-nums">{{ colaboradoresService.aRealizarLivro() }}</div>
+          <div class="text-xs font-bold text-red-700 tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalPendentes ?? 0 }}</div>
         </div>
       </div>
 
-      <!-- Impedimentos: qualquer UC do livro cujo código atual não seja 000
+      <!-- Impedimentos: qualquer UC do dia cujo código atual não seja 000
            (leitura normal) nem 099 (sem leitura, não é problema de campo) —
            pedido explícito do usuário, ver ehCodigoDeImpedimento() no service. -->
       <div class="flex items-center gap-1.5 rounded-lg border border-amber-100 bg-gradient-to-br from-amber-100/20 to-amber-50 px-2 py-1.5">
@@ -144,34 +144,31 @@
         </div>
         <div class="min-w-0 leading-tight">
           <div class="text-[8.5px] font-semibold text-amber-500 uppercase tracking-wide truncate">Impedimentos</div>
-          <div class="text-xs font-bold text-amber-700 tabular-nums">{{ colaboradoresService.impedimentosLivro() }}</div>
+          <div class="text-xs font-bold text-amber-700 tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalImpedimentos ?? 0 }}</div>
         </div>
       </div>
     </div>
 
     <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
-      UCs do livro (ordem de rota)
+      Execução do dia (ordem cronológica)
     </div>
-    <div class="text-center text-slate-400 text-[11px] py-4" *ngIf="colaboradoresService.carregandoTimelineLivro()">
+    <div class="text-center text-slate-400 text-[11px] py-4" *ngIf="!jornadaCarregada()">
       Carregando timeline...
-    </div>
-    <div class="text-center text-red-500 text-[11px] py-4" *ngIf="colaboradoresService.erroTimelineLivro() && !colaboradoresService.carregandoTimelineLivro()">
-      {{ colaboradoresService.erroTimelineLivro() }}
     </div>
     <div
       class="text-center text-slate-400 text-[11px] py-4"
-      *ngIf="!colaboradoresService.carregandoTimelineLivro() && !colaboradoresService.erroTimelineLivro() && !ucsOrdenadas().length"
+      *ngIf="jornadaCarregada() && !pontosOrdenados().length"
     >
-      Nenhuma UC encontrada para este livro.
+      Nenhuma atividade registrada {{ colaboradoresService.rotuloDataAtividade() }}.
     </div>
     <ol
       class="relative border-l-2 border-slate-100 ml-2"
-      *ngIf="!colaboradoresService.carregandoTimelineLivro() && ucsOrdenadas().length"
+      *ngIf="jornadaCarregada() && pontosOrdenados().length"
     >
-      <ng-container *ngFor="let item of ucsOrdenadas(); let i = index; let ultimoItem = last">
-        <!-- Separador de deslocamento entre duas UCs realizadas consecutivas
-             na ordem de rota — laranja/destacado quando o intervalo passou
-             do limite (>5min urbana / >15min rural) e vira "pausa". -->
+      <ng-container *ngFor="let item of pontosOrdenados(); let i = index">
+        <!-- Separador de deslocamento entre dois pontos cronologicamente
+             consecutivos — laranja/destacado quando o intervalo passou do
+             limite (>5min urbana / >15min rural) e vira "pausa". -->
         <li *ngIf="item.tipo_intervalo && i > 0" class="mb-2 ml-4 pl-1.5 text-[9px] flex items-center gap-1" [ngClass]="item.tipo_intervalo === 'pausa' ? 'text-orange-600 font-semibold' : 'text-slate-400'">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M13 6l6 6-6 6" />
@@ -179,22 +176,22 @@
           <span>+{{ duracaoFormatada(item.intervalo_anterior_segundos) }} desloc {{ distanciaFormatada(item.distancia_anterior_metros) }} · {{ item.velocidade_m_por_min?.toFixed(1) }} m/min</span>
         </li>
 
-        <!-- Mudança de colaborador e/ou situação entre esta UC e a última
-             realizada antes dela na ordem de rota — cor índigo, deliberadamente
-             diferente do laranja (já usado pra "pausa" acima). -->
-        <li *ngIf="mudancasPorUc().get(item.uc) as mudanca" class="mb-2 ml-4 pl-1.5">
-          <div class="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-indigo-700">
-            <div class="flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wide mb-0.5">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="8" r="1.5" />
-                <path d="M12 9.5v4M9 17.5h6" />
-              </svg>
-              <span *ngIf="mudanca.colaboradorAnterior !== mudanca.colaboradorAtual && mudanca.situacaoAnterior !== mudanca.situacaoAtual">Mudança de colaborador e situação</span>
-              <span *ngIf="mudanca.colaboradorAnterior !== mudanca.colaboradorAtual && mudanca.situacaoAnterior === mudanca.situacaoAtual">Mudança de colaborador</span>
-              <span *ngIf="mudanca.colaboradorAnterior === mudanca.colaboradorAtual && mudanca.situacaoAnterior !== mudanca.situacaoAtual">Mudança de situação</span>
-            </div>
-            <div *ngIf="mudanca.colaboradorAnterior !== mudanca.colaboradorAtual" class="text-[9.5px]">{{ mudanca.colaboradorAnterior || '—' }} → {{ mudanca.colaboradorAtual || '—' }}</div>
-            <div *ngIf="mudanca.situacaoAnterior !== mudanca.situacaoAtual" class="text-[9.5px]">{{ mudanca.situacaoAnterior || '—' }} → {{ mudanca.situacaoAtual || '—' }}</div>
+        <!-- Mudança de LIVRO e/ou MUNICÍPIO entre este ponto e o anterior —
+             só existe cruzando o dia inteiro (não fazia sentido dentro de
+             um livro só). Cores dedicadas (fúcsia/teal), distintas de tudo
+             que já existe na timeline/mapa (ver ADR). -->
+        <li *ngIf="item.mudou_livro || item.mudou_municipio" class="mb-2 ml-4 pl-1.5 flex flex-col gap-1">
+          <div *ngIf="item.mudou_livro" class="rounded-md border border-fuchsia-200 bg-fuchsia-50 px-2 py-1 text-fuchsia-700 text-[9.5px] font-semibold flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+            Mudou de livro — agora Livro {{ item.livro }}
+          </div>
+          <div *ngIf="item.mudou_municipio" class="rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-teal-700 text-[9.5px] font-semibold flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" />
+            </svg>
+            Mudou de município — agora {{ item.nom_municipio }}
           </div>
         </li>
 
@@ -205,15 +202,29 @@
           [ngClass]="colaboradoresService.ucFocada() === item.uc ? 'bg-blue-50/70' : ''"
           (click)="toggleExpandir(item)"
         >
-          <div
-            class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
-            [ngClass]="{
-              'bg-emerald-400': corDoPonto(item) === 'verde',
-              'bg-slate-300': corDoPonto(item) === 'cinza',
-              'bg-amber-500': corDoPonto(item) === 'laranja',
-              'bg-red-500': corDoPonto(item) === 'vermelho'
-            }"
-          ></div>
+          <!-- Pausa (>limite por etapa) vira ícone de pausa no marcador da
+               linha, em vez da bolinha colorida normal. -->
+          <svg
+            *ngIf="item.tipo_intervalo === 'pausa'; else bolinha"
+            xmlns="http://www.w3.org/2000/svg"
+            class="absolute w-3 h-3 -left-[7px] mt-0.5 text-orange-500"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <rect x="6" y="4" width="4" height="16" rx="1" />
+            <rect x="14" y="4" width="4" height="16" rx="1" />
+          </svg>
+          <ng-template #bolinha>
+            <div
+              class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
+              [ngClass]="{
+                'bg-emerald-400': corDoPonto(item) === 'verde',
+                'bg-slate-300': corDoPonto(item) === 'cinza',
+                'bg-amber-500': corDoPonto(item) === 'laranja',
+                'bg-red-500': corDoPonto(item) === 'vermelho'
+              }"
+            ></div>
+          </ng-template>
           <div class="flex items-center justify-between gap-2 text-[11px]">
             <span
               class="truncate flex-1 px-1.5 font-semibold"
@@ -236,8 +247,10 @@
             <span class="text-slate-400 shrink-0 tabular-nums" *ngIf="item.codigo">{{ item.hora_import }}</span>
             <span class="text-slate-300 shrink-0" *ngIf="!item.codigo">A realizar</span>
           </div>
+          <!-- Abaixo do endereço: UC, depois Livro — nessa ordem (pedido
+               explícito do usuário). -->
           <div class="text-[9.5px] text-slate-400 truncate pl-1.5">
-            Livro {{ sel.livro.livro }} · #{{ item.sequencia || '—' }}
+            UC {{ item.uc }} · Livro {{ item.livro }}
             <span *ngIf="item.nom_municipio"> · {{ item.nom_municipio }}</span>
             <span *ngIf="item.localidade"> · {{ item.localidade }}</span>
             <span *ngIf="item.classe_principal"> · {{ item.classe_principal }}</span>
@@ -260,8 +273,12 @@
                 <div class="text-slate-600">{{ item.endereco || '—' }}<span *ngIf="item.nom_municipio">, {{ item.nom_municipio }}</span><span *ngIf="item.localidade"> ({{ item.localidade }})</span></div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Livro / Seq. na rota</div>
-                <div class="text-slate-600 tabular-nums">{{ sel.livro.livro }} · #{{ item.sequencia || '—' }} / {{ ucsOrdenadas().length }}</div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">UC / Livro</div>
+                <div class="text-slate-600 tabular-nums">{{ item.uc }} · Livro {{ item.livro }}<span *ngIf="item.sequencia"> (#{{ item.sequencia }} na rota)</span></div>
+              </div>
+              <div>
+                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Equipamento</div>
+                <div class="text-slate-600">{{ item.equipamento || '—' }}</div>
               </div>
               <div>
                 <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Situação</div>

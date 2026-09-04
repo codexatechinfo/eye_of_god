@@ -6,7 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
 import { FiltrosColaboradores } from './components/filtros-colaboradores/filtros-colaboradores';
 import { ListaColaboradores } from './components/lista-colaboradores/lista-colaboradores';
-import { LivroDetalhe } from './components/livro-detalhe/livro-detalhe';
+import { ColaboradorDetalhe } from './components/colaborador-detalhe/colaborador-detalhe';
 import { MapaBases } from './components/mapa-bases/mapa-bases';
 import { MonitoramentoView } from './components/monitoramento-view/monitoramento-view';
 import { ImportacaoView } from './components/importacao-view/importacao-view';
@@ -32,7 +32,7 @@ interface StatusColetaResponse {
 
 @Component({
   selector: 'app-home',
-  imports: [CommonModule, FiltrosColaboradores, ListaColaboradores, LivroDetalhe, MapaBases, MonitoramentoView, ImportacaoView],
+  imports: [CommonModule, FiltrosColaboradores, ListaColaboradores, ColaboradorDetalhe, MapaBases, MonitoramentoView, ImportacaoView],
   templateUrl: './home.html',
   styleUrl: './home.css',
 })

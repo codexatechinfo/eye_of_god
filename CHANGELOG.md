@@ -17,6 +17,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o
+  painel — o clique disparava abrir E o listener de "clicar fora fecha" no mesmo evento, já que só
+  o mapa estava isento dessa checagem. Cor vermelha do ponto/UC passa a significar "regime
+  sucessivo" (mesmo código de impedimento por mais de 1 mês nessa UC), não mais "código repetido
+  em outra UC no mesmo dia" — card expandido agora lista os meses. Clicar numa linha de transição
+  (mudança de livro/município/pausa) no mapa centraliza nela, em vez de depender só do zoom geral
+  do dia (que ficava distante demais quando um ponto isolado ficava longe dos outros). Ver Adendo
+  1 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 - Filtros de colaborador (aba Trilho): limite de "tempo parado" que decide Ativo/Sem sincronismo
   estava em 20min desde sempre, deveria ser 30min — unificado com o limite já usado (30min) na
   barra de resumo da aba Massivas/Monitoramento de Livros, antes mantidos de propósito separados.

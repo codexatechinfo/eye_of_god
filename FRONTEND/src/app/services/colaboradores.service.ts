@@ -279,12 +279,16 @@ export interface LocalizacaoColaborador {
 }
 
 // N° de meses consecutivos em que uma UC recebeu o MESMO código de
-// impedimento (ver monitoramentoService.js#obterRegimeSucessivo). Buscado sob
-// demanda, só quando o card da UC é expandido.
+// impedimento, mais a lista desses meses (mais recente primeiro) — ver
+// monitoramentoService.js#obterRegimeSucessivo. Decide a cor vermelha do
+// ponto (ciclosConsecutivos > 1) — por isso pré-carregado assim que a
+// jornada do dia chega, não mais só sob demanda ao expandir (ver
+// carregarJornada).
 export interface RegimeSucessivo {
   uc: string;
   codigoAtual: string | null;
   ciclosConsecutivos: number;
+  mesesConsecutivos: string[];
 }
 
 interface RegimeSucessivoResponse extends RegimeSucessivo {
@@ -356,33 +360,19 @@ export function ehCodigoDeImpedimento(codigo: string | null): boolean {
   return !!codigo && codigo !== '000' && codigo !== '099' && !CODIGOS_ADMINISTRATIVOS.has(codigo);
 }
 
-// Qual UC foi a primeira, cronologicamente, a mostrar cada código de
-// impedimento no DIA do colaborador — usado só pra decidir "vermelho"
-// (código repetido em UC diferente, mesmo que em livros diferentes).
-// `pontos` precisa estar em ordem cronológica (mesma ordem que já vem de
-// GET /colaboradores/jornada). Compartilhado entre a timeline do painel
-// (colaborador-detalhe.ts) e os pontos do mapa (mapa-bases.ts) — mesma
-// regra de cor nos dois lugares.
-export function mapaPrimeiraUcPorCodigo(pontos: PontoJornada[]): Map<string, string> {
-  const mapa = new Map<string, string>();
-  for (const item of pontos) {
-    if (item.codigo && ehCodigoDeImpedimento(item.codigo) && !mapa.has(item.codigo)) {
-      mapa.set(item.codigo, item.uc);
-    }
-  }
-  return mapa;
-}
-
 // Cor de uma UC: verde = realizada (código normal), cinza = ainda pendente,
-// âmbar = impedimento (primeira vez que esse código aparece no dia), vermelho
-// = esse código de impedimento já apareceu antes em OUTRA UC do mesmo dia
-// (padrão recorrente). Compara sempre o código ATUAL da UC (nunca o código
-// antigo dela mesma) contra `primeiraUcPorCodigo`.
-export function corDaUc(item: PontoJornada, primeiraUcPorCodigo: Map<string, string>): 'verde' | 'cinza' | 'laranja' | 'vermelho' {
+// âmbar = impedimento (qualquer um, sem repetição relevante), vermelho =
+// regime sucessivo — essa MESMA UC recebeu o MESMO código de impedimento
+// por mais de 1 mês consecutivo (ver RegimeSucessivo/carregarRegimeSucessivo).
+// Antes "vermelho" comparava o código contra OUTRAS UCs no mesmo dia — usuário
+// pediu pra virar sobre a própria UC ao longo do tempo, que é exatamente o
+// que já existia no card expandido (ciclosConsecutivos), só não decidia a
+// cor do ponto ainda.
+export function corDaUc(item: PontoJornada, regimeSucessivoPorUc: Map<string, RegimeSucessivo>): 'verde' | 'cinza' | 'laranja' | 'vermelho' {
   if (!item.codigo) return 'cinza';
   if (!ehCodigoDeImpedimento(item.codigo)) return 'verde';
-  const primeiraUc = primeiraUcPorCodigo.get(item.codigo);
-  return primeiraUc && primeiraUc !== item.uc ? 'vermelho' : 'laranja';
+  const regime = regimeSucessivoPorUc.get(item.uc);
+  return regime && regime.ciclosConsecutivos > 1 ? 'vermelho' : 'laranja';
 }
 
 // Formatação compartilhada dos campos de deslocamento — usada tanto na
@@ -658,7 +648,12 @@ export class ColaboradoresService {
       .subscribe({
         next: resposta => {
           const mapa = new Map(this.regimeSucessivoPorUc());
-          mapa.set(uc, { uc: resposta.uc, codigoAtual: resposta.codigoAtual, ciclosConsecutivos: resposta.ciclosConsecutivos });
+          mapa.set(uc, {
+            uc: resposta.uc,
+            codigoAtual: resposta.codigoAtual,
+            ciclosConsecutivos: resposta.ciclosConsecutivos,
+            mesesConsecutivos: resposta.mesesConsecutivos,
+          });
           this.regimeSucessivoPorUc.set(mapa);
         },
         error: () => {},
@@ -711,6 +706,16 @@ export class ColaboradoresService {
           const mapa = new Map(this.jornadaPorColaborador());
           mapa.set(nome, resposta);
           this.jornadaPorColaborador.set(mapa);
+          // Pré-carrega regime sucessivo de toda UC com código de
+          // impedimento no dia — precisa estar disponível ANTES de
+          // expandir, já que agora decide a cor do ponto (vermelho =
+          // repetiu o mesmo código por mais de 1 mês), não só o texto do
+          // card expandido. carregarRegimeSucessivo já cacheia por UC, não
+          // refaz a busca se o dia for recarregado (poll de 60s) com a
+          // mesma UC já vista.
+          for (const ponto of resposta.pontos ?? []) {
+            if (ehCodigoDeImpedimento(ponto.codigo)) this.carregarRegimeSucessivo(ponto.uc);
+          }
         },
         error: () => {},
       });

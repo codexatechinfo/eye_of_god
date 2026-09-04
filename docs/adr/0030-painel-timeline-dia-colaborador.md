@@ -113,3 +113,65 @@ pra confirmar visualmente nesta sessão.
 Verificação visual completa (login, badge/ícone de pausa no mapa, cor das transições, painel
 abrindo ao clicar) **pendente** — sem credencial de teste disponível nesta sessão; fica pro usuário
 confirmar do lado dele.
+
+## Adendo 1 (2026-09-04) — clique no nome não abria o painel; vermelho vira regime sucessivo; linha centraliza o mapa
+
+Usuário testou a versão da ADR principal e reportou 3 ajustes, com print do mapa (linhas fúcsia/
+laranja atravessando uma região enorme, do Foz do Iguaçu urbano até um ponto isolado perto do
+aeroporto) e do card colapsado com um ponto vermelho.
+
+### Bug: clicar no nome do colaborador na lista não abria o painel
+
+`ColaboradorDetalhe.aoClicarFora` ([colaborador-detalhe.ts](../../../FRONTEND/src/app/pages/home/components/colaborador-detalhe/colaborador-detalhe.ts))
+fecha o painel em qualquer clique fora dele, exceto dentro de `app-mapa-bases` — mas a lista lateral
+(`app-lista-colaboradores`) não estava na exceção. Clicar no nome do colaborador (fora do mapa)
+disparava `selecionarColaborador` (abre) E o `document:click` do painel (fecha) no MESMO evento —
+abria e fechava no mesmo clique, parecendo "não fazer nada". Corrigido: `app-lista-colaboradores`
+entrou na mesma exceção que `app-mapa-bases` já tinha.
+
+### Vermelho vira "regime sucessivo" (>1 mês), não mais "código repetido em outra UC no mesmo dia"
+
+`corDaUc` comparava o código de impedimento contra OUTRAS UCs no mesmo dia pra decidir vermelho —
+usuário quer que vermelho signifique especificamente "essa UC recebeu o MESMO código por mais de 1
+mês consecutivo" (conceito que já existia, `RegimeSucessivo`/`ciclosConsecutivos`, mas só aparecia
+como texto no card expandido, nunca decidia a cor do ponto). `corDaUc` reescrita pra usar
+`regimeSucessivoPorUc` em vez de `mapaPrimeiraUcPorCodigo` (removida — ficou sem uso). Como a cor
+precisa estar certa ANTES de expandir (não é mais sob demanda), `carregarJornada`
+(`colaboradores.service.ts`) passou a pré-carregar regime sucessivo de toda UC com código de
+impedimento assim que a jornada do dia chega (`carregarRegimeSucessivo` já cacheia por UC, sem
+refazer a busca em polls seguintes). Backend (`obterRegimeSucessivo`,
+[monitoramentoService.js](../../../BACKEND/src/services/monitoramentoService.js)) passou a devolver
+também `mesesConsecutivos: string[]` (a lista de meses, não só a contagem) — o loop que já contava
+`ciclos` já tinha o mês de cada linha em mãos, só não guardava. Card expandido agora lista os meses.
+
+### Linhas de transição centralizam o mapa ao clicar
+
+O print mostrou o problema real: o `fitBounds` automático (primeira vez que abre um colaborador)
+enquadra TODOS os pontos do dia — se um ponto isolado fica longe dos demais (ex.: perto do
+aeroporto, no anexo), o mapa fica tão distante que não dá pra ver detalhe nenhum da região onde a
+maioria dos pontos está. Cada segmento de `segmentosRota` ganhou um `click` que dá `fitBounds` só
+nos 2 pontos daquele segmento (`padding: [60,60]`, `maxZoom: ZOOM_FOCO`) — clicar na linha da
+transição leva direto pra região onde ela aconteceu.
+
+### Em aberto — pedido de indicar troca de colaborador/devolução a Pendente do livro
+
+Usuário perguntou se a timeline indica quando um livro que aparece no dia do colaborador passou
+pra OUTRO colaborador, ou voltou pra "Pendente". Hoje **não indica**: `obterJornadaColaborador`
+filtra só `nome_do_usuario = <este colaborador>` em `base_dados_leitura` — não tem visibilidade do
+que acontece com o livro depois (outro colaborador, ou reversão de status em
+`contr_execucao_leitura`). O antigo `mudancasPorUc` (removido nesta mesma ADR) comparava
+colaborador/situação entre UCs de UM livro só (fonte: `buscarEventosLeitura` por livro, sem filtro
+de colaborador) — não é a mesma coisa que "esse livro específico mudou de dono depois". Precisa de
+query nova (cruzando os livros do dia contra o estado ATUAL deles no roster, não só o que este
+colaborador leu) — não implementado ainda, aguardando confirmação do usuário sobre o desenho exato.
+
+## Verificação (Adendo 1)
+
+`node --check` no backend; `npm test` (12/12); `ng build` sem erro. `obterRegimeSucessivo` testado
+ao vivo contra UCs reais com impedimento (`mesesConsecutivos` populado corretamente, ex.:
+`ciclosConsecutivos: 1` → `["07/2026"]`) — não achei nenhuma UC real nesta base com
+`ciclosConsecutivos > 1` pra confirmar visualmente o caso vermelho (pode ser raro nesta operação:
+código repetindo no mesmo mês seguinte). Lógica de contagem/lista de meses validada à parte com
+dado sintético (3 meses seguidos com o mesmo código → `ciclosConsecutivos: 3`, lista de meses na
+ordem certa, parada correta ao bater um código/mês diferente). Verificação visual (clique no nome,
+cor vermelha, clique na linha) segue pendente por falta de credencial de teste.

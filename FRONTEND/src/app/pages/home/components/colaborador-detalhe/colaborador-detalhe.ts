@@ -6,7 +6,6 @@ import {
   ehCodigoDeImpedimento,
   formatarDistancia,
   formatarDuracao,
-  mapaPrimeiraUcPorCodigo,
   PontoJornada,
 } from '../../../../services/colaboradores.service';
 
@@ -33,22 +32,20 @@ export class ColaboradorDetalhe {
     });
   }
 
-  // O clique que ABRE o painel (clicar no colaborador, na lista ou no ícone
-  // do mapa) já para a propagação ou vem de fora do painel, então nunca
-  // chega aqui no mesmo evento — sem isso, abrir um colaborador diferente
-  // com o painel já aberto fecharia ele de novo no mesmo clique.
-  //
-  // Cliques DENTRO do mapa (app-mapa-bases) também não fecham o painel:
-  // mesmo cuidado que existia no antigo painel de livro (ver histórico) —
-  // um clique no marcador do colaborador que ABRE o painel bolha até
-  // `document` no mesmo evento, e como o alvo não está dentro do elemento
-  // do painel, fechava de volta imediatamente.
+  // Cliques DENTRO do mapa (app-mapa-bases) ou da lista lateral
+  // (app-lista-colaboradores) não fecham o painel — um clique no marcador
+  // do colaborador ou no nome dele na lista, que ABRE o painel (ou troca
+  // pra outro colaborador), bolha até `document` no mesmo evento, e como o
+  // alvo não está dentro do elemento do painel, fechava de volta
+  // imediatamente (bug real: clicar no nome na lista "não fazia nada" —
+  // abria e fechava no mesmo clique).
   @HostListener('document:click', ['$event'])
   aoClicarFora(evento: MouseEvent): void {
     if (!this.colaboradoresService.colaboradorSelecionado()) return;
     const alvo = evento.target as Node;
     if (this.elementRef.nativeElement.contains(alvo)) return;
     if (document.querySelector('app-mapa-bases')?.contains(alvo)) return;
+    if (document.querySelector('app-lista-colaboradores')?.contains(alvo)) return;
     this.fechar();
   }
 
@@ -80,11 +77,9 @@ export class ColaboradorDetalhe {
   });
 
   // Mesma regra de cor usada nos pontos do mapa (mapa-bases.ts) — ver
-  // mapaPrimeiraUcPorCodigo/corDaUc em colaboradores.service.ts.
-  private primeiraUcPorCodigo = computed(() => mapaPrimeiraUcPorCodigo(this.pontosOrdenados()));
-
+  // corDaUc em colaboradores.service.ts.
   corDoPonto(item: PontoJornada): 'verde' | 'cinza' | 'laranja' | 'vermelho' {
-    return corDaUc(item, this.primeiraUcPorCodigo());
+    return corDaUc(item, this.colaboradoresService.regimeSucessivoPorUc());
   }
 
   distanciaFormatada(metros: number | null): string {

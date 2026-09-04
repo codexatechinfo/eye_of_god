@@ -1403,20 +1403,22 @@ async function obterRegimeSucessivo(db, uc) {
     .map(linha => ({ mes: linha.mes, codigo: extrairCodigoDeMensagem(linha.mensagem) }))
     .filter(linha => linha.codigo);
 
-  if (!linhasComCodigo.length) return { uc, codigoAtual: null, ciclosConsecutivos: 0 };
+  if (!linhasComCodigo.length) return { uc, codigoAtual: null, ciclosConsecutivos: 0, mesesConsecutivos: [] };
 
   const codigoAtual = linhasComCodigo[0].codigo;
   let ciclos = 0;
   let mesEsperado = null;
+  const meses = [];
 
   for (const linha of linhasComCodigo) {
     if (linha.codigo !== codigoAtual) break;
     if (mesEsperado && linha.mes.getTime() !== mesEsperado.getTime()) break;
     ciclos++;
+    meses.push(`${String(linha.mes.getMonth() + 1).padStart(2, '0')}/${linha.mes.getFullYear()}`);
     mesEsperado = new Date(linha.mes.getFullYear(), linha.mes.getMonth() - 1, 1);
   }
 
-  return { uc, codigoAtual, ciclosConsecutivos: ciclos };
+  return { uc, codigoAtual, ciclosConsecutivos: ciclos, mesesConsecutivos: meses };
 }
 
 // `ateData` opcional ("DD/MM/YYYY") — repassado pra buscarEventosLeitura,

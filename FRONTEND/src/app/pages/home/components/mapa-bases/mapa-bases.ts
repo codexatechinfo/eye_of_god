@@ -4,7 +4,6 @@ import {
   ColaboradoresService,
   corDaUc,
   ehCodigoDeImpedimento,
-  mapaPrimeiraUcPorCodigo,
   MunicipioLimite,
   PontoJornada,
 } from '../../../../services/colaboradores.service';
@@ -638,13 +637,21 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     for (let i = 1; i < validos.length; i++) {
       const anterior = validos[i - 1];
       const atual = validos[i];
-      const linha = L.polyline(
-        [
-          [Number(anterior.latitude), Number(anterior.longitude)],
-          [Number(atual.latitude), Number(atual.longitude)],
-        ],
-        { color: corDoSegmento(atual), weight: 3, opacity: 0.8 },
-      ).addTo(this.grupoSequencia);
+      const pontosSegmento: L.LatLngTuple[] = [
+        [Number(anterior.latitude), Number(anterior.longitude)],
+        [Number(atual.latitude), Number(atual.longitude)],
+      ];
+      const linha = L.polyline(pontosSegmento, { color: corDoSegmento(atual), weight: 3, opacity: 0.8 }).addTo(
+        this.grupoSequencia,
+      );
+      // Clicar na linha centraliza o mapa na região onde a transição
+      // aconteceu — os dois pontos do segmento podem estar bem distantes um
+      // do outro (mudança de livro/pausa longa costuma ser exatamente
+      // isso), então usa fitBounds nos dois em vez de flyTo num ponto só.
+      linha.on('click', () => {
+        if (!this.mapa) return;
+        this.mapa.fitBounds(L.latLngBounds(pontosSegmento), { padding: [60, 60], maxZoom: ZOOM_FOCO });
+      });
       this.segmentosRota.push(linha);
     }
 
@@ -672,7 +679,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
 
     // Pontos: atualiza em cima da instância existente por UC (posição/cor/
     // ícone), cria só as novas, remove as que já não aparecem mais.
-    const primeiraUcPorCodigo = mapaPrimeiraUcPorCodigo(pontos);
+    const regimeSucessivoPorUc = this.colaboradoresService.regimeSucessivoPorUc();
     const vistos = new Set<string>();
 
     for (const item of validos) {
@@ -684,7 +691,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       if (existente) {
         existente.setLatLng(latLng);
         if (existente instanceof L.CircleMarker && !ehPausa) {
-          existente.setStyle({ fillColor: CORES_PONTO[corDaUc(item, primeiraUcPorCodigo)] });
+          existente.setStyle({ fillColor: CORES_PONTO[corDaUc(item, regimeSucessivoPorUc)] });
           existente.setTooltipContent(tooltipDoPonto(item));
         } else if (!(existente instanceof L.CircleMarker) && ehPausa) {
           existente.setTooltipContent(tooltipDoPonto(item));
@@ -703,7 +710,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
               radius: 5,
               color: '#fff',
               weight: 1,
-              fillColor: CORES_PONTO[corDaUc(item, primeiraUcPorCodigo)],
+              fillColor: CORES_PONTO[corDaUc(item, regimeSucessivoPorUc)],
               fillOpacity: 0.95,
             });
         ponto.addTo(this.grupoPontos).bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });

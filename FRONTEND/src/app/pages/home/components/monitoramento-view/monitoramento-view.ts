@@ -2,7 +2,7 @@ import { Component, Input, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DetalheLinha, EscopoMonitoramento, MonitoramentoService, StatusMonitoramento } from '../../../../services/monitoramento.service';
-import { ColaboradoresService, LIMITE_PARADO_MINUTOS } from '../../../../services/colaboradores.service';
+import { ColaboradoresService, formatarTempoParado, LIMITE_PARADO_MINUTOS } from '../../../../services/colaboradores.service';
 
 type CorLinha = 'verde' | 'amarelo' | 'vermelho';
 type ColunaOrdenavel =
@@ -131,10 +131,7 @@ export class MonitoramentoView implements OnInit {
   }
 
   formatarTempoParado(minutos: number): string {
-    if (minutos >= 24 * 60) return `${Math.floor(minutos / (24 * 60))}d`;
-    const h = Math.floor(minutos / 60);
-    const m = Math.round(minutos % 60);
-    return h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`;
+    return formatarTempoParado(minutos);
   }
 
   // atividade.totalRealizadas/totalPendentes soma TODOS os livros do

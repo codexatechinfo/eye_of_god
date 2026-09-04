@@ -6,6 +6,7 @@ import {
   ehCodigoDeImpedimento,
   formatarDistancia,
   formatarDuracao,
+  formatarTempoParado,
   PontoJornada,
 } from '../../../../services/colaboradores.service';
 
@@ -88,6 +89,12 @@ export class ColaboradorDetalhe {
 
   duracaoFormatada(segundos: number | null): string {
     return formatarDuracao(segundos);
+  }
+
+  // Card "Sem sincronizar há" mostra há QUANTO TEMPO o colaborador não
+  // sincroniza (pedido explícito do usuário), não mais a hora do relógio.
+  tempoSemSincronizar(minutos: number | null | undefined): string {
+    return minutos == null ? '--' : formatarTempoParado(minutos);
   }
 
   ehImpedimento(codigo: string | null): boolean {

@@ -20,6 +20,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   roster (`contr_execucao_leitura`), não só o que este colaborador leu. Ver Adendo 1 da [ADR
   0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Cards "Último sincronismo" (lista de colaboradores e painel do dia) mostravam a hora do último
+  sincronismo — agora mostram há quanto tempo o colaborador não sincroniza ("Sem sincronizar há
+  23min"), mesmo dado que já decidia o toggle Ativo/Sem sincronismo. Ver Adendo 2 da [ADR
+  0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

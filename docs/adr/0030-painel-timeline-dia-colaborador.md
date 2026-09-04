@@ -186,3 +186,17 @@ código repetindo no mesmo mês seguinte). Lógica de contagem/lista de meses va
 dado sintético (3 meses seguidos com o mesmo código → `ciclosConsecutivos: 3`, lista de meses na
 ordem certa, parada correta ao bater um código/mês diferente). Verificação visual (clique no nome,
 cor vermelha, clique na linha) segue pendente por falta de credencial de teste.
+
+## Adendo 2 (2026-09-04) — cards "Último sincronismo" mostram há quanto tempo, não a hora
+
+Os cards "Último sincronismo" (`lista-colaboradores.html`, colapsado e expandido, e
+`colaborador-detalhe.html`) mostravam a HORA do último sincronismo (`ultimaMudancaHora.slice(0,
+5)`, ex. "08:45"). Usuário pediu pra mostrar HÁ QUANTO TEMPO o colaborador não sincroniza — dado
+que já existia pronto (`AtividadeColaborador.minutosParado`, é o mesmo valor que decide o toggle
+Ativo/Sem sincronismo), só não estava sendo exibido nesses cards.
+
+Nova função compartilhada `formatarTempoParado(minutos)` em `colaboradores.service.ts` — mesma
+fórmula que já existia DUPLICADA em `monitoramento-view.ts` (usada no modal "sem comunicar 30min"),
+agora só uma implementação; `monitoramento-view.ts` passou a chamar a versão compartilhada.
+Rótulos dos cards mudaram de "Último sincronismo" pra "Sem sincronizar há", valor de
+`ultimaMudancaHora` (hora) pra `minutosParado` formatado (ex. "23min", "1h 30min", "2d").

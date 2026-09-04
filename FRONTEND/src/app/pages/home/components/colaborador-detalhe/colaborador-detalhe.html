@@ -99,8 +99,8 @@
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Último sincronismo</div>
-          <div class="text-xs font-bold text-blue-700 tabular-nums truncate">{{ colaboradoresService.atividadeDe(nome)?.ultimaMudancaHora || '--' }}</div>
+          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Sem sincronizar há</div>
+          <div class="text-xs font-bold text-blue-700 tabular-nums truncate">{{ tempoSemSincronizar(colaboradoresService.atividadeDe(nome)?.minutosParado) }}</div>
         </div>
       </div>
 

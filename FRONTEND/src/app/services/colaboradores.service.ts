@@ -402,6 +402,18 @@ export function formatarDuracao(segundos: number | null): string {
   return minutosResto > 0 ? `${horas}h ${minutosResto}m` : `${horas}h`;
 }
 
+// Há quanto tempo o colaborador não sincroniza — mesma fórmula que já
+// existia (duplicada) em monitoramento-view.ts#formatarTempoParado, agora
+// compartilhada com os cards "Último sincronismo" (lista-colaboradores,
+// colaborador-detalhe), que mostravam a HORA do último sincronismo em vez
+// de HÁ QUANTO TEMPO ele não sincroniza — pedido explícito do usuário.
+export function formatarTempoParado(minutos: number): string {
+  if (minutos >= 24 * 60) return `${Math.floor(minutos / (24 * 60))}d`;
+  const h = Math.floor(minutos / 60);
+  const m = Math.round(minutos % 60);
+  return h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`;
+}
+
 @Injectable({
   providedIn: 'root',
 })

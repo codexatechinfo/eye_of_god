@@ -7,6 +7,7 @@ import {
   ColaboradoresService,
   formatarDistancia,
   formatarDuracao,
+  formatarTempoParado,
   normalizarRegional,
   OPCOES_CATEGORIA,
   percentualExecucao,
@@ -56,6 +57,14 @@ export class ListaColaboradores {
 
   duracaoFormatada(segundos: number | null | undefined): string {
     return formatarDuracao(segundos ?? null);
+  }
+
+  // Cards "Último sincronismo" mostram há QUANTO TEMPO o colaborador não
+  // sincroniza (pedido explícito do usuário), não mais a hora do relógio —
+  // mesma fórmula já usada no toggle Parado/Ativo/Sem sincronismo
+  // (LIMITE_PARADO_MINUTOS) e no modal "sem comunicar" de monitoramento-view.
+  tempoSemSincronizar(minutos: number | null | undefined): string {
+    return minutos == null ? '--' : formatarTempoParado(minutos);
   }
 
   toggleCategoria(categoria: CategoriaAtividade): void {

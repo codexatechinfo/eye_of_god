@@ -112,13 +112,14 @@
             <path d="M12 17h.01" />
           </svg>
         </span>
-        <!-- Último sincronismo sempre visível abaixo do nome (não só no card
-             expandido) — mesmo campo já usado lá (a.ultimaMudancaHora). -->
+        <!-- Sempre visível abaixo do nome (não só no card expandido) — há
+             quanto tempo o colaborador não sincroniza, não a hora do
+             relógio (pedido explícito do usuário). -->
         <span
           *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as atividadeSync"
           class="block text-[9.5px] text-slate-400 tabular-nums mt-0.5"
         >
-          Últ. sincronismo: {{ atividadeSync.ultimaMudancaHora ? atividadeSync.ultimaMudancaHora.slice(0, 5) : '--' }}
+          Sem sincronizar há {{ tempoSemSincronizar(atividadeSync.minutosParado) }}
         </span>
         <!-- Barra de % de execução do dia — mesma métrica que agora ordena
              a lista (mais críticos = menor % primeiro). Só aparece quando
@@ -214,10 +215,10 @@
             </div>
             <div class="min-w-0 leading-tight">
               <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">
-                Último sincronismo
+                Sem sincronizar há
               </div>
               <div class="text-xs font-bold text-blue-700 tabular-nums">
-                {{ a.ultimaMudancaHora ? a.ultimaMudancaHora.slice(0, 5) : '--' }}
+                {{ tempoSemSincronizar(a.minutosParado) }}
               </div>
             </div>
           </div>

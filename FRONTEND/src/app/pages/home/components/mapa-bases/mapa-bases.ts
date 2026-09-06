@@ -804,6 +804,13 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     for (let i = 1; i < validos.length; i++) {
       const anterior = validos[i - 1];
       const atual = validos[i];
+      // Sem código = ainda não realizado (ver corDaUc) — não desenha linha
+      // de deslocamento envolvendo um ponto pendente. A ordem deles vem da
+      // sequência PLANEJADA da rota, não de quando aconteceram (não
+      // aconteceram ainda), então uma linha ali sugeriria um trajeto real
+      // que não existe (o backend já não calcula intervalo/velocidade nesse
+      // caso — ver mudou_livro/segmento em obterJornadaColaborador).
+      if (!anterior.codigo || !atual.codigo) continue;
       const pontosSegmento: L.LatLngTuple[] = [
         [Number(anterior.latitude), Number(anterior.longitude)],
         [Number(atual.latitude), Number(atual.longitude)],
@@ -865,11 +872,16 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     // ícone), cria só as novas, remove as que já não aparecem mais.
     const regimeSucessivoPorUc = this.colaboradoresService.regimeSucessivoPorUc();
     const vistos = new Set<string>();
-    // Último ponto CRONOLOGICAMENTE (validos preserva a ordem de `pontos`,
-    // que já vem ASC do backend) ganha o ícone de "localização real" —
-    // pedido explícito do usuário, primeiro passo pros ícones do mapa
-    // passarem a refletir onde o colaborador está agora, não só o histórico.
-    const ucUltimoPonto = validos.length ? validos[validos.length - 1].uc : null;
+    // Último ponto REALIZADO cronologicamente (validos preserva a ordem de
+    // `pontos`, que já vem ASC do backend) ganha o ícone de "localização
+    // real" — pedido explícito do usuário, primeiro passo pros ícones do
+    // mapa passarem a refletir onde o colaborador está agora, não só o
+    // histórico. Não pode ser simplesmente o último item do array: `pontos`
+    // agora termina com as UCs AINDA NÃO realizadas (ver
+    // obterJornadaColaborador), que viriam depois na lista mas não são "onde
+    // ele está" — sem código = pendente (ver corDaUc), busca de trás pra
+    // frente até achar o último com código.
+    const ucUltimoPonto = [...validos].reverse().find(item => item.codigo)?.uc ?? null;
 
     for (const item of validos) {
       vistos.add(item.uc);

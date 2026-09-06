@@ -370,7 +370,9 @@ export function ehCodigoDeImpedimento(codigo: string | null): boolean {
   return !!codigo && codigo !== '000' && codigo !== '099' && !CODIGOS_ADMINISTRATIVOS.has(codigo);
 }
 
-// Cor de uma UC: verde = realizada (código normal), cinza = ainda pendente,
+// Cor de uma UC: verde = realizada (código normal), cinza = ainda pendente
+// (nome da chave é histórico — a cor de verdade em CORES_PONTO/mapa-bases.ts
+// e no ponto da timeline é AZUL, não cinza; pedido explícito do usuário),
 // âmbar = impedimento (qualquer um, sem repetição relevante), vermelho =
 // regime sucessivo — essa MESMA UC recebeu o MESMO código de impedimento
 // por mais de 1 mês consecutivo (ver RegimeSucessivo/carregarRegimeSucessivo).

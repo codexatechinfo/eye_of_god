@@ -410,3 +410,79 @@ gerava a confusão, não a fonte dela.
 
 `tsc --noEmit` sem erro. Único ponto do código com essa ambiguidade (conferido por busca no
 FRONTEND inteiro) — não sobrou nenhum outro lugar escrevendo minuto como "m".
+
+## Adendo 12 (2026-09-06) — barras laterais mais estreitas, cards "Leituras/min"/"Improdutivo" ativados
+
+Dois pedidos pequenos e independentes:
+
+- **Barras laterais mais estreitas**: usuário pediu mais espaço pro mapa. Lista de colaboradores
+  (`home.html`, `w-96` → `w-80`) e painel de detalhe do colaborador (`colaborador-detalhe.html`,
+  `max-w-sm` → `max-w-xs`) — 384px → 320px cada, mesma proporção nas duas (ficam alinhadas quando
+  as duas estão abertas ao mesmo tempo).
+- **"Leituras/min" e "Improdutivo"**: ficavam "Em breve" desde a criação do painel — usuário pediu
+  pra ativar.
+  - `Leituras/min` = `totalRealizadas / trabalhadoSegundos * 60` (ambos já calculados em
+    `obterJornadaColaborador` pro card "Km percorrido"/ocupação). O comentário antigo dizia que uma
+    tentativa anterior tinha sido descartada por medir pelo tempo TOTAL visto (incluindo pausas),
+    distorcendo o ritmo — `trabalhadoSegundos` já exclui pausas, resolve a distorção original sem
+    precisar de dado novo.
+  - `Improdutivo` = `ociosoSegundos` (soma dos intervalos que já viram "pausa" na timeline,
+    também já calculado). Não é a métrica originalmente pensada pro card (execução vs. deslocamento
+    separados, que segue sem dado pra calcular — comentário antigo mantido como contexto), mas é o
+    "tempo não produtivo" que já existe no sistema.
+  - Os dois ganham o mesmo tratamento visual condicional do card "Km percorrido" (cinza tracejado
+    "Em breve" enquanto não há jornada carregada / sem tempo trabalhado ainda; colorido quando tem
+    dado — azul pra Leituras/min, laranja pra Improdutivo, pra não repetir a cor de nenhum outro
+    card da grade).
+
+### Verificação
+
+`tsc --noEmit` e `ng build --configuration production` sem erro. Não verificado dentro do app de
+verdade nesta sessão (sem credencial de teste) — usuário vai confirmar do lado dele.
+
+## Adendo 13 (2026-09-06) — pontos AINDA NÃO realizados aparecem em azul, no mapa e na timeline
+
+Até aqui, `obterJornadaColaborador` só devolvia pontos REALIZADOS (de `base_dados_leitura`) — o
+usuário reparou que faltava enxergar o que ainda falta fazer no livro, tanto no mapa quanto na
+timeline lateral, "em azul".
+
+A cor já existia e já era azul: `corDaUc()` (`colaboradores.service.ts`) já retornava `'cinza'`
+sempre que `!item.codigo`, e `CORES_PONTO.cinza` (`mapa-bases.ts`) já era `#3b82f6` (azul) — só que
+nenhum ponto sem código jamais chegava na lista, então esse branch nunca rodava de verdade (todo
+ponto realizado sempre tem código, porque toda linha de `base_dados_leitura` já tem uma mensagem
+tipo "000 - LEITURA NORMAL"). A única peça fora do lugar era a bolinha da timeline lateral
+(`colaborador-detalhe.html`), que usava `bg-slate-300` (cinza de verdade) pra essa mesma categoria —
+corrigida pra `bg-blue-500`, batendo com o mapa.
+
+O que realmente faltava era o DADO: `obterJornadaColaborador` ganha uma segunda consulta, contra o
+roster de UCs do(s) livro(s) que o colaborador tocou hoje (`coordenadas_ucs_mineradas`, mesma fonte
+já usada em `obterEventosPorLivrosAteData`/`monitoramentoService.js`), trazendo toda UC que **nunca**
+foi realizada (nenhum colaborador, nenhum dia — mais simples que `ja_realizado_antes`, que só
+precisa achar a primeira leitura de HOJE). Essas UCs pendentes entram no array `pontos` DEPOIS de
+todas as realizadas (não têm hora real pra ordenar cronologicamente — ordenadas por `sequencia`, a
+ordem planejada da rota, calculada em JS porque `sequencia` é texto livre nem sempre numérico) com
+`codigo`/`mensagem`/`hora_import`/`data_import` todos `null`.
+
+Consequências que precisaram de ajuste fino:
+
+- **Segmento/deslocamento**: `calcularSegmento` só olha coordenada, não horário — sem guarda,
+  calcularia um "intervalo"/"velocidade" usando `hora_import: null` de um ponto pendente, lixo.
+  `intervalo_anterior_segundos`/`distancia_anterior_metros`/`velocidade_m_por_min`/`tipo_intervalo`
+  agora só são calculados quando os DOIS lados do par são realizados; mesma guarda em
+  `mudou_livro`/`mudou_municipio`.
+- **"Último ponto" (Adendo 10)**: usava `validos[validos.length - 1]` — quebraria agora que a lista
+  termina com pendentes. Passa a buscar de trás pra frente o último item COM código.
+  Linhas de segmento no mapa (`mapa-bases.ts`) também passam a pular qualquer par onde um dos lados
+  não tem código — sem isso, uma linha "normal" apareceria ligando o último ponto real ao primeiro
+  pendente, sugerindo um deslocamento que não aconteceu (a ordem dos pendentes é a rota PLANEJADA,
+  não um trajeto real).
+- Casco convexo ("Setor planejado") CONTINUA incluindo os pendentes de propósito — eles enriquecem a
+  área de cobertura esperada do livro, não atrapalham.
+
+### Verificação
+
+Confirmado ao vivo contra o banco real (mesmo colaborador do ADR 0031, livro 04002): 94 pontos
+realizados + 36 pendentes = 130 pontos no total, batendo exatamente com a contagem de UCs do roster
+menos as já realizadas (checado por consulta direta). Campos de segmento/mudança nulos/falsos
+exatamente na fronteira entre o último realizado e o primeiro pendente. `npm test` (12/12) e
+`tsc --noEmit`/`ng build` sem erro.

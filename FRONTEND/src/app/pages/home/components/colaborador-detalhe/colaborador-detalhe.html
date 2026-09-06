@@ -21,17 +21,29 @@
 
   <div class="flex-1 overflow-y-auto px-4 py-3">
     <div class="grid grid-cols-2 gap-1.5 mb-4">
-      <!-- Leituras/min — em revisão: o cálculo atual media pelo tempo total
-           visto, não reflete corretamente o ritmo de leitura -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
+      <!-- Leituras/min — média sobre TEMPO TRABALHADO (exclui pausas), não
+           mais o tempo total visto (distorcia o ritmo real). -->
+      <div
+        class="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
+        [ngClass]="leiturasPorMinuto(nome) !== null ? 'border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50' : 'border border-dashed border-slate-200 bg-slate-50/60'"
+      >
+        <div
+          class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+          [ngClass]="leiturasPorMinuto(nome) !== null ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-300'"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-slate-300 uppercase tracking-wide truncate">Leituras/min</div>
-          <div class="text-xs font-bold text-slate-300 truncate">Em breve</div>
+          <div
+            class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
+            [ngClass]="leiturasPorMinuto(nome) !== null ? 'text-blue-400' : 'text-slate-300'"
+          >Leituras/min</div>
+          <div
+            class="text-xs font-bold truncate"
+            [ngClass]="leiturasPorMinuto(nome) !== null ? 'text-blue-700' : 'text-slate-300'"
+          >{{ leiturasPorMinuto(nome) !== null ? (leiturasPorMinuto(nome) | number: '1.1-1') : 'Em breve' }}</div>
         </div>
       </div>
 
@@ -48,18 +60,33 @@
         </div>
       </div>
 
-      <!-- Improdutivo — em revisão: adiado, sem dado de tempo médio por UC
-           pra separar execução de deslocamento -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-300 flex items-center justify-center shrink-0">
+      <!-- Improdutivo — soma dos intervalos que já viram "pausa" na timeline
+           (tempo parado além do normal entre leituras); não é a métrica de
+           execução-vs-deslocamento originalmente pensada (segue sem dado
+           pra calcular essa), mas é o que já existe de "tempo não
+           produtivo". -->
+      <div
+        class="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
+        [ngClass]="improdutivoSegundos(nome) !== null ? 'border border-orange-100 bg-gradient-to-br from-orange-100/20 to-orange-50' : 'border border-dashed border-slate-200 bg-slate-50/60'"
+      >
+        <div
+          class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+          [ngClass]="improdutivoSegundos(nome) !== null ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-300'"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9" />
             <polyline points="12 7 12 12 15 14" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-slate-300 uppercase tracking-wide truncate">Improdutivo</div>
-          <div class="text-xs font-bold text-slate-300 truncate">Em breve</div>
+          <div
+            class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
+            [ngClass]="improdutivoSegundos(nome) !== null ? 'text-orange-400' : 'text-slate-300'"
+          >Improdutivo</div>
+          <div
+            class="text-xs font-bold truncate"
+            [ngClass]="improdutivoSegundos(nome) !== null ? 'text-orange-700' : 'text-slate-300'"
+          >{{ improdutivoSegundos(nome) !== null ? duracaoFormatada(improdutivoSegundos(nome)) : 'Em breve' }}</div>
         </div>
       </div>
 
@@ -232,7 +259,7 @@
               class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
               [ngClass]="{
                 'bg-emerald-400': corDoPonto(item) === 'verde',
-                'bg-slate-300': corDoPonto(item) === 'cinza',
+                'bg-blue-500': corDoPonto(item) === 'cinza',
                 'bg-amber-500': corDoPonto(item) === 'laranja',
                 'bg-red-500': corDoPonto(item) === 'vermelho'
               }"

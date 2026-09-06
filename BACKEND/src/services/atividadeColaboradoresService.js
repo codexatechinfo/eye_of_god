@@ -964,6 +964,63 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
 
   if (!rows.length) return { colaborador, data: dataBr, semDado: true };
 
+  // UCs do(s) mesmo(s) livro(s) que este colaborador tocou hoje que AINDA
+  // NÃO foram realizadas (nenhum colaborador, nenhum dia) — usuário pediu
+  // pra ver no mapa/timeline não só o que já foi feito, mas o que falta,
+  // pra ter noção da rota completa (mesmo raciocínio de "setor planejado" no
+  // mapa, agora ponto a ponto). Roster vem de coordenadas_ucs_mineradas
+  // (mesma fonte já usada em obterEventosPorLivrosAteData/monitoramentoService.js
+  // pra saber quais UCs existem num livro) — "realizada" aqui é
+  // deliberadamente mais simples que `ja_realizado_antes` acima (que só
+  // precisa achar a PRIMEIRA leitura de HOJE): qualquer linha de
+  // base_dados_leitura pra aquele (livro, uc), de qualquer colaborador, em
+  // qualquer dia, já tira a UC da lista de pendentes.
+  const livroStringPorInt = new Map(rows.map(r => [Number(r.livro), r.livro]));
+  const livrosInt = [...livroStringPorInt.keys()].filter(Number.isFinite);
+  const { rows: pendentesRows } = await db.query(
+    `
+    WITH realizadas AS (
+      SELECT DISTINCT b.livro::int AS livro_int, b.unidade_consumidora AS uc
+      FROM base_dados_leitura b
+      WHERE b.livro::int = ANY($1::int[])
+    )
+    SELECT m.unidade_consumidora AS uc, m.livro::int AS livro_int, m.etapa,
+      m.latitude, m.longitude, m.nom_municipio, m.localidade, m.endereco,
+      m.classe_principal, m.sequencia
+    FROM coordenadas_ucs_mineradas m
+    WHERE m.livro::int = ANY($1::int[])
+      AND NOT EXISTS (SELECT 1 FROM realizadas r WHERE r.livro_int = m.livro::int AND r.uc = m.unidade_consumidora)
+    `,
+    [livrosInt],
+  );
+  // Ordenado em JS (não SQL) — `sequencia` é texto livre, não sempre
+  // numérico; sequência inválida vai pro fim do livro em vez de quebrar a
+  // consulta ou sumir da lista.
+  pendentesRows.sort((a, b) => {
+    if (a.livro_int !== b.livro_int) return a.livro_int - b.livro_int;
+    const seqA = Number.parseInt(a.sequencia, 10);
+    const seqB = Number.parseInt(b.sequencia, 10);
+    return (Number.isFinite(seqA) ? seqA : Infinity) - (Number.isFinite(seqB) ? seqB : Infinity);
+  });
+  const pendentes = pendentesRows.map(p => ({
+    uc: p.uc,
+    livro: livroStringPorInt.get(p.livro_int) ?? String(p.livro_int),
+    etapa: p.etapa,
+    data_import: null,
+    hora_import: null,
+    mensagem: null,
+    equipamento: null,
+    latitude: p.latitude,
+    longitude: p.longitude,
+    nom_municipio: p.nom_municipio,
+    localidade: p.localidade,
+    endereco: p.endereco,
+    classe_principal: p.classe_principal,
+    sequencia: p.sequencia,
+    realizado: false,
+  }));
+  const combinados = [...rows.map(r => ({ ...r, realizado: true })), ...pendentes];
+
   // Estado ATUAL de cada livro que aparece na jornada, no roster
   // (contr_execucao_leitura — o scraper de Acompanhamento reescreve isso a
   // cada ciclo, ~28-58s desde a ADR 0028), independente de quem leu o quê
@@ -996,10 +1053,17 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
   // (entre pontos consecutivos) e livro_reatribuido/livro_pendente (estado
   // atual do livro no roster, vs. quando este colaborador o leu) — usadas
   // pelo painel lateral e pelo mapa pra colorir/marcar a transição (ver
-  // ColaboradorDetalhe/mapa-bases.ts).
-  const pontos = rows.map((row, i) => {
-    const anterior = i > 0 ? rows[i - 1] : null;
-    const segmento = anterior ? calcularSegmento(anterior, row) : null;
+  // ColaboradorDetalhe/mapa-bases.ts). `combinados` (não `rows`) inclui
+  // também as UCs pendentes, sempre DEPOIS das realizadas (ordem
+  // cronológica não existe pra quem ainda não aconteceu) — segmento/
+  // mudou_livro/mudou_municipio só fazem sentido entre dois pontos REAIS
+  // (`realizado`), então ficam `null`/`false` sempre que um dos dois lados é
+  // pendente (não tem hora_import pra calcular intervalo/velocidade de
+  // verdade, e a fronteira "realizado -> pendente" não é uma transição real
+  // de deslocamento).
+  const pontos = combinados.map((row, i) => {
+    const anterior = i > 0 ? combinados[i - 1] : null;
+    const segmento = anterior && anterior.realizado && row.realizado ? calcularSegmento(anterior, row) : null;
     if (segmento) {
       if (segmento.tipo === 'pausa') ociosoSegundos += segmento.intervaloSegundos;
       else trabalhadoSegundos += segmento.intervaloSegundos;
@@ -1029,8 +1093,11 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
       distancia_anterior_metros: segmento?.distanciaMetros ?? null,
       velocidade_m_por_min: segmento?.velocidadeMetrosPorMinuto ?? null,
       tipo_intervalo: segmento?.tipo ?? null,
-      mudou_livro: anterior ? anterior.livro !== row.livro : false,
-      mudou_municipio: anterior && anterior.nom_municipio && row.nom_municipio ? anterior.nom_municipio !== row.nom_municipio : false,
+      mudou_livro: anterior && anterior.realizado && row.realizado ? anterior.livro !== row.livro : false,
+      mudou_municipio:
+        anterior && anterior.realizado && row.realizado && anterior.nom_municipio && row.nom_municipio
+          ? anterior.nom_municipio !== row.nom_municipio
+          : false,
       livro_situacao_atual: estadoAtual?.situacao ?? null,
       livro_colaborador_atual: estadoAtual?.colaborador ?? null,
       livro_reatribuido: !!estadoAtual?.colaborador && estadoAtual.colaborador !== colaborador,

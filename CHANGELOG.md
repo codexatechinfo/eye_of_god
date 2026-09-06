@@ -72,6 +72,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 - Barra lateral de colaboradores (`w-96`, 384px) e painel de detalhe do colaborador (`max-w-sm`,
   384px) reduzidos pra `w-80`/`max-w-xs` (320px cada) — mais espaço pro mapa, a pedido do usuário.
 
+- Cards "Leituras/min" e "Improdutivo" (painel de detalhe do colaborador), antes "Em breve", agora
+  mostram dado real (leituras por minuto sobre tempo trabalhado, e tempo em pausa do dia). Ver
+  Adendo 12 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
+- Timeline e mapa do colaborador (aba Trilho) só mostravam UCs já realizadas — agora também mostram,
+  em azul, as UCs do(s) livro(s) do dia que ainda não foram lidas por ninguém, pra dar noção da rota
+  completa. Ver Adendo 13 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

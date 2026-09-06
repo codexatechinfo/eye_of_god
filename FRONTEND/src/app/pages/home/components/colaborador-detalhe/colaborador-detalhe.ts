@@ -92,6 +92,28 @@ export class ColaboradorDetalhe {
     return formatarDuracao(segundos);
   }
 
+  // Card "Leituras/min" ficava "Em breve" — cálculo anterior tinha sido
+  // descartado por medir pelo tempo TOTAL visto (incluindo pausas), o que
+  // distorcia o ritmo real. `trabalhadoSegundos` (já calculado pra "Km
+  // percorrido"/ocupação) exclui pausas — dividir por ele em vez do tempo
+  // total resolve a distorção original. null enquanto não há tempo
+  // trabalhado ainda (evita 0/0 ou Infinity no primeiro ponto do dia).
+  leiturasPorMinuto(nome: string): number | null {
+    const jornada = this.colaboradoresService.jornadaPorColaborador().get(nome);
+    if (!jornada?.trabalhadoSegundos || !jornada.totalRealizadas) return null;
+    return (jornada.totalRealizadas / jornada.trabalhadoSegundos) * 60;
+  }
+
+  // Card "Improdutivo" ficava "Em breve" — a métrica originalmente pensada
+  // (tempo de execução vs. deslocamento, separados) segue sem dado pra
+  // calcular. `ociosoSegundos` (soma dos intervalos que já viram "pausa" na
+  // timeline — ver tipo_intervalo/corDoSegmento) já existe e é exatamente
+  // "tempo parado além do normal entre leituras", que é o que "Improdutivo"
+  // quer dizer na prática.
+  improdutivoSegundos(nome: string): number | null {
+    return this.colaboradoresService.jornadaPorColaborador().get(nome)?.ociosoSegundos ?? null;
+  }
+
   // Card "Sem sincronizar há" mostra há QUANTO TEMPO o colaborador não
   // sincroniza (pedido explícito do usuário), não mais a hora do relógio.
   tempoSemSincronizar(minutos: number | null | undefined): string {

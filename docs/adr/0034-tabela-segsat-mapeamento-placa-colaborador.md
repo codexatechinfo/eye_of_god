@@ -69,3 +69,59 @@ quando o usuário pedir.
 - Cruzamento ao vivo `segsat.placa` × `GET /devices` da SEGSAT (`nm`): 122/122 batem.
 - `BACKEND/test/isolamento_tenant.test.js` ganhou `segsat` na lista de tabelas testadas — suíte
   completa (16 testes) passa.
+
+## Adendo 1 (2026-09-06) — job de coleta de posição (`segsat_posicoes`) e investigação do descasamento de nomes
+
+Usuário pediu pra seguir com o job de coleta (mesmo padrão da Scalefusion, ADR 0033) e, na
+sequência, investigar por que os nomes da planilha não batem 100% com `ativos_inativos`.
+
+### Job de coleta
+
+Nova tabela `segsat_posicoes` (mesma estrutura de `scalefusion`: histórico completo, RLS
+`isolamento_empresa` padrão), alimentada por `segsatFrotaService.js`/`segsatFrotaJob.js` (mesmo
+esqueleto de `scalefusionJob.js`, 5min entre ciclos). Duas diferenças da SEGSAT que exigiram atenção:
+
+- **Login por ciclo, não sessão persistida**: a SEGSAT exige `GET /login` (header `frota-token`)
+  pra obter um `sid`, que expira em 3min sem uso — como o job roda a cada 5min (mais que isso),
+  cada ciclo faz login de novo em vez de tentar guardar/renovar sessão entre ciclos.
+- **`lmsg.t` é epoch em SEGUNDOS**, não milissegundos como o `date_time` da Scalefusion — confirmado
+  ao vivo (em milissegundos a data cairia em 1970). `unidade.lmsg.pos.y`/`.x` são latitude/longitude
+  nessa ordem (confirmado numa investigação anterior desta sessão, coordenadas batendo com o Paraná).
+
+Casamento em duas etapas: placa (`unidade.nm`) → colaborador via `segsat` (a tabela nova do corpo
+principal deste ADR), depois colaborador → cargo via `ativos_inativos`. Só grava se as DUAS
+etapas baterem — mesma política da Scalefusion, confirmada com o usuário nesta rodada (ver
+investigação abaixo).
+
+### Por que só ~55% dos nomes da planilha batem com `ativos_inativos`
+
+Investigação (não só suposição — cruzamento real):
+
+- Dos 53 colaboradores da planilha sem correspondência exata, só **1** parece erro de digitação de
+  verdade: "ANGELO MARCOS SARTO" (planilha) vs "ANGELO MARCOS SARTOR" (cadastro, falta o R). Os
+  outros 52 não têm nenhum candidato parecido nem por busca aproximada (primeiro+último nome).
+- **Nenhum dos 53** (incluindo o do typo) aparece em `contr_execucao_leitura` ou
+  `base_dados_leitura` em NENHUM dia — ou seja, nenhum deles nunca fez uma leitura de medidor
+  neste sistema.
+- Conclusão: não é erro de cadastro, é diferença de ESCOPO. `ativos_inativos` (única tabela de
+  pessoas do banco) é o roster de leiturista/monitor — é pra isso que o sistema existe. A planilha
+  de veículos cobre o centro de custo inteiro ("925001 - COPEL MARINGA CTR 2025"), que inclui gente
+  dirigindo moto em outras funções (inspeção, eletricista, supervisão — mesmo padrão já visto nos
+  prefixos "ADM"/"ELT" da própria SEGSAT). Essas 53 pessoas provavelmente nunca vão aparecer em
+  `ativos_inativos`, porque não são leituristas.
+
+Apresentado ao usuário como decisão (não resolvido sozinho): manter a coleta restrita a
+leiturista/monitor (mesma regra da Scalefusion), ou remover a exigência de bater com
+`ativos_inativos` só pro job da SEGSAT e gravar todo mundo da planilha. **Usuário escolheu manter
+restrito** — o código já implementado nesta rodada já segue essa regra, nenhuma mudança adicional
+necessária.
+
+### Verificação
+
+Coletado ao vivo: 193 veículos retornados pela API nesta consulta (a conta inteira da SEGSAT
+oscila de tamanho ao longo do dia — 424 numa consulta anterior desta sessão, poucas horas antes),
+75 sem placa correspondente em `segsat` (outros centros de custo/contratos na mesma conta SEGSAT),
+53 com placa mapeada mas colaborador fora do cadastro (exatamente os 53 da investigação acima),
+resto gravado com sucesso. `\d+ segsat_posicoes` confirma RLS forçada com a policy padrão.
+`BACKEND/test/isolamento_tenant.test.js` ganhou `segsat_posicoes` — suíte completa (18 testes)
+passa.

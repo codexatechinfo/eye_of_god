@@ -16,7 +16,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 - Nova tabela `segsat` — mapeamento placa↔colaborador (122 veículos), importado da planilha
   fornecida pelo usuário. Resolve o bloqueio da integração de frota SEGSAT (a API só devolve placa,
-  não motorista). Ainda não usado em nenhuma tela — só a tabela e a carga inicial. Ver [ADR
+  não motorista). Ver [ADR 0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
+
+- Coleta contínua de posição/velocidade/ignição dos veículos (motoqueiros) via API SEGSAT — nova
+  tabela `segsat_posicoes` (histórico, mesmo padrão da Scalefusion), job a cada 5min. Só grava
+  quem bate com o cadastro de leiturista/monitor (~55% dos veículos da planilha — o resto é gente
+  de outras funções dirigindo moto pro mesmo contrato, não um erro de cadastro, ver investigação no
+  Adendo 1 da ADR 0034). Ainda não usado em nenhuma tela. Ver Adendo 1 da [ADR
   0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
 
 - Colaborador pedestre no mapa (aba Trilho) agora aparece na posição REAL do aparelho (via

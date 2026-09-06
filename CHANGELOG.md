@@ -53,7 +53,8 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   da [ADR 0029](docs/adr/0029-filtros-colaboradores-afastado-com-atividade.md).
 
 - Ícone do pedestre no mapa (aba Trilho) trocou de arquivo (novo SVG real mandado pelo usuário) e
-  de cor (laranja → vermelho). Ícone da moto não mudou. Ver Adendo 9 da [ADR
+  de cor (laranja → vermelho, `#ef4444` ajustado depois pra `#dc2626` por ainda ler como alaranjado
+  perto de um vermelho puro de referência). Ícone da moto não mudou. Ver Adendo 9 da [ADR
   0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
 ### Corrigido

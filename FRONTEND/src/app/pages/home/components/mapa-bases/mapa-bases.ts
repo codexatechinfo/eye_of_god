@@ -122,9 +122,12 @@ m556 -734 c138 -28 204 -51 345 -120 374 -184 641 -532 732 -953 28 -126 25
 );
 
 // 310286.svg — viewBox e transform idênticos ao arquivo original, só o fill
-// do <g> trocado de #000000 pra vermelho (mesmo tom de CORES_TRECHO.vermelho).
+// do <g> trocado de #000000 pra vermelho. Primeira tentativa (#ef4444,
+// CORES_TRECHO.vermelho) usuário achou "ainda alaranjado" comparando com um
+// pino de referência (círculo vermelho com "+") — trocado pra #dc2626, mais
+// saturado/puro, sem a mistura quente do red-500.
 const ICONE_PEDESTRE = iconeColaborador(
-  `<g transform="translate(0,1280) scale(0.1,-0.1)" fill="#ef4444" stroke="none">
+  `<g transform="translate(0,1280) scale(0.1,-0.1)" fill="#dc2626" stroke="none">
 <path d="M3955 12793 c-151 -19 -271 -55 -407 -125 -389 -198 -628 -589 -629
 -1028 0 -146 14 -238 57 -368 183 -559 756 -893 1334 -776 540 110 930 587
 930 1139 0 371 -171 710 -470 934 -149 111 -334 188 -517 216 -90 14 -225 17

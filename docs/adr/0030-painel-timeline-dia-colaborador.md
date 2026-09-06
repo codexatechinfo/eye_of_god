@@ -338,3 +338,15 @@ o anterior 869×1280): altura mantida em 32px (mesma dos ícones anteriores), la
 Mesmo preview local isolado (HTML com o SVG embutido servido por `python -m http.server`,
 screenshot via browser) confirma o desenho — pedestre carregando prancheta/bolsa — renderizando em
 vermelho. `tsc --noEmit` sem erro. Ícone de moto (`ICONE_MOTO`) não foi tocado nesta rodada.
+
+Antes de reportar como pronto, cheguei a confirmar que o bundle servido em `localhost:4200/main.js`
+já tinha `#ef4444` — o código estava correto e publicado, então a causa não era build desatualizado.
+
+### Correção — `#ef4444` ainda lia como alaranjado; troca pra `#dc2626`
+
+Usuário mandou print comparando o pedestre no mapa real com um pino de referência (círculo vermelho
+com "+") e confirmou visualmente que `#ef4444` (Tailwind red-500, tom mais quente/claro) ainda lia
+como alaranjado ao lado do vermelho puro do pino. Trocado pra `#dc2626` (Tailwind red-600, mais
+saturado, sem a mistura quente do red-500) — mais próximo do vermelho puro pedido, ainda que sem
+conseguir extrair o hex exato do pino de referência a partir do print (comparação visual, não
+amostragem de pixel). Re-verificado no mesmo preview local antes de publicar.

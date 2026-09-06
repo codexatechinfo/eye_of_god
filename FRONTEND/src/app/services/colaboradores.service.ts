@@ -399,10 +399,13 @@ export function formatarDuracao(segundos: number | null): string {
   if (segundos < 60) return `${Math.round(segundos)}s`;
   const minutos = Math.floor(segundos / 60);
   const resto = Math.round(segundos % 60);
-  if (minutos < 60) return resto > 0 ? `${minutos}m ${resto}s` : `${minutos}m`;
+  // "min" (não "m") pra não confundir com metros — aparece lado a lado com
+  // deslocamento em metros na mesma linha (ex.: "+3min 16s desloc 200 m"),
+  // pedido explícito do usuário.
+  if (minutos < 60) return resto > 0 ? `${minutos}min ${resto}s` : `${minutos}min`;
   const horas = Math.floor(minutos / 60);
   const minutosResto = minutos % 60;
-  return minutosResto > 0 ? `${horas}h ${minutosResto}m` : `${horas}h`;
+  return minutosResto > 0 ? `${horas}h ${minutosResto}min` : `${horas}h`;
 }
 
 // Há quanto tempo o colaborador não sincroniza — mesma fórmula que já

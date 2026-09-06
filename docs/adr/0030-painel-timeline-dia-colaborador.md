@@ -395,3 +395,18 @@ budget de bundle e do pacote `leaflet` não ser ESM, nada novo). Ícone de "últ
 no mesmo preview local isolado (screenshot via browser) nas cores verde e vermelha — desenha como
 bandeira reconhecível em ambas. Piscar e descrição do código não deu pra verificar dentro do app de
 verdade nesta sessão (sem credencial de teste) — usuário vai confirmar do lado dele.
+
+## Adendo 11 (2026-09-06) — "m" de minuto virou "min", pra não confundir com metro
+
+`formatarDuracao` (`colaboradores.service.ts`) escrevia minutos como "m" (ex.: "3m 16s") — no
+separador de deslocamento da timeline isso aparece na MESMA linha que a distância em metros (ex.:
+"+3m 16s desloc 200 m"), ambíguo à primeira vista. Trocado "m" por "min" (`${minutos}min ${resto}s`,
+`${horas}h ${minutosResto}min`) — "s" (segundos) e "h" (horas) não têm essa ambiguidade com nenhuma
+unidade usada no app, ficaram como estavam. `formatarTempoParado` (cards "Sem sincronizar há") já
+usava "min", não precisou mudar. `formatarDistancia` (metros/km) também não muda — é a unidade que
+gerava a confusão, não a fonte dela.
+
+### Verificação
+
+`tsc --noEmit` sem erro. Único ponto do código com essa ambiguidade (conferido por busca no
+FRONTEND inteiro) — não sobrou nenhum outro lugar escrevendo minuto como "m".

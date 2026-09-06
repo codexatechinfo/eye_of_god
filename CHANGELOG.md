@@ -80,6 +80,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   do dia (que ficava distante demais quando um ponto isolado ficava longe dos outros). Ver Adendo
   1 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Duração na timeline do colaborador (aba Trilho) escrevia minutos como "m" (ex.: "3m 16s") na
+  mesma linha da distância em metros ("desloc 200 m") — ambíguo. Minutos agora são "min" ("3min
+  16s"). Ver Adendo 11 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 - Filtros de colaborador (aba Trilho): limite de "tempo parado" que decide Ativo/Sem sincronismo
   estava em 20min desde sempre, deveria ser 30min — unificado com o limite já usado (30min) na
   barra de resumo da aba Massivas/Monitoramento de Livros, antes mantidos de propósito separados.

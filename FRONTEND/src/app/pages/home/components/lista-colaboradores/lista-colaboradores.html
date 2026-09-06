@@ -71,6 +71,20 @@
           >
             {{ colaborador.colaborador }}
           </span>
+          <!-- Bateria do aparelho (Scalefusion, ADR 0033) — motoqueiro e
+               pedestre, só aparece quando existe dado coletado pra ele. -->
+          <span
+            *ngIf="colaboradoresService.scalefusionDe(colaborador.colaborador) as posicao"
+            class="inline-flex items-center gap-0.5 text-[9px] font-bold tabular-nums shrink-0"
+            [ngClass]="corBateria(posicao.bateria_percentual)"
+            [title]="'Bateria do aparelho: ' + posicao.bateria_percentual + '%' + (posicao.bateria_carregando ? ' (carregando)' : '')"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="18" height="10" rx="2" />
+              <line x1="22" y1="10" x2="22" y2="14" />
+            </svg>
+            {{ posicao.bateria_percentual }}%
+          </span>
           <!-- Só pra "sem serviço" — indica de cara (sem precisar expandir)
                que a ausência tem justificativa (atestado ou licença de
                ativos_inativos). Roxo + negrito quando é afastamento pelo

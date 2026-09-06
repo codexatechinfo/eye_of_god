@@ -42,6 +42,12 @@ const ZOOM_PADRAO = 7;
 const ZOOM_REGIONAL = 11;
 const ZOOM_FOCO = 17;
 
+// Posição via Scalefusion (ADR 0033) só conta como "tempo real" com menos
+// que isso de idade — sem esse corte, um aparelho que parou de reportar há
+// dias ficaria marcado como tempo real pra sempre (mesma preocupação já
+// registrada na especificação da API sobre "idade da última posição").
+const LIMITE_POSICAO_REAL_MS = 24 * 60 * 60 * 1000;
+
 // Compara ignorando acento/caixa: as opções do filtro vêm sem acento
 // ("CAMPO MOURAO") enquanto as bases do mapa têm acento ("CAMPO MOURÃO").
 function normalizarParaComparacao(texto: string): string {
@@ -733,25 +739,56 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     this.marcadoresColaboradores.clear();
 
     const porNome = new Map(this.colaboradoresService.colaboradores().map(c => [c.colaborador, c]));
+    const localizacaoPorNome = new Map(this.colaboradoresService.localizacoes().map(l => [l.colaborador, l]));
+    const scalefusionPorNome = this.colaboradoresService.scalefusionPorColaborador();
+    // União das duas fontes — um pedestre pode ter posição real (Scalefusion)
+    // sem nunca ter uma UC realizada ainda (contratado recente), e vice-versa
+    // (aparelho sem correspondência no Scalefusion, ver ADR 0033).
+    const nomesVistos = new Set([...localizacaoPorNome.keys(), ...scalefusionPorNome.keys()]);
 
-    for (const loc of this.colaboradoresService.localizacoes()) {
-      const colaborador = porNome.get(loc.colaborador);
+    for (const nome of nomesVistos) {
+      const colaborador = porNome.get(nome);
       if (!colaborador) continue;
-      if (!this.colaboradoresService.atividadeDe(loc.colaborador)) continue;
-
-      const lat = Number(loc.latitude);
-      const lng = Number(loc.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      if (!this.colaboradoresService.atividadeDe(nome)) continue;
 
       const ehMoto = colaborador.cargo === 'LEITURISTA MOTOCICLISTA' || colaborador.cargo === 'MONITOR';
+      // Posição REAL (Scalefusion) só pro pedestre por enquanto — pedido
+      // explícito do usuário; motoqueiro ainda usa a última UC realizada até
+      // a integração de frota (SEGSAT) resolver o mapeamento placa↔colaborador
+      // (ver ADR 0033). "Válida" exige menos de 24h de idade — sem esse
+      // corte, um aparelho parado de reportar há dias ficaria marcado como
+      // "tempo real" pra sempre (mesma preocupação já registrada na
+      // especificação da API).
+      const posicaoReal = !ehMoto ? scalefusionPorNome.get(nome) : undefined;
+      const idadePosicaoReal = posicaoReal?.data_hora_posicao ? Date.now() - new Date(posicaoReal.data_hora_posicao).getTime() : null;
+      const posicaoRealValida =
+        !!posicaoReal?.latitude && !!posicaoReal?.longitude && idadePosicaoReal !== null && idadePosicaoReal < LIMITE_POSICAO_REAL_MS;
+
+      let lat: number;
+      let lng: number;
+      let tooltip: string;
+      if (posicaoRealValida) {
+        lat = Number(posicaoReal!.latitude);
+        lng = Number(posicaoReal!.longitude);
+        const hora = new Date(posicaoReal!.data_hora_posicao!).toLocaleTimeString('pt-BR');
+        tooltip = `${nome} - localização em tempo real (${hora})`;
+      } else {
+        const loc = localizacaoPorNome.get(nome);
+        if (!loc) continue;
+        lat = Number(loc.latitude);
+        lng = Number(loc.longitude);
+        tooltip = `${nome} - última leitura em ${loc.data_import} ${loc.hora_import}`;
+      }
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
       // Rebuild recria do zero a cada refresh — se este for o colaborador da
       // rota aberta, nasce direto no grupo sempre-visível, senão nomeAgenteEmDestaque
       // ficaria "certo" no campo mas o marcador voltaria pro grupo com toggle
       // até o próximo clique trocar a seleção (ver atualizarAgenteEmDestaque).
-      const grupoAlvo = loc.colaborador === this.nomeAgenteEmDestaque ? this.grupoAgenteAtual : this.grupoAgentes;
+      const grupoAlvo = nome === this.nomeAgenteEmDestaque ? this.grupoAgenteAtual : this.grupoAgentes;
       const marcador = L.marker([lat, lng], { icon: ehMoto ? ICONE_MOTO : ICONE_PEDESTRE })
         .addTo(grupoAlvo)
-        .bindTooltip(`${colaborador.colaborador} - última leitura em ${loc.data_import} ${loc.hora_import}`, {
+        .bindTooltip(tooltip, {
           direction: 'top',
           // Ícone ancorado no centro (silhueta sem pino) — offset sobe até
           // acima do topo do ícone.
@@ -762,10 +799,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       // específico) — mesma reação de clicar nele direto na lista, pedido
       // explícito do usuário.
       marcador.on('click', () => {
-        this.colaboradoresService.abrirColaborador(colaborador.colaborador);
+        this.colaboradoresService.abrirColaborador(nome);
       });
 
-      this.marcadoresColaboradores.set(loc.colaborador, marcador);
+      this.marcadoresColaboradores.set(nome, marcador);
     }
   }
 

@@ -139,4 +139,19 @@ async function coletarPosicoes(db, empresaId) {
   return { total: devices.length, gravadas: linhasParaGravar.length, semRoster, semParse };
 }
 
-module.exports = { coletarPosicoes, obterNomeEPrefixo };
+// Última posição+bateria conhecida de cada colaborador (qualquer dia — não
+// tem filtro de data como as telas baseadas em leitura, é sempre "o retrato
+// mais recente que a gente já coletou"). Alimenta tanto a posição real do
+// pedestre no mapa quanto o indicador de bateria na lista lateral (motoqueiro
+// e pedestre, ver pedido do usuário).
+async function obterUltimasPosicoes(db) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (colaborador)
+       colaborador, cargo, latitude, longitude, bateria_percentual, bateria_carregando, data_hora_posicao
+     FROM scalefusion
+     ORDER BY colaborador, coletado_em DESC`,
+  );
+  return rows;
+}
+
+module.exports = { coletarPosicoes, obterNomeEPrefixo, obterUltimasPosicoes };

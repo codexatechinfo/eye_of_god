@@ -122,3 +122,37 @@ não erro fatal — não impede o resto do servidor de subir).
   projeto.
 - `BACKEND/test/isolamento_tenant.test.js` ganhou `scalefusion` na lista de tabelas testadas
   (fail-closed + isolamento cross-empresa) — suíte completa (14 testes) passa.
+
+## Adendo 1 (2026-09-06) — posição real do pedestre no mapa; bateria na lista lateral
+
+Dois pedidos na sequência, ambos usando o que já estava coletado:
+
+- **Mapa**: só o PEDESTRE (`!ehMoto`) passa a usar a posição do Scalefusion em vez da última UC
+  realizada — motoqueiro fica como estava até a integração de frota (SEGSAT) resolver o mapeamento
+  placa↔colaborador (ver conversa anterior desta sessão). Novo endpoint `GET
+  /colaboradores/scalefusion` (`obterUltimasPosicoes` em `scalefusionService.js` — `DISTINCT ON
+  (colaborador)` pegando a linha mais recente de cada um) alimenta um novo signal
+  `scalefusionPorColaborador` no frontend, recarregado a cada 60s (mesmo intervalo de
+  atividade/localizações, mas SEM depender de `filtroData` — Scalefusion não tem conceito de "dia
+  passado", é sempre o retrato mais recente já coletado).
+
+  `atualizarMarcadoresColaboradores()` (`mapa-bases.ts`) passa a iterar sobre a UNIÃO dos nomes de
+  `localizacoes()` (leitura) e `scalefusionPorColaborador()` (posição real) — um pedestre pode ter
+  uma sem ter a outra (contratado recente sem UC ainda; ou aparelho sem correspondência no
+  Scalefusion). Posição real só é usada se tiver menos de 24h de idade
+  (`LIMITE_POSICAO_REAL_MS`) — sem esse corte, um aparelho que parasse de reportar ficaria marcado
+  como "tempo real" pra sempre (mesma preocupação já registrada na especificação da API sobre
+  "idade da última posição"); passando disso, cai de volta pra última UC realizada, mesmo
+  comportamento de antes.
+
+- **Bateria na lista lateral**: ícone + percentual ao lado do nome, pra motoqueiro E pedestre (sem
+  filtro de cargo — qualquer colaborador com dado no Scalefusion mostra), usando o mesmo
+  `scalefusionPorColaborador`. Cor por faixa (vermelho ≤20%, âmbar ≤50%, verde acima) — mesmos
+  limiares usados em qualquer indicador de bateria comum, não inventados pro projeto.
+
+### Verificação
+
+`obterUltimasPosicoes()` testado direto contra o banco real: 285 colaboradores com posição+bateria
+retornados. `tsc --noEmit` e `ng build --configuration production` sem erro (só os warnings
+pré-existentes de bundle/leaflet). Não verificado dentro do app de verdade nesta sessão (sem
+credencial de teste) — usuário vai confirmar do lado dele.

@@ -288,6 +288,26 @@ export interface LocalizacaoColaborador {
   longitude: string;
 }
 
+// Última posição+bateria conhecida via API Scalefusion (ADR 0033) — sempre
+// "o retrato mais recente já coletado", sem filtro de dia (diferente de
+// LocalizacaoColaborador, que respeita a data do calendário). Usada pra
+// posição real do pedestre no mapa e pro indicador de bateria na lista
+// lateral (motoqueiro e pedestre).
+export interface PosicaoScalefusion {
+  colaborador: string;
+  cargo: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  bateria_percentual: number | null;
+  bateria_carregando: boolean | null;
+  data_hora_posicao: string | null;
+}
+
+interface ScalefusionResponse {
+  sucesso: boolean;
+  posicoes: PosicaoScalefusion[];
+}
+
 // N° de meses consecutivos em que uma UC recebeu o MESMO código de
 // impedimento, mais a lista desses meses (mais recente primeiro) — ver
 // monitoramentoService.js#obterRegimeSucessivo. Decide a cor vermelha do
@@ -456,6 +476,12 @@ export class ColaboradoresService {
   // — buscada uma vez só (não muda a cada minuto como atividadeHoje).
   localizacoes = signal<LocalizacaoColaborador[]>([]);
 
+  // Última posição+bateria via Scalefusion, por colaborador (ADR 0033) —
+  // recarregada no mesmo intervalo de atividadeHoje/localizacoes, mas SEM
+  // depender de filtroData (é sempre "agora", não um retrato de um dia
+  // passado do calendário).
+  scalefusionPorColaborador = signal<Map<string, PosicaoScalefusion>>(new Map());
+
   // Contorno só dos município(s) que o colaborador aberto tocou no dia
   // (camada "Limites municipais", ADR 0022) — não a malha inteira do
   // estado. Recalculado sempre que o colaborador selecionado muda enquanto
@@ -572,6 +598,7 @@ export class ColaboradoresService {
     this.buscar();
     this.carregarAtividadeHoje();
     this.carregarLocalizacoes();
+    this.carregarScalefusion();
 
     // Abre o alerta sozinho (sem precisar de clique) assim que aparece um
     // nome em afastadosComAtividade que ainda não estava em afastadosVistos
@@ -586,6 +613,10 @@ export class ColaboradoresService {
     // um dia passado não tem "chegando dado novo" pra esperar, e ficar
     // refazendo a mesma busca a cada 60s seria trabalho à toa.
     setInterval(() => {
+      // Scalefusion é sempre "agora" — atualiza mesmo com um dia passado
+      // selecionado no calendário (diferente de atividade/localizações, que
+      // são retrato DAQUELE dia e não têm nada novo pra buscar nesse caso).
+      this.carregarScalefusion();
       if (this.filtroData() === hojeIso()) {
         this.carregarAtividadeHoje();
         this.carregarLocalizacoes();
@@ -683,6 +714,21 @@ export class ColaboradoresService {
       next: resposta => this.localizacoes.set(resposta.localizacoes),
       error: () => {},
     });
+  }
+
+  // Sem parâmetro de data de propósito — Scalefusion não tem conceito de
+  // "retrato de um dia passado", é sempre a última posição já coletada.
+  carregarScalefusion(): void {
+    this.http.get<ScalefusionResponse>(`${this.apiUrl}/colaboradores/scalefusion`).subscribe({
+      next: resposta => {
+        this.scalefusionPorColaborador.set(new Map(resposta.posicoes.map(p => [p.colaborador, p])));
+      },
+      error: () => {},
+    });
+  }
+
+  scalefusionDe(nome: string): PosicaoScalefusion | null {
+    return this.scalefusionPorColaborador().get(nome) ?? null;
   }
 
   // pontos: coordenadas [latitude, longitude] das UCs do dia do colaborador

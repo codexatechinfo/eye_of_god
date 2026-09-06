@@ -14,6 +14,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   (`POST /alert`) e exibição no mapa ficaram de fora desta rodada, a pedido do usuário. Ver [ADR
   0033](docs/adr/0033-integracao-scalefusion-posicao-bateria.md).
 
+- Colaborador pedestre no mapa (aba Trilho) agora aparece na posição REAL do aparelho (via
+  Scalefusion), não mais na última UC realizada — só volta pra posição por leitura se a posição
+  real tiver mais de 24h. Lista lateral ganhou indicador de bateria (ícone + %) ao lado do nome,
+  pra motoqueiro e pedestre. Ver Adendo 1 da [ADR
+  0033](docs/adr/0033-integracao-scalefusion-posicao-bateria.md).
+
 ### Alterado
 
 - Painel lateral de detalhe (aba Trilho): mostrava a timeline de UM livro só, aberto livro por

@@ -350,3 +350,48 @@ como alaranjado ao lado do vermelho puro do pino. Trocado pra `#dc2626` (Tailwin
 saturado, sem a mistura quente do red-500) — mais próximo do vermelho puro pedido, ainda que sem
 conseguir extrair o hex exato do pino de referência a partir do print (comparação visual, não
 amostragem de pixel). Re-verificado no mesmo preview local antes de publicar.
+
+## Adendo 10 (2026-09-06) — descrição do código, piscar ao centralizar, ícone de "último ponto"
+
+Três pedidos do usuário na mesma rodada, todos dentro do painel de detalhe/mapa:
+
+- **Descrição do código**: o card de detalhe de UC mostrava só "Código 028" — sem dizer o que é o
+  028. A descrição já existe, junto com o código, na própria coluna de origem
+  (`base_dados_leitura.mensagem`, formato `"028 - MD ELETRONICO DESLIG"`; `codigo` é só a parte
+  numérica extraída via `extrairCodigoDeMensagem`). Bastou parar de descartar o resto da string:
+  `obterJornadaColaborador` (`atividadeColaboradoresService.js`) passa a devolver `mensagem` cru
+  junto com `codigo` em cada ponto; `PontoJornada` (frontend) ganha o mesmo campo;
+  `colaborador-detalhe.html` troca `'Código ' + item.codigo` por `item.mensagem` (com fallback pro
+  formato antigo se `mensagem` vier vazia) nos dois lugares que mostravam isso (badge da linha e
+  card expandido).
+- **Piscar ao "Centralizar no mapa"**: usuário pediu um destaque visual pra achar o ponto no mapa
+  depois de clicar "Centralizar no mapa" ("assim eu consigo identificar melhor"). `centralizarEm`
+  (signal em `colaboradores.service.ts`) ganhou um campo opcional `uc` (não usado ainda pro piscar
+  em si, mas documenta a intenção de futuro reaproveitamento). O piscar em si é um anel
+  (`L.circleMarker`, raio 12, sem preenchimento, azul `#2563eb` — cor não usada em nenhum ponto ou
+  segmento existente, pra não confundir) desenhado por cima da coordenada e independente do
+  marcador real: alterna opacidade via `setInterval` por ~2,4s (4 piscadas) e se remove sozinho.
+  Independente do marcador real de propósito — funciona mesmo que o ponto ainda não esteja
+  desenhado na camada, e não precisa descobrir/type-guard qual tipo de marcador é.
+- **Ícone de "último ponto de execução"**: primeiro passo de uma mudança maior nos ícones do mapa —
+  usuário quer que, no futuro, os ícones do colaborador representem a localização REAL dele.
+  Começando pelo ponto mais recente da jornada do dia: quando o painel do colaborador está aberto,
+  o ÚLTIMO ponto (cronologicamente, `validos[validos.length - 1]`, já que `pontos` vem ASC do
+  backend) usa um ícone novo — SVG exato mandado pelo usuário (`1295315.svg`, uma bandeira com bola
+  no topo do mastro) — na COR que já representa aquele ponto na timeline (`corDaUc` —
+  verde/cinza/laranja/vermelho, mesma paleta de `CORES_PONTO`), em vez do CircleMarker pequeno ou
+  do ícone de pausa. Diferente de `ICONE_MOTO`/`ICONE_PEDESTRE` (cor fixa, construídos uma vez), a
+  cor aqui é dinâmica — `iconeUltimoPonto(cor)` constrói (e cacheia por cor, só 4 possíveis) o
+  `L.divIcon` sob demanda. Esse ícone tem prioridade até sobre "pausa" (intervalo grande antes
+  dele) — o usuário quer sempre ver onde o colaborador está agora, mesmo que o intervalo até ali
+  tenha sido longo. `pontosJornada` (Map de marcador por UC) precisou guardar também o `tipo`
+  ('normal'/'pausa'/'ultimo') junto do marcador — CircleMarker-vs-Marker sozinho não bastava pra
+  detectar a troca de tipo entre "pausa" e "último ponto" (os dois são `L.Marker`).
+
+### Verificação
+
+`tsc --noEmit` e `ng build --configuration production` sem erro (só os warnings pré-existentes de
+budget de bundle e do pacote `leaflet` não ser ESM, nada novo). Ícone de "último ponto" verificado
+no mesmo preview local isolado (screenshot via browser) nas cores verde e vermelha — desenha como
+bandeira reconhecível em ambas. Piscar e descrição do código não deu pra verificar dentro do app de
+verdade nesta sessão (sem credencial de teste) — usuário vai confirmar do lado dele.

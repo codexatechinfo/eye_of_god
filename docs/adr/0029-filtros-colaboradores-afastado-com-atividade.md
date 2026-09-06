@@ -99,3 +99,19 @@ legível.
 `tsc --noEmit` sem erro. Não foi possível abrir a tela autenticada nesta sessão (sem credencial de
 teste) pra confirmar visualmente a quebra de linha dos filtros na coluna estreita — usuário vai
 confirmar do lado dele.
+
+## Adendo 2 (2026-09-06) — filtro "Etapa" ativado
+
+Select "Etapa · em breve" ficava `disabled` desde a criação da barra de filtros — usuário pediu pra
+ativar. Diferente de Regional/Cargo (vão pro backend, `listarAtivos` filtra na consulta), Etapa não
+existe no roster estático de colaborador — só existe por ATIVIDADE do dia (`livros[].etapa`, dentro
+de `atividadeHoje`). Por isso é filtro 100% client-side, junto de `filtroCategoria`: novo signal
+`filtroEtapa` e computed `etapasDisponiveis` (etapas com pelo menos um livro em atividade hoje,
+ordenadas numericamente — sort de string colocaria "18" antes de "9") em `colaboradores.service.ts`;
+`colaboradoresOrdenados` ganha mais um filtro (colaborador tem que ter pelo menos um livro na etapa
+escolhida), aplicado depois do de categoria. `limparFiltros()` zera o novo signal junto dos outros.
+
+### Verificação
+
+`tsc --noEmit` e `ng build` sem erro. Não verificado dentro do app de verdade nesta sessão (sem
+credencial de teste) — usuário vai confirmar do lado dele.

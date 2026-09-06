@@ -237,6 +237,9 @@ export interface PontoJornada {
   livro: string;
   etapa: string | null;
   codigo: string | null;
+  // Mensagem crua de base_dados_leitura (ex.: "028 - MD ELETRONICO DESLIG")
+  // — mesmo texto de onde `codigo` é extraído, com a descrição junto.
+  mensagem: string | null;
   equipamento: string | null;
   data_import: string | null;
   hora_import: string | null;
@@ -432,6 +435,10 @@ export class ColaboradoresService {
   filtroCargo = signal('');
   filtroRegional = signal('');
   filtroData = signal(hojeIso());
+  // Filtro client-side (não vai pro backend) — igual filtroCategoria, filtra
+  // colaboradoresOrdenados por quem tem pelo menos um livro na etapa
+  // selecionada no dia consultado.
+  filtroEtapa = signal('');
 
   atividadeHoje = signal<Record<string, AtividadeColaborador>>({});
   afastamentosHoje = signal<Record<string, AfastamentoInfo>>({});
@@ -465,8 +472,11 @@ export class ColaboradoresService {
   // por um effect em lista-colaboradores.ts.
   colaboradorFocado = signal<string | null>(null);
   // Coordenada pra centralizar o mapa — setada pelo botão "Centralizar no
-  // mapa" do card de detalhe, consumida por um effect em mapa-bases.ts.
-  centralizarEm = signal<{ lat: number; lng: number } | null>(null);
+  // mapa" do card de detalhe, consumida por um effect em mapa-bases.ts. `uc`
+  // é opcional (só os pontos da jornada têm um marcador nomeado por UC pra
+  // piscar; centralizações vindas de outro lugar continuam só voando até a
+  // coordenada, sem piscar nada).
+  centralizarEm = signal<{ lat: number; lng: number; uc?: string } | null>(null);
   // Cache simples por UC — evita rebuscar regime sucessivo se o usuário
   // reabrir a mesma UC mais de uma vez na mesma sessão.
   regimeSucessivoPorUc = signal<Map<string, RegimeSucessivo>>(new Map());
@@ -480,13 +490,33 @@ export class ColaboradoresService {
     const atividade = this.atividadeHoje();
     const afastamentos = this.afastamentosHoje();
     const filtro = this.filtroCategoria();
-    const lista = [...this.colaboradores()].sort(
+    const etapa = this.filtroEtapa();
+    let lista = [...this.colaboradores()].sort(
       (a, b) =>
         pontuacaoDestaque(atividade[b.colaborador], afastamentos[b.colaborador]) -
         pontuacaoDestaque(atividade[a.colaborador], afastamentos[a.colaborador]),
     );
-    if (!filtro) return lista;
-    return lista.filter(c => pertenceCategoria(atividade[c.colaborador], afastamentos[c.colaborador], filtro));
+    if (filtro) {
+      lista = lista.filter(c => pertenceCategoria(atividade[c.colaborador], afastamentos[c.colaborador], filtro));
+    }
+    if (etapa) {
+      lista = lista.filter(c => (atividade[c.colaborador]?.livros ?? []).some(l => l.etapa === etapa));
+    }
+    return lista;
+  });
+
+  // Etapas com pelo menos um livro em atividade no dia consultado — alimenta
+  // o select "Etapa" da barra de filtros. Numérica (não alfabética: "9" tem
+  // que vir antes de "18", string sort colocaria "18" primeiro).
+  etapasDisponiveis = computed(() => {
+    const atividade = this.atividadeHoje();
+    const etapas = new Set<string>();
+    for (const colaborador of Object.values(atividade)) {
+      for (const livro of colaborador.livros) {
+        if (livro.etapa) etapas.add(livro.etapa);
+      }
+    }
+    return [...etapas].sort((a, b) => Number(a) - Number(b));
   });
 
   // Quem tem afastamento cadastrado (atestado/licença/suspensão) cobrindo
@@ -605,6 +635,7 @@ export class ColaboradoresService {
     this.filtroColaborador.set('');
     this.filtroCargo.set('');
     this.filtroRegional.set('');
+    this.filtroEtapa.set('');
     this.filtroData.set(hojeIso());
     this.buscar();
     this.carregarAtividadeHoje();

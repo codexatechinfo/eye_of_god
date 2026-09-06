@@ -57,6 +57,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   perto de um vermelho puro de referência). Ícone da moto não mudou. Ver Adendo 9 da [ADR
   0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Filtro "Etapa" da barra de filtros, antes desabilitado ("em breve"), agora funciona — filtra a
+  lista de colaboradores por quem tem pelo menos um livro na etapa escolhida no dia. Ver Adendo 2
+  da [ADR 0029](docs/adr/0029-filtros-colaboradores-afastado-com-atividade.md).
+
+- Card de detalhe de UC (aba Trilho) mostrava só "Código 028" — agora mostra a descrição junto,
+  como já vem na origem do dado ("028 - MD ELETRONICO DESLIG"). Botão "Centralizar no mapa" agora
+  faz o ponto piscar (anel azul, ~2,4s) pra facilitar achar visualmente. Último ponto da jornada do
+  colaborador aberto ganha um ícone próprio (bandeira, SVG real mandado pelo usuário) na cor que já
+  representa aquele ponto — primeiro passo pros ícones do mapa passarem a indicar a localização
+  real do colaborador. Ver Adendo 10 da [ADR
+  0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o
@@ -76,6 +88,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   pro topo da lista, ganha badge e dispara alerta central automático — antes a atividade sempre
   vencia e esse caso nunca aparecia em Afastados. Ver [ADR
   0029](docs/adr/0029-filtros-colaboradores-afastado-com-atividade.md).
+
+- "Sem sincronizar há" (aba Trilho) podia mostrar um valor muito maior que o real — ex.: colaborador
+  com leitura real às 09:04 aparecendo horas depois como "sem sincronizar há 12h24min" quando o
+  correto era ~3h. Causa raiz: `contr_execucao_leitura.codigo` fica sempre `NULL` desde que o
+  scraper de Acompanhamento parou de abrir OS (mudança de outra sessão), então a última execução
+  real nunca era detectada por esse caminho — na prática o app mostrava "minutos desde meia-noite"
+  disfarçado de "sem sincronizar", pra QUALQUER colaborador de leitura/releitura. Corrigido
+  cruzando com `base_dados_leitura` (mesma fonte que já corrige as contagens de "Livros hoje"). Ver
+  [ADR 0031](docs/adr/0031-minutos-parado-via-base-dados-leitura.md).
 
 - Coleta de Acompanhamento: lista de ETAPAs travava em 2, mesmo existindo mais com dado real no
   portal — sem `stylesheet`, a página colapsava pra caber na viewport e a rolagem que carrega

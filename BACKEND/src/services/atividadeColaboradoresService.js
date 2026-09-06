@@ -311,6 +311,43 @@ async function obterBaselineDigitadosPorLivro(db, hoje) {
   return new Map(rows.map(linha => [linha.livro, linha.digitados]));
 }
 
+// "Última execução real" de cada colaborador HOJE, direto de
+// base_dados_leitura — usada pra corrigir `ultimaMudancaHora`/`minutosParado`
+// (ver uso em listarAtividadeHoje). Existe porque contr_execucao_leitura.codigo
+// fica sempre NULL desde que o scraper de Acompanhamento parou de abrir OS
+// (mesmo motivo documentado em obterEventosPorLivrosAteData,
+// monitoramentoService.js) — sem esse fallback, `ultimaExecucaoLivro` nunca é
+// detectado (digitados computado a partir de codigo é sempre 0) e
+// `ultimaMudancaColaborador` fica pra sempre `null`. `diferencaMinutos` trata
+// `null` como meia-noite (00:00), então o "sem sincronizar há" virava, na
+// prática, "minutos desde meia-noite" — sempre um número grande e crescente
+// ao longo do dia, mesmo pra quem sincronizou há minutos (usuário reportou
+// com print: colaborador com leitura real às 09:04 aparecendo "sem
+// sincronizar há 12h24min" horas depois). Cada linha de base_dados_leitura já
+// É um evento real (a tabela só guarda leituras que aconteceram, não
+// pendências), então o maior hora_da_leitura do dia por colaborador já é
+// exatamente "a última execução real hoje", sem precisar da lógica de
+// "baseline"/"digitados aumentando" que o caminho de contr_execucao_leitura
+// usa (aquele existe pra filtrar RE-RASPAGEM do mesmo lote, que não existe
+// aqui). Sem JOIN com coordenadas_ucs_mineradas de propósito — diferente de
+// obterUltimaUcRealizadaPorColaborador (usada só pra posição no mapa), aqui
+// não precisamos de coordenada, e um INNER JOIN excluiria justamente
+// colaboradores cuja última UC não está mapeada ainda.
+async function obterUltimaExecucaoRealHoje(db, dataBr) {
+  const { rows } = await db.query(
+    `
+    SELECT DISTINCT ON (nome_do_usuario) nome_do_usuario AS colaborador, hora_da_leitura AS hora_import
+    FROM base_dados_leitura
+    WHERE nome_do_usuario IS NOT NULL
+      AND data_da_leitura = $1
+      AND hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+    ORDER BY nome_do_usuario, hora_da_leitura DESC
+    `,
+    [dataBr],
+  );
+  return new Map(rows.map(linha => [linha.colaborador, linha.hora_import]));
+}
+
 // dataIso ("YYYY-MM-DD", mesmo formato do <input type="date"> do
 // frontend): quando informada, consulta a atividade DAQUELE dia em vez de
 // hoje — usuário pediu pra poder navegar dias de execução passados pelo
@@ -533,11 +570,15 @@ async function listarAtividadeHoje(db, dataIso) {
   // "Ponto no tempo" (`ateData = hoje`, a mesma data desta consulta) em vez
   // de sempre o estado mais atual — visualizar um dia passado no calendário
   // mostra o livro como estava NAQUELE dia, não hoje. O que NÃO muda aqui:
-  // quais livros aparecem, colaborador/situação/histórico/parado-ativo —
-  // base_dados_leitura não tem esse dado, só entra pra corrigir as
-  // contagens de progresso.
+  // quais livros aparecem, colaborador/situação/histórico — só as contagens
+  // de progresso e (logo abaixo) o "quando" de parado/ativo/semSincronismo.
+  // Sequencial, não Promise.all — as duas consultas usam o MESMO client de
+  // uma transação (abrirContextoTenant), que não suporta duas queries
+  // concorrentes (o driver `pg` avisa e serializa mesmo assim, mas gera
+  // warning de depreciação; melhor não depender disso).
   const todosLivros = [...new Set(colaboradores.flatMap(c => c.livros.map(l => l.livro)))];
   const eventosPorLivro = await obterEventosPorLivrosAteData(db, todosLivros, hoje);
+  const ultimaExecucaoRealPorColaborador = await obterUltimaExecucaoRealHoje(db, hoje);
   const contagensPorLivro = new Map();
   for (const linha of eventosPorLivro) {
     const codigo = extrairCodigoDeMensagem(linha.mensagem) ?? linha.codigo_contr;
@@ -564,10 +605,20 @@ async function listarAtividadeHoje(db, dataIso) {
     colaborador.totalRealizadas = colaborador.livros.reduce((soma, l) => soma + l.digitados, 0);
     colaborador.totalPendentes = colaborador.livros.reduce((soma, l) => soma + l.naoDigitados, 0);
     colaborador.totalImpedimentos = colaborador.livros.reduce((soma, l) => soma + (l.impedimentos || 0), 0);
-    // parado/ativo/semSincronismo dependem de totalRealizadas — recalcula
-    // com o valor unificado; minutosParado/ultimaMudancaHora NÃO mudam (são
-    // sobre QUANDO algo aconteceu, conceito que continua vindo só do
-    // scraper/contr_execucao_leitura, fora do escopo desta unificação).
+    // ultimaMudancaHora vinha só de contr_execucao_leitura.codigo — que fica
+    // SEMPRE null desde que o scraper de Acompanhamento parou de abrir OS
+    // (ver obterUltimaExecucaoRealHoje), o que fazia `ultimaExecucaoLivro`
+    // nunca disparar e `minutosParado` virar, na prática, "minutos desde
+    // meia-noite" pra QUALQUER colaborador (usuário reportou com print:
+    // leitura real às 09:04 aparecendo "sem sincronizar há 12h24min" horas
+    // depois). Mescla com a última execução real vinda de base_dados_leitura
+    // (mesma fonte que já corrige as contagens acima) antes de recalcular —
+    // só AVANÇA o horário (maiorHorario), nunca atrasa quem já estava certo.
+    const ultimaExecucaoReal = ultimaExecucaoRealPorColaborador.get(colaborador.colaborador) ?? null;
+    colaborador.ultimaMudancaHora = maiorHorario(colaborador.ultimaMudancaHora, ultimaExecucaoReal);
+    colaborador.minutosParado = diferencaMinutos(colaborador.ultimaMudancaHora, ultimaHoraGeral);
+    // parado/ativo/semSincronismo dependem de totalRealizadas/minutosParado —
+    // recalcula com os valores já unificados.
     colaborador.parado = colaborador.totalRealizadas === 0;
     colaborador.semSincronismo = colaborador.totalRealizadas > 0 && colaborador.minutosParado >= LIMITE_PARADO_MINUTOS;
     colaborador.ativo = colaborador.totalRealizadas > 0 && colaborador.minutosParado < LIMITE_PARADO_MINUTOS;
@@ -960,6 +1011,10 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
       livro: row.livro,
       etapa: row.etapa,
       codigo: extrairCodigoDeMensagem(row.mensagem),
+      // Mensagem crua da coluna (ex.: "028 - MD ELETRONICO DESLIG") — usada
+      // no lugar de "Código 028" sozinho pra mostrar a descrição do código
+      // sem precisar de um catálogo estático (pedido explícito do usuário).
+      mensagem: row.mensagem,
       equipamento: row.equipamento,
       data_import: row.data_import,
       hora_import: row.hora_import,

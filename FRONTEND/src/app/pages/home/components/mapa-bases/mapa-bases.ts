@@ -167,6 +167,47 @@ const ICONE_PAUSA = L.divIcon({
   iconAnchor: [7, 7],
 });
 
+// Último ponto de execução do colaborador aberto (1295315.svg, mesmo padrão
+// de fidelidade exata dos Adendos 7/9 de ADR 0030) — passo inicial pra os
+// ícones de colaborador no mapa passarem a representar a localização REAL
+// dele (próxima etapa do projeto), começando pelo ponto mais recente da
+// jornada do dia. Cor DINÂMICA (não fixa como moto/pedestre): usa a mesma
+// cor do ponto na timeline (corDaUc — verde/cinza/laranja/vermelho, ver
+// CORES_PONTO), então precisa construir o ícone sob demanda em vez de uma
+// constante única — cacheado por cor (só 4 cores possíveis) pra não recriar
+// o mesmo L.divIcon a cada refresh de 60s.
+const ICONES_ULTIMO_PONTO = new Map<string, L.DivIcon>();
+function iconeUltimoPonto(cor: string): L.DivIcon {
+  let icone = ICONES_ULTIMO_PONTO.get(cor);
+  if (!icone) {
+    icone = iconeColaborador(
+      `<g transform="translate(0,1240) scale(0.1,-0.1)" fill="${cor}" stroke="none">
+<path d="M2391 10315 c-171 -55 -286 -249 -251 -421 34 -162 146 -272 313
+-305 151 -31 320 59 393 207 26 53 29 69 29 159 0 93 -2 105 -32 166 -39 79
+-102 140 -181 177 -69 32 -199 41 -271 17z"/>
+<path d="M2425 9544 c-64 -33 -102 -88 -141 -204 -18 -53 -19 -175 -22 -3662
+l-2 -3608 97 0 c54 0 162 -3 241 -7 l142 -6 1 1009 c1 901 9 1434 19 1204 4
+-110 5 -118 29 -203 32 -117 70 -160 107 -123 8 9 19 16 23 16 4 0 29 21 55
+46 103 98 244 185 382 234 81 28 245 70 419 106 11 2 34 7 50 11 17 4 32 7 35
+8 3 1 25 5 50 9 70 13 397 90 595 141 99 25 190 48 201 50 12 3 51 14 85 24
+56 17 101 29 134 36 23 6 133 38 170 50 45 14 155 47 170 51 87 20 753 249
+895 308 36 15 72 29 80 31 14 3 211 82 423 169 97 39 278 118 372 162 33 15
+63 28 66 28 13 2 496 230 764 361 205 101 649 330 825 427 36 19 121 66 190
+103 659 359 886 499 1015 630 120 122 101 171 -81 208 -12 2 -30 0 -40 -6 -13
+-6 -16 -6 -9 0 6 6 208 131 450 278 242 147 446 273 454 280 10 10 11 20 2 47
+l-11 34 -198 -23 c-419 -48 -897 -87 -1427 -115 -302 -16 -1345 -16 -1635 0
+-1252 68 -2218 228 -3044 503 -666 222 -1164 496 -1535 845 l-81 76 0 92 c0
+174 -57 320 -145 371 -49 29 -124 33 -170 9z"/>
+</g>`,
+      '0 0 1280 1240',
+      30,
+      29,
+    );
+    ICONES_ULTIMO_PONTO.set(cor, icone);
+  }
+  return icone;
+}
+
 // Ícone do controle "Camadas" — checklist (linhas com quadrado marcável),
 // deliberadamente diferente da pilha de quadrados do controle nativo de
 // tipos de mapa (mesma classe CSS leaflet-control-layers-toggle, ícone
@@ -273,13 +314,17 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // Trajetória do DIA do colaborador aberto (cruza todos os livros dele) —
   // um segmento de linha por par de pontos cronologicamente consecutivos
   // (não uma polyline só, porque cada trecho pode ter cor diferente — ver
-  // corDoSegmento) + um marcador por UC (CircleMarker colorido normal, ou
-  // ícone de pausa quando o intervalo anterior excedeu o limite). Tudo
-  // atualizado em cima da instância existente (nunca recriado do zero)
-  // porque a jornada é atualizada a cada 60s enquanto o painel está aberto
-  // — recriar a cada ciclo causaria flicker.
+  // corDoSegmento) + um marcador por UC (CircleMarker colorido normal, ícone
+  // de pausa quando o intervalo anterior excedeu o limite, ou o ícone de
+  // "último ponto" — iconeUltimoPonto — só no ponto mais recente do dia).
+  // Tudo atualizado em cima da instância existente (nunca recriado do zero)
+  // porque a jornada é atualizada a cada 60s enquanto o painel está aberto —
+  // recriar a cada ciclo causaria flicker. `tipo` guardado junto pra
+  // detectar troca de tipo entre refreshes (ex.: deixou de ser o último
+  // ponto porque uma UC mais nova chegou) — CircleMarker/Marker sozinhos não
+  // bastam pra distinguir "pausa" de "último ponto", os dois são L.Marker.
   private segmentosRota: L.Polyline[] = [];
-  private pontosJornada = new Map<string, L.CircleMarker | L.Marker>();
+  private pontosJornada = new Map<string, { marcador: L.CircleMarker | L.Marker; tipo: 'normal' | 'pausa' | 'ultimo' }>();
   private colaboradorComBoundsAplicado: string | null = null;
   // Um polígono por LIVRO (não mais um casco convexo do dia inteiro) — se o
   // colaborador tem mais de um livro em execução hoje, cada um ganha o seu
@@ -289,6 +334,12 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // dado — evita rebuscar a cada refresh de 60s do mesmo colaborador/dia
   // (ver effect no construtor).
   private limitesMunicipaisChaveAtual: string | null = null;
+  // Anel piscando sobre o ponto centralizado (botão "Centralizar no mapa" do
+  // card de detalhe, pedido explícito do usuário — "assim eu consigo
+  // identificar melhor"). Marcador temporário próprio em vez de mexer no
+  // estilo do marcador real (pontosJornada) — funciona igual pra
+  // CircleMarker e pra L.Marker (ícone de pausa), sem precisar saber qual é.
+  private anelPiscando?: { anel: L.CircleMarker; intervalo: ReturnType<typeof setInterval>; timeoutFinal: ReturnType<typeof setTimeout> };
 
   // Grupos do painel "CAMADAS" — cada checkbox só liga/desliga o grupo
   // inteiro (mapa.addLayer/removeLayer), nunca decide SE algo é desenhado.
@@ -352,6 +403,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       const alvo = this.colaboradoresService.centralizarEm();
       if (!alvo || !this.mapa) return;
       this.mapa.flyTo([alvo.lat, alvo.lng], ZOOM_FOCO, { duration: 0.6 });
+      this.piscarPonto(alvo.lat, alvo.lng);
     });
 
     // Painel "CAMADAS": cada effect só decide se o GRUPO está no mapa — a
@@ -607,6 +659,42 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     setTimeout(() => this.mapa?.invalidateSize(), 0);
   }
 
+  // Anel azul piscando por ~2,4s (4 piscadas) sobre a coordenada centralizada
+  // — não depende de achar o marcador real (funciona mesmo se o ponto ainda
+  // não estiver desenhado na camada certa), então cobre igual pontos de
+  // jornada, agentes ou qualquer outra coisa que um dia chame centralizarEm.
+  // Cor azul (não usada em nenhuma cor de ponto/segmento existente) pra não
+  // se confundir com verde/âmbar/vermelho do próprio ponto.
+  private piscarPonto(lat: number, lng: number): void {
+    if (!this.mapa) return;
+    if (this.anelPiscando) {
+      clearInterval(this.anelPiscando.intervalo);
+      clearTimeout(this.anelPiscando.timeoutFinal);
+      this.mapa.removeLayer(this.anelPiscando.anel);
+    }
+
+    const anel = L.circleMarker([lat, lng], {
+      radius: 12,
+      color: '#2563eb',
+      weight: 3,
+      fill: false,
+      opacity: 1,
+    }).addTo(this.mapa);
+
+    let visivel = true;
+    const intervalo = setInterval(() => {
+      visivel = !visivel;
+      anel.setStyle({ opacity: visivel ? 1 : 0 });
+    }, 300);
+    const timeoutFinal = setTimeout(() => {
+      clearInterval(intervalo);
+      this.mapa?.removeLayer(anel);
+      this.anelPiscando = undefined;
+    }, 2400);
+
+    this.anelPiscando = { anel, intervalo, timeoutFinal };
+  }
+
   private aplicarZoomRegional(regionalFiltro: string): void {
     if (!this.mapa) return;
 
@@ -695,7 +783,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     if (!colaboradorAberto) {
       for (const linha of this.segmentosRota) this.grupoSequencia.removeLayer(linha);
       this.segmentosRota = [];
-      for (const ponto of this.pontosJornada.values()) this.grupoPontos.removeLayer(ponto);
+      for (const { marcador } of this.pontosJornada.values()) this.grupoPontos.removeLayer(marcador);
       this.pontosJornada.clear();
       for (const poligono of this.poligonosSetorPlanejado.values()) this.grupoSetorPlanejado.removeLayer(poligono);
       this.poligonosSetorPlanejado.clear();
@@ -777,39 +865,53 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     // ícone), cria só as novas, remove as que já não aparecem mais.
     const regimeSucessivoPorUc = this.colaboradoresService.regimeSucessivoPorUc();
     const vistos = new Set<string>();
+    // Último ponto CRONOLOGICAMENTE (validos preserva a ordem de `pontos`,
+    // que já vem ASC do backend) ganha o ícone de "localização real" —
+    // pedido explícito do usuário, primeiro passo pros ícones do mapa
+    // passarem a refletir onde o colaborador está agora, não só o histórico.
+    const ucUltimoPonto = validos.length ? validos[validos.length - 1].uc : null;
 
     for (const item of validos) {
       vistos.add(item.uc);
       const latLng: L.LatLngTuple = [Number(item.latitude), Number(item.longitude)];
       const existente = this.pontosJornada.get(item.uc);
-      const ehPausa = item.tipo_intervalo === 'pausa';
+      const cor = CORES_PONTO[corDaUc(item, regimeSucessivoPorUc)];
+      // Último ponto tem prioridade sobre "pausa" — o usuário quer sempre
+      // ver onde o colaborador está agora, mesmo que o intervalo até ali
+      // tenha passado do limite.
+      const tipo: 'normal' | 'pausa' | 'ultimo' = item.uc === ucUltimoPonto ? 'ultimo' : item.tipo_intervalo === 'pausa' ? 'pausa' : 'normal';
 
       if (existente) {
-        existente.setLatLng(latLng);
-        if (existente instanceof L.CircleMarker && !ehPausa) {
-          existente.setStyle({ fillColor: CORES_PONTO[corDaUc(item, regimeSucessivoPorUc)] });
-          existente.setTooltipContent(tooltipDoPonto(item));
-        } else if (!(existente instanceof L.CircleMarker) && ehPausa) {
-          existente.setTooltipContent(tooltipDoPonto(item));
+        existente.marcador.setLatLng(latLng);
+        if (existente.tipo === tipo) {
+          if (tipo === 'normal' && existente.marcador instanceof L.CircleMarker) {
+            existente.marcador.setStyle({ fillColor: cor });
+          } else if (tipo === 'ultimo' && existente.marcador instanceof L.Marker) {
+            existente.marcador.setIcon(iconeUltimoPonto(cor));
+          }
+          existente.marcador.setTooltipContent(tooltipDoPonto(item));
         } else {
-          // Trocou de tipo (virou pausa, ou deixou de ser) — CircleMarker e
-          // Marker não convertem um no outro, recria o marcador desse ponto.
-          this.grupoPontos.removeLayer(existente);
+          // Trocou de tipo (virou pausa, deixou de ser o último ponto, etc.)
+          // — CircleMarker e Marker não convertem um no outro, recria.
+          this.grupoPontos.removeLayer(existente.marcador);
           this.pontosJornada.delete(item.uc);
         }
       }
 
       if (!this.pontosJornada.has(item.uc)) {
-        const ponto: L.CircleMarker | L.Marker = ehPausa
-          ? L.marker(latLng, { icon: ICONE_PAUSA })
-          : L.circleMarker(latLng, {
-              radius: 5,
-              color: '#fff',
-              weight: 1,
-              fillColor: CORES_PONTO[corDaUc(item, regimeSucessivoPorUc)],
-              fillOpacity: 0.95,
-            });
-        ponto.addTo(this.grupoPontos).bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
+        const marcador: L.CircleMarker | L.Marker =
+          tipo === 'ultimo'
+            ? L.marker(latLng, { icon: iconeUltimoPonto(cor) })
+            : tipo === 'pausa'
+              ? L.marker(latLng, { icon: ICONE_PAUSA })
+              : L.circleMarker(latLng, {
+                  radius: 5,
+                  color: '#fff',
+                  weight: 1,
+                  fillColor: cor,
+                  fillOpacity: 0.95,
+                });
+        marcador.addTo(this.grupoPontos).bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
         // Clicar no ponto foca E expande a UC na timeline do painel (item 3
         // do pedido) — os dois juntos, sem precisar de um segundo clique na
         // lista. O marcador é reaproveitado entre refreshes (nunca recriado
@@ -819,7 +921,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         // `setStyle`. Busca o estado ATUAL da UC na jornada no momento do clique.
         const uc = item.uc;
         const nome = colaboradorAberto;
-        ponto.on('click', () => {
+        marcador.on('click', () => {
           this.colaboradoresService.ucFocada.set(uc);
           this.colaboradoresService.ucExpandida.set(uc);
           const atual = this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos?.find(p => p.uc === uc);
@@ -827,12 +929,12 @@ export class MapaBases implements AfterViewInit, OnDestroy {
             this.colaboradoresService.carregarRegimeSucessivo(uc);
           }
         });
-        this.pontosJornada.set(item.uc, ponto);
+        this.pontosJornada.set(item.uc, { marcador, tipo });
       }
     }
-    for (const [uc, ponto] of this.pontosJornada) {
+    for (const [uc, { marcador }] of this.pontosJornada) {
       if (!vistos.has(uc)) {
-        this.grupoPontos.removeLayer(ponto);
+        this.grupoPontos.removeLayer(marcador);
         this.pontosJornada.delete(uc);
       }
     }
@@ -840,6 +942,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+    if (this.anelPiscando) {
+      clearInterval(this.anelPiscando.intervalo);
+      clearTimeout(this.anelPiscando.timeoutFinal);
+    }
     this.mapa?.remove();
   }
 }

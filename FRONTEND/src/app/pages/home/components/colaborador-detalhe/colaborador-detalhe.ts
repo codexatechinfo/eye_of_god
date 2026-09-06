@@ -122,7 +122,7 @@ export class ColaboradorDetalhe {
 
   centralizarNoMapa(item: PontoJornada): void {
     if (!item.latitude || !item.longitude) return;
-    this.colaboradoresService.centralizarEm.set({ lat: Number(item.latitude), lng: Number(item.longitude) });
+    this.colaboradoresService.centralizarEm.set({ lat: Number(item.latitude), lng: Number(item.longitude), uc: item.uc });
   }
 
   linkStreetView(item: PontoJornada): string | null {

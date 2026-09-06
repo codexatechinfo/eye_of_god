@@ -254,7 +254,7 @@
                 class="ml-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full align-middle"
                 [ngClass]="corDoPonto(item) === 'vermelho' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
               >
-                Código {{ item.codigo }}
+                {{ item.mensagem || ('Código ' + item.codigo) }}
               </span>
             </span>
             <span class="text-slate-400 shrink-0 tabular-nums" *ngIf="item.codigo">{{ item.hora_import }}</span>
@@ -321,7 +321,7 @@
               </div>
               <div>
                 <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Apontamento</div>
-                <div class="text-slate-600">{{ item.codigo ? ('Código ' + item.codigo) : '—' }}</div>
+                <div class="text-slate-600">{{ item.codigo ? (item.mensagem || ('Código ' + item.codigo)) : '—' }}</div>
               </div>
               <div>
                 <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Horário da leitura</div>

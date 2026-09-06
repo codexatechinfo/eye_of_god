@@ -5,6 +5,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Adicionado
+
+- Coleta contínua de posição e bateria dos aparelhos de campo via API Scalefusion (FIMM) — nova
+  tabela `scalefusion` (histórico, uma linha por coleta com posição nova), job rodando a cada 5min
+  (mesmo intervalo do cache da API). Casa o nome do colaborador embutido no dispositivo contra o
+  cadastro (`ativos_inativos`); dispositivo sem correspondência não é gravado. Envio de mensagem
+  (`POST /alert`) e exibição no mapa ficaram de fora desta rodada, a pedido do usuário. Ver [ADR
+  0033](docs/adr/0033-integracao-scalefusion-posicao-bateria.md).
+
 ### Alterado
 
 - Painel lateral de detalhe (aba Trilho): mostrava a timeline de UM livro só, aberto livro por

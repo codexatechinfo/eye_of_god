@@ -5,6 +5,7 @@ const coletaRoutes = require('./routes/coletaRoutes');
 const { iniciarJobColeta } = require('./jobs/coletaJob');
 const coletaMassivasRoutes = require('./routes/coletaMassivasRoutes');
 const { iniciarJobMassivas } = require('./jobs/coletaMassivasJob');
+const { iniciarJobScalefusion } = require('./jobs/scalefusionJob');
 const authRoutes = require('./routes/authRoutes');
 const usuariosRoutes = require('./routes/usuariosRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
@@ -50,4 +51,5 @@ app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   iniciarJobColeta();
   iniciarJobMassivas();
+  iniciarJobScalefusion();
 });

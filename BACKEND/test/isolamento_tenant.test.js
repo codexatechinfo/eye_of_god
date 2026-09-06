@@ -80,8 +80,10 @@ test('usuário não grava linha carimbando empresa alheia (with check no insert)
 // calendario_leitura, cidades_localidades e tab_ligacao_coordenadas eram
 // referência compartilhada (sem empresa_id) até a ADR 0009 — cada empresa
 // pode ter seu próprio contrato/região, então passaram a isolar como as
-// demais. Prova que a policy pegou nas 3, não só nas que já existiam antes.
-for (const tabela of ['calendario_leitura', 'cidades_localidades', 'tab_ligacao_coordenadas']) {
+// demais. scalefusion (ADR sobre a integração de posição/bateria) já
+// nasceu com a mesma policy — testada aqui junto por conveniência, mesmo
+// padrão de verificação (fail-closed + isolamento cross-empresa).
+for (const tabela of ['calendario_leitura', 'cidades_localidades', 'tab_ligacao_coordenadas', 'scalefusion']) {
   test(`${tabela}: sem contexto de tenant, nenhuma linha é visível (fail-closed)`, async () => {
     const total = await comContexto(null, null, async client => {
       const { rows } = await client.query(`SELECT count(*)::int AS n FROM ${tabela}`);

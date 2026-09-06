@@ -69,6 +69,9 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   real do colaborador. Ver Adendo 10 da [ADR
   0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Barra lateral de colaboradores (`w-96`, 384px) e painel de detalhe do colaborador (`max-w-sm`,
+  384px) reduzidos pra `w-80`/`max-w-xs` (320px cada) — mais espaço pro mapa, a pedido do usuário.
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

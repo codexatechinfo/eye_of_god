@@ -82,6 +82,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Contagens de progresso de livro (digitados/naoDigitados/impedimentos, e os totais por colaborador
+  que dependem delas — Realizadas/A realizar/Impedimentos) podiam vir muito maiores que o real —
+  usuário reportou "Realizadas: 564" com a timeline do dia vazia, e um livro recém-aberto (0/176 no
+  portal Copel) contando 174 leituras no app. Causa: número de livro é reaproveitado a cada ciclo
+  (mesmo "036137" vira uma OS nova todo mês), e a contagem comparava contra `base_dados_leitura`
+  "alguma vez, qualquer dia" — leituras de um ciclo ANTERIOR do mesmo número contavam como progresso
+  do ciclo atual. Corrigido cortando pela data de abertura da OS do ciclo atual
+  (`contr_execucao_leitura.data_recebimento`) em toda comparação por histórico de livro
+  (`obterEventosPorLivrosAteData`, usada também pela aba Monitoramento de Livros; e as duas
+  consultas novas de `obterJornadaColaborador`). Ver [ADR
+  0032](docs/adr/0032-corte-por-ciclo-atual-livro-reaproveitado.md).
+
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o
   painel — o clique disparava abrir E o listener de "clicar fora fecha" no mesmo evento, já que só
   o mapa estava isento dessa checagem. Cor vermelha do ponto/UC passa a significar "regime

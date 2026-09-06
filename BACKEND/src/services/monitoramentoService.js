@@ -1149,14 +1149,39 @@ async function obterEventosPorLivrosAteData(db, livros, dataBr) {
       SELECT LPAD(m.livro::int::text, 6, '0') AS livro, m.unidade_consumidora AS uc, NULL::text AS codigo_contr
       FROM coordenadas_ucs_mineradas m
       WHERE m.livro ~ '^[0-9]+$' AND m.livro::int = ANY($2::int[])
+    ), ciclo_atual AS (
+      -- Número de livro é REAPROVEITADO entre ciclos de leitura (mesmo
+      -- "036137" vira uma OS nova todo mês) — achado ao vivo: usuário
+      -- reportou "Realizadas" MUITO maior que o total de OS do livro no
+      -- portal Copel (174 digitados calculados vs "0/176" no portal, livro
+      -- recém-aberto em 04/09 sem NENHUMA leitura ainda). Sem este corte,
+      -- uma leitura de AGOSTO (ciclo anterior do mesmo número de livro)
+      -- contava como progresso do ciclo de SETEMBRO. data_recebimento
+      -- (abertura da OS do ciclo atual, já usada em classificarTipoServico)
+      -- é o corte: só conta evento de base_dados_leitura a partir dali.
+      SELECT DISTINCT ON (livro::int) livro::int AS livro_int, data_recebimento
+      FROM contr_execucao_leitura
+      WHERE livro::int = ANY($2::int[])
+        AND data_import ~ '^\\d{2}/\\d{2}/\\d{4}$'
+        AND to_date(data_import, 'DD/MM/YYYY') <= to_date($1, 'DD/MM/YYYY')
+      ORDER BY livro::int, id DESC
     ), eventos AS (
       SELECT DISTINCT ON (b.livro::int, b.unidade_consumidora)
         b.livro::int AS livro_int, b.unidade_consumidora AS uc, b.mensagem
       FROM base_dados_leitura b
+      LEFT JOIN ciclo_atual c ON c.livro_int = b.livro::int
       WHERE b.livro::int = ANY($2::int[])
         AND b.data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
         AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
         AND to_date(b.data_da_leitura, 'DD/MM/YYYY') <= to_date($1, 'DD/MM/YYYY')
+        -- Sem data_recebimento conhecida (livro nunca visto em
+        -- contr_execucao_leitura, ex.: só existe via Massiva) mantém o
+        -- comportamento antigo — sem corte, não regride quem já funcionava.
+        AND (
+          c.data_recebimento IS NULL
+          OR c.data_recebimento !~ '^\\d{2}/\\d{2}/\\d{4}$'
+          OR to_date(b.data_da_leitura, 'DD/MM/YYYY') >= to_date(c.data_recebimento, 'DD/MM/YYYY')
+        )
       ORDER BY b.livro::int, b.unidade_consumidora,
         to_date(b.data_da_leitura, 'DD/MM/YYYY') DESC, b.hora_da_leitura DESC, (b.especificacao = 'CON') DESC
     )

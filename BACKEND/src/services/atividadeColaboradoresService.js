@@ -933,14 +933,49 @@ async function obterUltimaUcRealizadaPorColaborador(db, dataBr) {
 // com outro formato) — sem o filtro, uma única linha malformada derruba a
 // jornada do dia inteiro pro colaborador, em vez de só ficar de fora.
 async function obterJornadaColaborador(db, colaborador, dataBr) {
+  // Livros candidatos de HOJE (pra escopar ciclo_atual abaixo sem varrer
+  // contr_execucao_leitura inteira) — ja_realizado_antes só importa pros
+  // livros que aparecem em primeira_realizacao (o NOT EXISTS casa por
+  // `livro`), então não precisa saber de nenhum outro livro do histórico
+  // do colaborador.
+  const { rows: livrosHojeRows } = await db.query(
+    `SELECT DISTINCT livro::int AS livro_int FROM base_dados_leitura WHERE nome_do_usuario = $1 AND data_da_leitura = $2 AND livro ~ '^[0-9]+$'`,
+    [colaborador, dataBr],
+  );
+  const livrosHojeInt = livrosHojeRows.map(r => r.livro_int);
+  if (!livrosHojeInt.length) return { colaborador, data: dataBr, semDado: true };
+
   const { rows } = await db.query(
     `
-    WITH ja_realizado_antes AS (
+    WITH ciclo_atual AS (
+      -- Número de livro é REAPROVEITADO entre ciclos de leitura (mesmo
+      -- número vira uma OS nova todo mês, com outro data_recebimento) — sem
+      -- este corte, ja_realizado_antes (logo abaixo) usaria uma leitura de
+      -- um ciclo ANTERIOR do mesmo número de livro pra excluir uma leitura
+      -- REAL de hoje do ciclo ATUAL, escondendo ela da timeline (mesmo
+      -- achado ao vivo documentado em obterEventosPorLivrosAteData,
+      -- monitoramentoService.js, pra digitados/naoDigitados). Sem filtro de
+      -- colaborador (data_recebimento é do LIVRO, não de quem está com ele
+      -- agora) — só do conjunto de livros de hoje, pra não varrer a tabela
+      -- inteira.
+      SELECT DISTINCT ON (livro::int) livro::int AS livro_int, data_recebimento
+      FROM contr_execucao_leitura
+      WHERE livro::int = ANY($3::int[])
+        AND data_import ~ '^\\d{2}/\\d{2}/\\d{4}$'
+        AND to_date(data_import, 'DD/MM/YYYY') <= to_date($2, 'DD/MM/YYYY')
+      ORDER BY livro::int, id DESC
+    ), ja_realizado_antes AS (
       SELECT DISTINCT b.livro, b.unidade_consumidora
       FROM base_dados_leitura b
+      LEFT JOIN ciclo_atual c ON c.livro_int = b.livro::int
       WHERE b.nome_do_usuario = $1
         AND b.data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
         AND to_date(b.data_da_leitura, 'DD/MM/YYYY') < to_date($2, 'DD/MM/YYYY')
+        AND (
+          c.data_recebimento IS NULL
+          OR c.data_recebimento !~ '^\\d{2}/\\d{2}/\\d{4}$'
+          OR to_date(b.data_da_leitura, 'DD/MM/YYYY') >= to_date(c.data_recebimento, 'DD/MM/YYYY')
+        )
     ), primeira_realizacao AS (
       SELECT DISTINCT ON (b.livro, b.unidade_consumidora)
         b.unidade_consumidora AS uc, b.livro, b.etapa, b.data_da_leitura AS data_import, b.hora_da_leitura AS hora_import,
@@ -959,30 +994,44 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
     LEFT JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = pr.uc
     ORDER BY pr.hora_import ASC
     `,
-    [colaborador, dataBr],
+    [colaborador, dataBr, livrosHojeInt],
   );
 
   if (!rows.length) return { colaborador, data: dataBr, semDado: true };
 
   // UCs do(s) mesmo(s) livro(s) que este colaborador tocou hoje que AINDA
-  // NÃO foram realizadas (nenhum colaborador, nenhum dia) — usuário pediu
-  // pra ver no mapa/timeline não só o que já foi feito, mas o que falta,
-  // pra ter noção da rota completa (mesmo raciocínio de "setor planejado" no
-  // mapa, agora ponto a ponto). Roster vem de coordenadas_ucs_mineradas
-  // (mesma fonte já usada em obterEventosPorLivrosAteData/monitoramentoService.js
-  // pra saber quais UCs existem num livro) — "realizada" aqui é
-  // deliberadamente mais simples que `ja_realizado_antes` acima (que só
-  // precisa achar a PRIMEIRA leitura de HOJE): qualquer linha de
-  // base_dados_leitura pra aquele (livro, uc), de qualquer colaborador, em
-  // qualquer dia, já tira a UC da lista de pendentes.
+  // NÃO foram realizadas NO CICLO ATUAL — usuário pediu pra ver no
+  // mapa/timeline não só o que já foi feito, mas o que falta, pra ter noção
+  // da rota completa (mesmo raciocínio de "setor planejado" no mapa, agora
+  // ponto a ponto). Roster vem de coordenadas_ucs_mineradas (mesma fonte já
+  // usada em obterEventosPorLivrosAteData/monitoramentoService.js pra saber
+  // quais UCs existem num livro). "Realizada" tem o MESMO corte por
+  // data_recebimento do ciclo atual usado em ja_realizado_antes acima e em
+  // obterEventosPorLivrosAteData — sem ele, uma UC lida num ciclo ANTERIOR
+  // do mesmo número de livro (reaproveitado todo mês) contaria como já
+  // feita no ciclo ATUAL, e sumiria da lista de pendentes por engano.
   const livroStringPorInt = new Map(rows.map(r => [Number(r.livro), r.livro]));
   const livrosInt = [...livroStringPorInt.keys()].filter(Number.isFinite);
   const { rows: pendentesRows } = await db.query(
     `
-    WITH realizadas AS (
+    WITH ciclo_atual AS (
+      SELECT DISTINCT ON (livro::int) livro::int AS livro_int, data_recebimento
+      FROM contr_execucao_leitura
+      WHERE livro::int = ANY($1::int[])
+        AND data_import ~ '^\\d{2}/\\d{2}/\\d{4}$'
+        AND to_date(data_import, 'DD/MM/YYYY') <= to_date($2, 'DD/MM/YYYY')
+      ORDER BY livro::int, id DESC
+    ), realizadas AS (
       SELECT DISTINCT b.livro::int AS livro_int, b.unidade_consumidora AS uc
       FROM base_dados_leitura b
+      LEFT JOIN ciclo_atual c ON c.livro_int = b.livro::int
       WHERE b.livro::int = ANY($1::int[])
+        AND (
+          c.data_recebimento IS NULL
+          OR c.data_recebimento !~ '^\\d{2}/\\d{2}/\\d{4}$'
+          OR NOT (b.data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$')
+          OR to_date(b.data_da_leitura, 'DD/MM/YYYY') >= to_date(c.data_recebimento, 'DD/MM/YYYY')
+        )
     )
     SELECT m.unidade_consumidora AS uc, m.livro::int AS livro_int, m.etapa,
       m.latitude, m.longitude, m.nom_municipio, m.localidade, m.endereco,
@@ -991,7 +1040,7 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
     WHERE m.livro::int = ANY($1::int[])
       AND NOT EXISTS (SELECT 1 FROM realizadas r WHERE r.livro_int = m.livro::int AND r.uc = m.unidade_consumidora)
     `,
-    [livrosInt],
+    [livrosInt, dataBr],
   );
   // Ordenado em JS (não SQL) — `sequencia` é texto livre, não sempre
   // numérico; sequência inválida vai pro fim do livro em vez de quebrar a

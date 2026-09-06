@@ -76,3 +76,26 @@ alerta ou expandir o card.
 mudança é só o valor de uma constante). `ng build` no FRONTEND sem erro. Verificação visual (login,
 badge, alerta, filtros) ainda pendente — não foi feita nesta sessão por falta de credencial de
 teste; usuário vai confirmar do lado dele.
+
+## Adendo 1 (2026-09-06) — barra de filtros move do topo do mapa pra dentro da barra lateral
+
+`app-filtros-colaboradores` (Etapa/Regional/Buscar colaborador/Cargo/Data/Limpar) ficava acima do
+mapa, dentro de `<main>` em `home.html`. Usuário pediu pra mover pra dentro da barra lateral,
+acima do cabeçalho "Colaboradores" — os filtros afetam a lista de colaboradores, faz mais sentido
+fisicamente colados a ela do que acima do mapa.
+
+Mudança só de posição, sem tocar lógica: `ListaColaboradores` (`lista-colaboradores.ts`) passa a
+importar e declarar `FiltrosColaboradores`; `<app-filtros-colaboradores>` entra no topo de
+`lista-colaboradores.html`, acima do bloco "Colaboradores {{ total }}". Removido de `home.html`
+(bloco que envolvia o componente dentro de `<main>`) e do array `imports` de `home.ts`, que ficaram
+sem uso depois da mudança.
+
+`filtros-colaboradores.html` já usa `flex flex-wrap` — no encaixe mais estreito da coluna lateral
+(w-96, ~352px úteis) os campos quebram em várias linhas em vez de uma só, mantendo cada campo
+legível.
+
+### Verificação
+
+`tsc --noEmit` sem erro. Não foi possível abrir a tela autenticada nesta sessão (sem credencial de
+teste) pra confirmar visualmente a quebra de linha dos filtros na coluna estreita — usuário vai
+confirmar do lado dele.

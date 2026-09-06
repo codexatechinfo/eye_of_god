@@ -4,7 +4,6 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
-import { FiltrosColaboradores } from './components/filtros-colaboradores/filtros-colaboradores';
 import { ListaColaboradores } from './components/lista-colaboradores/lista-colaboradores';
 import { ColaboradorDetalhe } from './components/colaborador-detalhe/colaborador-detalhe';
 import { MapaBases } from './components/mapa-bases/mapa-bases';
@@ -32,7 +31,7 @@ interface StatusColetaResponse {
 
 @Component({
   selector: 'app-home',
-  imports: [CommonModule, FiltrosColaboradores, ListaColaboradores, ColaboradorDetalhe, MapaBases, MonitoramentoView, ImportacaoView],
+  imports: [CommonModule, ListaColaboradores, ColaboradorDetalhe, MapaBases, MonitoramentoView, ImportacaoView],
   templateUrl: './home.html',
   styleUrl: './home.css',
 })

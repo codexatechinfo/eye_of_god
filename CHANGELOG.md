@@ -48,6 +48,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   cada um separado). Linha de "Limites municipais" ganhou mais destaque (mais grossa, mais opaca)
   e virou tracejada. Ver Adendo 8 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Barra de filtros de colaborador (Etapa/Regional/Buscar colaborador/Cargo/Data/Limpar) ficava
+  acima do mapa — movida pra dentro da barra lateral, acima da lista de colaboradores. Ver Adendo 1
+  da [ADR 0029](docs/adr/0029-filtros-colaboradores-afastado-com-atividade.md).
+
+- Ícone do pedestre no mapa (aba Trilho) trocou de arquivo (novo SVG real mandado pelo usuário) e
+  de cor (laranja → vermelho). Ícone da moto não mudou. Ver Adendo 9 da [ADR
+  0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
+
 ### Corrigido
 
 - Painel do dia do colaborador (aba Trilho, ADR 0030): clicar no nome na lista lateral não abria o

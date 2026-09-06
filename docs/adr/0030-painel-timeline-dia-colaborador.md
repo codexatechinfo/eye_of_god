@@ -318,3 +318,23 @@ Mudança de propriedades padrão do Leaflet (`weight`/`dashArray`/etc.) e lógic
 (`Map` por livro, mesmo padrão já usado nos pontos), sem geometria desenhada à mão — risco visual
 bem menor que os ícones dos Adendos 4-7, verificação ficou só em `ng build` sem erro (sem
 credencial de teste pro app nesta sessão).
+
+## Adendo 9 (2026-09-06) — ícone do pedestre troca de arquivo (310286.svg) e de cor (laranja → vermelho)
+
+Usuário mandou um terceiro arquivo `.svg` (`310286.svg`, mesmo formato `potrace` dos anteriores) pra
+substituir o pedestre do Adendo 7 (`304880.svg`), e pediu a cor vermelha no lugar da laranja. Mesma
+técnica dos Adendos 7/8: `ICONE_PEDESTRE` troca o path data (3 `<path>` em vez dos 2 anteriores) e o
+`viewBox` (`0 0 869 1280` → `0 0 711 1280`, novo aspecto mais estreito), mantendo intacto o mecanismo
+de `iconeColaborador` (`<g transform="translate(...) scale(0.1,-0.1)">` envolvendo os paths, só o
+`fill` do `<g>` que muda). Cor foi pra `#ef4444` — mesmo tom já usado em `CORES_TRECHO.vermelho` no
+mesmo arquivo, em vez de inventar um vermelho novo.
+
+Tamanho de exibição recalculado preservando a proporção do novo viewBox (711×1280, mais estreito que
+o anterior 869×1280): altura mantida em 32px (mesma dos ícones anteriores), largura ajustada pra
+18px (`32 × 711/1280 ≈ 17,8`).
+
+### Verificação
+
+Mesmo preview local isolado (HTML com o SVG embutido servido por `python -m http.server`,
+screenshot via browser) confirma o desenho — pedestre carregando prancheta/bolsa — renderizando em
+vermelho. `tsc --noEmit` sem erro. Ícone de moto (`ICONE_MOTO`) não foi tocado nesta rodada.

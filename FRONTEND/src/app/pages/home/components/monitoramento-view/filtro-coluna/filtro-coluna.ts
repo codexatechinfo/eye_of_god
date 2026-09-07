@@ -45,7 +45,14 @@ export class FiltroColuna implements OnDestroy {
   posicaoLeft = signal(0);
 
   private readonly LARGURA_POPOVER_PX = 208; // w-52
-  private readonly fecharListener = () => this.fechar();
+  // Reposiciona (não fecha) em scroll/resize — a 1ª versão fechava no
+  // scroll, mas isso disparava sozinho: o focus() do campo de busca (logo
+  // abaixo) já causa um scroll-into-view em alguns navegadores, fechando o
+  // popover no mesmo instante em que abre (usuário: "não está mostrando
+  // nada"); e rolar a tabela de propósito pra ver outra coluna também
+  // fechava o filtro que o usuário ainda queria usar ("sai do filtro").
+  // Reposicionar mantém o popover ancorado no botão em vez de sumir.
+  private readonly reposicionarListener = () => this.posicionar();
 
   constructor(private elementRef: ElementRef<HTMLElement>) {}
 
@@ -73,14 +80,17 @@ export class FiltroColuna implements OnDestroy {
     this.busca.set(this.opcoes ? '' : this.valor);
     this.posicionar();
     this.aberto.set(true);
-    // position: fixed é ancorado por coordenada calculada uma vez, na
-    // abertura — se a tabela (ou a página) rolar depois, a coordenada fica
-    // velha. Mais simples e robusto que recalcular a cada scroll: fecha o
-    // popover. `capture: true` porque o scroll do <div overflow-y-auto> da
-    // tabela não borbulha até window/document.
-    window.addEventListener('scroll', this.fecharListener, true);
-    window.addEventListener('resize', this.fecharListener);
-    setTimeout(() => this.campoBusca?.nativeElement.focus());
+    // `capture: true` porque o scroll do <div overflow-y-auto>/<div
+    // overflow-x-auto> da tabela não borbulha até window/document — só a
+    // fase de captura alcança um scroll disparado dentro de um elemento
+    // aninhado.
+    window.addEventListener('scroll', this.reposicionarListener, true);
+    window.addEventListener('resize', this.reposicionarListener);
+    // preventScroll: true — sem isso, focar o campo já causa um
+    // scroll-into-view em alguns navegadores assim que o popover abre
+    // (mesmo ele já estando visível), e isso sozinho bastava pra confundir
+    // o usuário achando que "não mostra nada".
+    setTimeout(() => this.campoBusca?.nativeElement.focus({ preventScroll: true }));
   }
 
   fechar(): void {
@@ -89,8 +99,8 @@ export class FiltroColuna implements OnDestroy {
   }
 
   private pararDeOuvirRolagem(): void {
-    window.removeEventListener('scroll', this.fecharListener, true);
-    window.removeEventListener('resize', this.fecharListener);
+    window.removeEventListener('scroll', this.reposicionarListener, true);
+    window.removeEventListener('resize', this.reposicionarListener);
   }
 
   private posicionar(): void {

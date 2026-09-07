@@ -202,3 +202,36 @@ lateral (era o bug reportado). Matemática do clamp de borda conferida separadam
 = innerWidth - rect.left`; `rect.left=1200, rect.right=1216, innerWidth=1280` → `left=1008`,
 `left+208=1216`, dentro da janela). `npx tsc --noEmit` e `npx ng build --configuration production`
 limpos.
+
+## Adendo 3 (2026-09-07) — fechar no scroll fechava o próprio popover que acabou de abrir
+
+Usuário, na sequência: *"não está funcionando... agora não está mostrando nada e quando tento
+rolar o scrol lateralmente sai do filtro"*.
+
+Causa: "fecha no scroll" (Adendo 2) tratava scroll só como "a coordenada ficou velha, mais seguro
+fechar" — mas dois casos disparavam ESSE MESMO listener de forma indesejada:
+
+- `campoBusca.focus()` (chamado logo depois de abrir, pra já poder digitar) causa um
+  scroll-into-view implícito em alguns navegadores mesmo quando o campo já está totalmente
+  visível — o listener de scroll (`capture: true`, pega até scroll de elemento aninhado) fechava o
+  popover no MESMO instante em que abria. Sintoma: "não está mostrando nada" (abre e fecha rápido
+  demais pra perceber, exceto o flash).
+- Rolar a tabela de propósito pra ver outra coluna também fechava o filtro que o usuário ainda
+  queria usar — a intenção nunca foi essa, "fechar" era só a solução mais simples pro problema de
+  coordenada desatualizada, não um requisito.
+
+Correção: o listener de scroll/resize passa a CHAMAR `posicionar()` DE NOVO (reancora no botão) em
+vez de `fechar()` — resolve a coordenada desatualizada sem precisar fechar nada. `focus()` ganhou
+`{ preventScroll: true }`, eliminando o scroll implícito na abertura por completo (correção na
+causa, não só no sintoma via reposicionamento).
+
+### Verificação
+
+Réplica do Adendo 2 refeita pra chamar as mesmas funções do componente real (`opcoesFiltradas`
+embutida como `renderLista`, mesmo `posicionar()`, mesmo listener). Testado via console/JS na
+Browser pane (clique físico simulado num alvo de 16px é impreciso demais no scale da réplica, mas
+a LÓGICA é a mesma que roda no Angular real): abrir populou a lista imediatamente e permaneceu
+aberto (`aberto: "Situacao"`, 4 opções renderizadas); simular scroll horizontal de 300px no
+`.scroller` manteve `aberto`/`display: "block"` e ajustou `left` de 336px pra 36px — exatamente o
+delta do scroll, popover acompanhando em vez de fechar. `npx tsc --noEmit` e `npx ng build
+--configuration production` limpos.

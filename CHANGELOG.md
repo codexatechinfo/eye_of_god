@@ -7,6 +7,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Spinner no mapa ("Carregando rota do colaborador...") enquanto a jornada do dia é buscada, depois
+  de abrir um colaborador ou clicar "Ver no mapa" — antes a rota simplesmente demorava a aparecer,
+  sem nenhum indicativo de carregamento. Não aparece no refresh silencioso de 60s. Ver Adendo 3 da
+  [ADR 0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
+
 - Nova camada "Rastro executado" no mapa (aba Trilho) — trajeto GPS REAL do dia (Scalefusion pro
   pedestre, SEGSAT pro motoqueiro), independente da já existente "Trajetória do dia" (que conecta
   só os pontos de UC lida, inferido da execução, não GPS contínuo). As duas ficam marcáveis/

@@ -567,6 +567,14 @@ export class ColaboradoresService {
   // Jornada do dia por colaborador — recarregada toda vez que o card dele é
   // reaberto (sem polling, não muda minuto a minuto como atividadeHoje).
   jornadaPorColaborador = signal<Map<string, JornadaColaborador>>(new Map());
+  // true enquanto uma busca INTERATIVA de jornada está em voo (usuário
+  // acabou de abrir um colaborador ou clicar "Ver no mapa") — usuário
+  // reportou que a rota demora um tempo considerável pra aparecer no mapa,
+  // sem nenhum indicativo de que algo está carregando. Não cobre o refresh
+  // silencioso de 60s (carregarJornada chamado sem `interativo`) —
+  // mostrar um spinner a cada minuto pra um refresh em segundo plano seria
+  // ruído, não ajuda em nada.
+  carregandoJornada = signal(false);
 
   // Sempre ordenada por destaque (mais grave primeiro) e, quando um toggle
   // está ativo, filtrada só para quem está naquela categoria.
@@ -862,7 +870,7 @@ export class ColaboradoresService {
   selecionarColaborador(nome: string): void {
     const abrindo = this.colaboradorSelecionado() !== nome;
     this.colaboradorSelecionado.set(abrindo ? nome : null);
-    if (abrindo) this.carregarJornada(nome);
+    if (abrindo) this.carregarJornada(nome, true);
   }
 
   // Igual selecionarColaborador, mas nunca fecha (não alterna) — usado pelo
@@ -879,7 +887,7 @@ export class ColaboradoresService {
     this.colaboradorFocado.set(null);
     if (this.colaboradorSelecionado() !== nome) {
       this.colaboradorSelecionado.set(nome);
-      this.carregarJornada(nome);
+      this.carregarJornada(nome, true);
     }
     this.colaboradorFocado.set(nome);
   }
@@ -910,7 +918,11 @@ export class ColaboradoresService {
   // Sem cache (diferente de regimeSucessivoPorUc) — recarrega toda vez que
   // o card é reaberto, já que a jornada de hoje muda ao longo do dia.
   // Segue a mesma data selecionada no calendário da sidebar (filtroData).
-  carregarJornada(nome: string): void {
+  // `interativo` liga carregandoJornada (spinner no mapa) — só quando é o
+  // usuário esperando algo acontecer na tela; o refresh silencioso de 60s
+  // (chamado sem esse parâmetro) não mexe no spinner.
+  carregarJornada(nome: string, interativo = false): void {
+    if (interativo) this.carregandoJornada.set(true);
     this.http
       .get<JornadaResponse>(`${this.apiUrl}/colaboradores/jornada`, {
         params: new HttpParams().set('colaborador', nome).set('data', this.filtroData()),
@@ -920,6 +932,7 @@ export class ColaboradoresService {
           const mapa = new Map(this.jornadaPorColaborador());
           mapa.set(nome, resposta);
           this.jornadaPorColaborador.set(mapa);
+          if (interativo) this.carregandoJornada.set(false);
           // Pré-carrega regime sucessivo de toda UC com código de
           // impedimento no dia — precisa estar disponível ANTES de
           // expandir, já que agora decide a cor do ponto (vermelho =
@@ -931,7 +944,9 @@ export class ColaboradoresService {
             if (ehCodigoDeImpedimento(ponto.codigo)) this.carregarRegimeSucessivo(ponto.uc);
           }
         },
-        error: () => {},
+        error: () => {
+          if (interativo) this.carregandoJornada.set(false);
+        },
       });
   }
 

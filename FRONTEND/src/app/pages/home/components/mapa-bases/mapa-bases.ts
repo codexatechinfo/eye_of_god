@@ -1,4 +1,5 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, effect, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import * as L from 'leaflet';
 import {
   ColaboradoresService,
@@ -306,7 +307,7 @@ function cascoConvexo(pontos: L.LatLngTuple[]): L.LatLngTuple[] {
 
 @Component({
   selector: 'app-mapa-bases',
-  imports: [],
+  imports: [CommonModule],
   templateUrl: './mapa-bases.html',
   styleUrl: './mapa-bases.css',
 })

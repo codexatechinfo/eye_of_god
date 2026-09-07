@@ -157,3 +157,31 @@ o roster inteiro sem filtro, exatamente o efeito esperado ao remover a barra.
 
 `npx tsc --noEmit` e `npx ng build --configuration production` limpos (bundle ligeiramente menor,
 confirma a remoção).
+
+## Adendo 3 (2026-09-07) — spinner no mapa enquanto a rota do colaborador carrega
+
+Usuário: abrir um colaborador (ou "Ver no mapa") demora um tempo considerável até a rota aparecer
+no mapa, sem nenhum indicativo de que algo está carregando — parecia travado.
+
+Causa: a linha só é desenhada quando `jornadaPorColaborador` recebe a resposta de `GET
+/colaboradores/jornada` (query pesada, cruza vários livros do dia — ver `obterJornadaColaborador`);
+até lá, nada na tela mudava.
+
+`ColaboradoresService.carregarJornada` ganhou um parâmetro `interativo` (default `false`) — só
+liga o novo signal `carregandoJornada` quando é `true`. Chamado com `true` nos dois lugares onde é
+o usuário esperando (`selecionarColaborador`/`abrirColaborador` — cobre clique na lista, no ícone
+do mapa e "Ver no mapa"); o refresh silencioso de 60s (`carregarJornada(nome)` sem o parâmetro, na
+função que já existia pra manter a timeline atualizada) continua sem tocar no spinner — mostrar um
+spinner a cada minuto por um refresh em segundo plano seria ruído, não ajuda em nada.
+
+`mapa-bases.html` ganhou um wrapper `relative` em volta do `<div #mapaEl>` (antes era o único
+elemento raiz) e uma pílula flutuante (`position: absolute`, topo centralizado,
+`pointer-events-none` — não bloqueia interação com o mapa) com ícone girando
+(`animate-spin`) e "Carregando rota do colaborador...", visível enquanto
+`colaboradoresService.carregandoJornada()` for `true`.
+
+### Verificação
+
+Réplica com o CSS real compilado do projeto: pílula branca translúcida, ícone azul girando,
+centralizada no topo — visual limpo, não cobre o mapa. `npx tsc --noEmit` e `npx ng build
+--configuration production` limpos.

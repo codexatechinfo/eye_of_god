@@ -5,6 +5,7 @@ const {
   obterJornadaColaborador,
 } = require('../services/atividadeColaboradoresService');
 const { obterUltimasPosicoes } = require('../services/scalefusionService');
+const { obterUltimasPosicoes: obterUltimasPosicoesSegsat } = require('../services/segsatFrotaService');
 
 // "YYYY-MM-DD" -> "DD/MM/YYYY" (mesmo formato de contr_execucao_leitura.data_import).
 function isoParaDataBr(iso) {
@@ -76,6 +77,16 @@ async function scalefusion(req, res) {
   }
 }
 
+async function segsatPosicoes(req, res) {
+  try {
+    const dados = await obterUltimasPosicoesSegsat(req.db);
+    res.json({ sucesso: true, posicoes: dados });
+  } catch (erro) {
+    console.error('❌ Erro ao obter posições SEGSAT dos colaboradores:', erro);
+    res.status(500).json({ sucesso: false, erro: erro.message });
+  }
+}
+
 async function jornada(req, res) {
   try {
     const { colaborador, data } = req.query;
@@ -94,4 +105,4 @@ async function jornada(req, res) {
   }
 }
 
-module.exports = { ativos, opcoesFiltro, atividadeHoje, localizacoes, scalefusion, jornada };
+module.exports = { ativos, opcoesFiltro, atividadeHoje, localizacoes, scalefusion, segsatPosicoes, jornada };

@@ -31,6 +31,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   pra motoqueiro e pedestre. Ver Adendo 1 da [ADR
   0033](docs/adr/0033-integracao-scalefusion-posicao-bateria.md).
 
+- Colaborador motoqueiro no mapa (aba Trilho) agora também usa posição REAL (via SEGSAT, a própria
+  moto), mesmo tratamento já dado ao pedestre — só volta pra última UC realizada se a posição real
+  tiver mais de 24h. Ver Adendo 2 da [ADR
+  0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
+
 ### Alterado
 
 - Painel lateral de detalhe (aba Trilho): mostrava a timeline de UM livro só, aberto livro por

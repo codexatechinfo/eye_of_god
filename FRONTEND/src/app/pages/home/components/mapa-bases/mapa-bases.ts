@@ -715,17 +715,17 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
   }
 
-  // Um marcador por colaborador com posição conhecida (Scalefusion em tempo
-  // real pro pedestre, ou última UC realizada pros demais) — sem filtro de
-  // regional (os círculos que faziam essa seleção foram removidos). Sempre
-  // limpa tudo primeiro: mais simples que diffar, e o volume (algumas
-  // centenas no máximo) não justifica a complexidade de atualizar em cima
-  // da instância existente.
+  // Um marcador por colaborador com posição conhecida — tempo real
+  // (Scalefusion pro pedestre, SEGSAT pro motoqueiro) quando existe e está
+  // fresca, senão última UC realizada — sem filtro de regional (os círculos
+  // que faziam essa seleção foram removidos). Sempre limpa tudo primeiro:
+  // mais simples que diffar, e o volume (algumas centenas no máximo) não
+  // justifica a complexidade de atualizar em cima da instância existente.
   //
   // O gate de "atividade hoje" (atividadeDe) só vale pro caminho de posição
-  // por LEITURA — posição real (Scalefusion) prova sozinha que o
-  // colaborador está em campo agora, não precisa desse gate (ver dentro da
-  // função pra detalhe de cada caminho).
+  // por LEITURA — posição real prova sozinha que o colaborador está em
+  // campo agora, não precisa desse gate (ver dentro da função pra detalhe de
+  // cada caminho).
   private atualizarMarcadoresColaboradores(): void {
     if (!this.mapa) return;
 
@@ -738,24 +738,23 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     const porNome = new Map(this.colaboradoresService.colaboradores().map(c => [c.colaborador, c]));
     const localizacaoPorNome = new Map(this.colaboradoresService.localizacoes().map(l => [l.colaborador, l]));
     const scalefusionPorNome = this.colaboradoresService.scalefusionPorColaborador();
-    // União das duas fontes — um pedestre pode ter posição real (Scalefusion)
-    // sem nunca ter uma UC realizada ainda (contratado recente), e vice-versa
-    // (aparelho sem correspondência no Scalefusion, ver ADR 0033).
-    const nomesVistos = new Set([...localizacaoPorNome.keys(), ...scalefusionPorNome.keys()]);
+    const segsatPorNome = this.colaboradoresService.segsatPorColaborador();
+    // União das três fontes — um colaborador pode ter posição real sem nunca
+    // ter uma UC realizada ainda (contratado recente), e vice-versa (sem
+    // correspondência no Scalefusion/SEGSAT ainda, ver ADR 0033/0034).
+    const nomesVistos = new Set([...localizacaoPorNome.keys(), ...scalefusionPorNome.keys(), ...segsatPorNome.keys()]);
 
     for (const nome of nomesVistos) {
       const colaborador = porNome.get(nome);
       if (!colaborador) continue;
 
       const ehMoto = colaborador.cargo === 'LEITURISTA MOTOCICLISTA' || colaborador.cargo === 'MONITOR';
-      // Posição REAL (Scalefusion) só pro pedestre por enquanto — pedido
-      // explícito do usuário; motoqueiro ainda usa a última UC realizada até
-      // a integração de frota (SEGSAT) resolver o mapeamento placa↔colaborador
-      // (ver ADR 0033). "Válida" exige menos de 24h de idade — sem esse
-      // corte, um aparelho parado de reportar há dias ficaria marcado como
-      // "tempo real" pra sempre (mesma preocupação já registrada na
-      // especificação da API).
-      const posicaoReal = !ehMoto ? scalefusionPorNome.get(nome) : undefined;
+      // Posição REAL: Scalefusion (celular) pro pedestre, SEGSAT (a própria
+      // moto) pro motoqueiro — ADR 0033/0034. "Válida" exige menos de 24h de
+      // idade nos dois casos — sem esse corte, um aparelho parado de
+      // reportar há dias ficaria marcado como "tempo real" pra sempre (mesma
+      // preocupação já registrada na especificação da API).
+      const posicaoReal = ehMoto ? segsatPorNome.get(nome) : scalefusionPorNome.get(nome);
       const idadePosicaoReal = posicaoReal?.data_hora_posicao ? Date.now() - new Date(posicaoReal.data_hora_posicao).getTime() : null;
       const posicaoRealValida =
         !!posicaoReal?.latitude && !!posicaoReal?.longitude && idadePosicaoReal !== null && idadePosicaoReal < LIMITE_POSICAO_REAL_MS;
@@ -767,9 +766,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         // Posição real NÃO passa pelo gate de "atividade hoje" — o próprio
         // GPS fresco (< 24h) já prova que o colaborador está em campo agora,
         // independente de ele já ter registrado alguma leitura hoje. Bug
-        // real reportado pelo usuário: 41 pedestres com posição Scalefusion
+        // real reportado pelo usuário: pedestres com posição Scalefusion
         // válida sumiam do mapa só porque ainda não tinham lido nenhuma UC
-        // hoje (gate pensado só pra rota por leitura, ver comentário abaixo).
+        // hoje (gate pensado só pra rota por leitura, ver comentário abaixo)
+        // — mesma regra vale pro motoqueiro com posição SEGSAT.
         lat = Number(posicaoReal!.latitude);
         lng = Number(posicaoReal!.longitude);
         const hora = new Date(posicaoReal!.data_hora_posicao!).toLocaleTimeString('pt-BR');

@@ -134,4 +134,18 @@ async function coletarPosicoes(db, empresaId) {
   return { total: unidades.length, gravadas: linhasParaGravar.length, semMapeamento, semRoster };
 }
 
-module.exports = { coletarPosicoes };
+// Última posição+velocidade+ignição conhecida de cada colaborador motoqueiro
+// — mesmo raciocínio de obterUltimasPosicoes em scalefusionService.js
+// (sempre "o retrato mais recente já coletado", sem filtro de dia). Alimenta
+// a posição real do motoqueiro no mapa (ver ADR 0033/0034).
+async function obterUltimasPosicoes(db) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (colaborador)
+       colaborador, cargo, placa, latitude, longitude, velocidade, ignicao, data_hora_posicao
+     FROM segsat_posicoes
+     ORDER BY colaborador, coletado_em DESC`,
+  );
+  return rows;
+}
+
+module.exports = { coletarPosicoes, obterUltimasPosicoes };

@@ -308,6 +308,26 @@ interface ScalefusionResponse {
   posicoes: PosicaoScalefusion[];
 }
 
+// Última posição+velocidade+ignição conhecida via API SEGSAT (ADR 0034) —
+// mesmo raciocínio de PosicaoScalefusion, mas pro motoqueiro (posição da
+// MOTO, não do celular). Sem bateria — a SEGSAT não expõe isso, quem dá
+// bateria de motoqueiro é a Scalefusion (celular dele, tabela separada).
+export interface PosicaoSegsat {
+  colaborador: string;
+  cargo: string | null;
+  placa: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  velocidade: number | null;
+  ignicao: boolean | null;
+  data_hora_posicao: string | null;
+}
+
+interface SegsatResponse {
+  sucesso: boolean;
+  posicoes: PosicaoSegsat[];
+}
+
 // N° de meses consecutivos em que uma UC recebeu o MESMO código de
 // impedimento, mais a lista desses meses (mais recente primeiro) — ver
 // monitoramentoService.js#obterRegimeSucessivo. Decide a cor vermelha do
@@ -482,6 +502,10 @@ export class ColaboradoresService {
   // passado do calendário).
   scalefusionPorColaborador = signal<Map<string, PosicaoScalefusion>>(new Map());
 
+  // Mesma ideia, posição da MOTO via SEGSAT (ADR 0034) — mapa (mapa-bases.ts)
+  // usa esta pro motoqueiro em vez de scalefusionPorColaborador.
+  segsatPorColaborador = signal<Map<string, PosicaoSegsat>>(new Map());
+
   // Contorno só dos município(s) que o colaborador aberto tocou no dia
   // (camada "Limites municipais", ADR 0022) — não a malha inteira do
   // estado. Recalculado sempre que o colaborador selecionado muda enquanto
@@ -599,6 +623,7 @@ export class ColaboradoresService {
     this.carregarAtividadeHoje();
     this.carregarLocalizacoes();
     this.carregarScalefusion();
+    this.carregarSegsat();
 
     // Abre o alerta sozinho (sem precisar de clique) assim que aparece um
     // nome em afastadosComAtividade que ainda não estava em afastadosVistos
@@ -617,6 +642,7 @@ export class ColaboradoresService {
       // selecionado no calendário (diferente de atividade/localizações, que
       // são retrato DAQUELE dia e não têm nada novo pra buscar nesse caso).
       this.carregarScalefusion();
+      this.carregarSegsat();
       if (this.filtroData() === hojeIso()) {
         this.carregarAtividadeHoje();
         this.carregarLocalizacoes();
@@ -729,6 +755,21 @@ export class ColaboradoresService {
 
   scalefusionDe(nome: string): PosicaoScalefusion | null {
     return this.scalefusionPorColaborador().get(nome) ?? null;
+  }
+
+  // Mesmo raciocínio de carregarScalefusion — sempre "agora", sem parâmetro
+  // de data.
+  carregarSegsat(): void {
+    this.http.get<SegsatResponse>(`${this.apiUrl}/colaboradores/segsat`).subscribe({
+      next: resposta => {
+        this.segsatPorColaborador.set(new Map(resposta.posicoes.map(p => [p.colaborador, p])));
+      },
+      error: () => {},
+    });
+  }
+
+  segsatDe(nome: string): PosicaoSegsat | null {
+    return this.segsatPorColaborador().get(nome) ?? null;
   }
 
   // pontos: coordenadas [latitude, longitude] das UCs do dia do colaborador

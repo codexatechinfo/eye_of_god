@@ -125,3 +125,26 @@ oscila de tamanho ao longo do dia — 424 numa consulta anterior desta sessão, 
 resto gravado com sucesso. `\d+ segsat_posicoes` confirma RLS forçada com a policy padrão.
 `BACKEND/test/isolamento_tenant.test.js` ganhou `segsat_posicoes` — suíte completa (18 testes)
 passa.
+
+## Adendo 2 (2026-09-07) — motoqueiro passa a usar a posição real (SEGSAT) no mapa
+
+Usuário confirmou: sim, ligar a exibição no mapa. Mesmo tratamento já dado ao pedestre com
+Scalefusion (ADR 0033 Adendo 1/2), agora pro motoqueiro com SEGSAT:
+
+- Novo endpoint `GET /colaboradores/segsat` (`obterUltimasPosicoes` em `segsatFrotaService.js` —
+  mesma forma de `DISTINCT ON (colaborador)` já usada na Scalefusion) alimenta um novo signal
+  `segsatPorColaborador` no frontend, recarregado a cada 60s, sem depender de `filtroData`.
+- `atualizarMarcadoresColaboradores()` (`mapa-bases.ts`) generalizada: a escolha da fonte de posição
+  real agora é `ehMoto ? segsatPorNome.get(nome) : scalefusionPorNome.get(nome)` — o resto da lógica
+  (corte de 24h de idade, sem gate de atividade hoje, fallback pra última UC realizada) é o MESMO
+  código pros dois casos, só troca a fonte. `nomesVistos` passa a ser a união de três mapas
+  (localização + Scalefusion + SEGSAT), não mais dois.
+- SEGSAT não tem bateria (isso continua vindo só da Scalefusion, celular do colaborador — moto e
+  celular são rastreadores diferentes, tabelas diferentes) — `PosicaoSegsat` no frontend não tem
+  esse campo de propósito, pra não sugerir um dado que não existe.
+
+### Verificação
+
+Simulação da lógica completa contra o banco real: **85 marcadores** no total agora (45 pedestres via
+Scalefusion + 40 motoqueiros via SEGSAT, 0 precisando do fallback por leitura neste momento).
+`tsc --noEmit` e `ng build --configuration production` sem erro. `npm test` (18/18) sem regressão.

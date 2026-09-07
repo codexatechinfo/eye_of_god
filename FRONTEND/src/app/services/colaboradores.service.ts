@@ -532,6 +532,12 @@ export class ColaboradoresService {
   // piscar; centralizações vindas de outro lugar continuam só voando até a
   // coordenada, sem piscar nada).
   centralizarEm = signal<{ lat: number; lng: number; uc?: string } | null>(null);
+  // Pedido de trocar pra aba Trilho a partir de OUTRA aba (Monitoramento de
+  // Livros/Massivas) — botão "Ver no mapa" do modal de agentes em campo
+  // (monitoramento-view.ts). Contador (não boolean) pra sempre disparar o
+  // effect em home.ts mesmo pedindo a mesma coisa duas vezes seguidas
+  // (mesmo motivo do null-no-meio de abrirColaborador).
+  pedidoAbaTrilho = signal(0);
   // Cache simples por UC — evita rebuscar regime sucessivo se o usuário
   // reabrir a mesma UC mais de uma vez na mesma sessão.
   regimeSucessivoPorUc = signal<Map<string, RegimeSucessivo>>(new Map());
@@ -833,6 +839,29 @@ export class ColaboradoresService {
       this.carregarJornada(nome);
     }
     this.colaboradorFocado.set(nome);
+  }
+
+  // "Ver no mapa" do modal de agentes em campo (Monitoramento de
+  // Livros/Massivas) — abre o card do colaborador (mesmo efeito de
+  // abrirColaborador) e pede a troca pra aba Trilho, além de centralizar o
+  // mapa na posição real dele quando existe (Scalefusion pro pedestre,
+  // SEGSAT pro motoqueiro — mesma regra de mapa-bases.ts#ehMoto), com
+  // fallback pra última UC realizada quando não há posição real.
+  verNoMapa(nome: string): void {
+    this.abrirColaborador(nome);
+
+    const colaborador = this.colaboradores().find(c => c.colaborador === nome);
+    const ehMoto = colaborador?.cargo === 'LEITURISTA MOTOCICLISTA' || colaborador?.cargo === 'MONITOR';
+    const posicaoReal = ehMoto ? this.segsatDe(nome) : this.scalefusionDe(nome);
+    const localizacao = this.localizacoes().find(l => l.colaborador === nome);
+
+    const lat = posicaoReal?.latitude ?? localizacao?.latitude;
+    const lng = posicaoReal?.longitude ?? localizacao?.longitude;
+    if (lat != null && lng != null) {
+      this.centralizarEm.set({ lat: Number(lat), lng: Number(lng) });
+    }
+
+    this.pedidoAbaTrilho.update(v => v + 1);
   }
 
   // Sem cache (diferente de regimeSucessivoPorUc) — recarrega toda vez que

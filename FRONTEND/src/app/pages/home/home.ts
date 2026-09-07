@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -56,7 +56,17 @@ export class Home implements OnInit, OnDestroy {
     // Público — o alerta de "afastado com atividade" é global (não preso à
     // aba Trilho, ver home.html), consumido direto do template daqui.
     public colaboradoresService: ColaboradoresService,
-  ) {}
+  ) {
+    // "Ver no mapa" do modal de agentes em campo (Monitoramento de
+    // Livros/Massivas, ver monitoramento-view.ts) — abaAtiva só existe aqui
+    // (Home), então o pedido cruza via um signal do service compartilhado.
+    // Primeira execução do effect (valor inicial 0) já cai aqui e seta
+    // 'monitoramento' de novo — inofensivo, é o valor padrão de abaAtiva.
+    effect(() => {
+      this.colaboradoresService.pedidoAbaTrilho();
+      this.abaAtiva.set('monitoramento');
+    });
+  }
 
   ngOnInit(): void {
     this.verificarStatusColeta();

@@ -120,10 +120,22 @@ const CONFIG_IMPORTACAO = {
     temEmpresa: true,
     colunas: ['regional', 'cidade', 'distrito', 'local'],
   },
+  // `mes_ref`/`prazo_calendario` têm o mesmo formato "YYYY-MM-DD" de
+  // calendario_leitura (ver comentário lá) e o mesmo bug: sem
+  // `colunasDataIso`, célula do Excel formatada como data virava
+  // "31/08/2026" em vez de "2026-08-01"/"2026-08-31", quebrando o
+  // `to_date(preg.mes_ref, ...)`/`to_date(preg.prazo_calendario, ...)` de
+  // monitoramentoService.js — o JOIN de `EFETIVO_PRAZO_REG_SQL` exige
+  // `mes_ref` batendo exatamente com o mês corrente, então essas linhas
+  // simplesmente nunca casavam com nada (coluna "Prazo regulatório" saía
+  // "—" pra TODO livro do mês, não só os sem correspondência de verdade).
+  // Achado ao vivo (usuário reportou 2026-09-07): reimportação da planilha
+  // gravou 13.892 linhas com mes_ref = "31/08/2026" em vez de "2026-08-01".
   prazo_reg_livros: {
     modo: 'upsert',
     temEmpresa: true,
     chave: ['mes_ref'],
+    colunasDataIso: ['mes_ref', 'prazo_calendario'],
     colunas: [
       'mes_ref', 'regional', 'municipio', 'local', 'etapa', 'livro', 'ultimo_executor',
       'primeira', 'ultima', 'prazo_calendario', 'dias_iniciais', 'dias_finais',

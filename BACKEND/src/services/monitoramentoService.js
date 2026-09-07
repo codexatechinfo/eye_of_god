@@ -1,5 +1,14 @@
 const { calcularSegmento } = require('./deslocamentoService');
 
+// Mesmo padrão de colaboradoresController.js#hojeBr — data local do
+// servidor, "DD/MM/YYYY".
+function hojeBr() {
+  const agora = new Date();
+  const dia = String(agora.getDate()).padStart(2, '0');
+  const mes = String(agora.getMonth() + 1).padStart(2, '0');
+  return `${dia}/${mes}/${agora.getFullYear()}`;
+}
+
 // ── fontes "massiva" (tabelas de staging do scraper de massivas) ──
 const TABELAS_MASSIVA = {
   pendentes: { nome: 'pendentes_im', temLeiturista: false, rotulo: 'Pendente' },
@@ -526,10 +535,24 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
 async function obterResumo(db, filtros) {
   await desligarNestedLoop(db);
   const fontes = fontesAtivas(filtros.tipoServico);
-  const [ultimoBatchMassiva, ultimoBatchLeitura] = await Promise.all([
+  const [ultimoBatchMassivaBruto, ultimoBatchLeitura] = await Promise.all([
     fontes.massiva ? obterUltimoBatchMassiva(db) : null,
     fontes.leitura || fontes.releitura ? obterUltimoBatchLeitura(db) : null,
   ]);
+
+  // A coleta de massivas roda em loop contínuo (~5s) — se o último lote
+  // gravado não é de HOJE, a coleta está parada (fonte externa fora do ar,
+  // etc.), e o número mais recente que existe já tem dias. Tratar esse lote
+  // velho como se fosse o status atual seria informação infiel (usuário,
+  // após reportar o card "Progresso de atividades" zerado incorretamente:
+  // "se não tem dado nenhum pra hoje então a tabela de massivas não deve
+  // exibir nada pq se exibir vai estar mostrando uma informação infiel") —
+  // por isso a aba Massivas cai no mesmo caminho de "nenhum dado" (zerado)
+  // quando isso acontece, só que devolve o horário do último lote conhecido
+  // pra o FRONTEND avisar o usuário em vez de simplesmente mostrar zero sem
+  // explicação (zero também seria enganoso: pareceria "tudo em dia").
+  const massivaDesatualizada = !!ultimoBatchMassivaBruto && ultimoBatchMassivaBruto.dt_import !== hojeBr();
+  const ultimoBatchMassiva = massivaDesatualizada ? null : ultimoBatchMassivaBruto;
 
   if (!ultimoBatchMassiva && !ultimoBatchLeitura) {
     return {
@@ -543,6 +566,10 @@ async function obterResumo(db, filtros) {
       prazoFinal: { ...CONTAGEM_ZERO },
       atrasadas: { ...CONTAGEM_ZERO },
       faixasDias: { menor27: { ...CONTAGEM_ZERO }, igual33: { ...CONTAGEM_ZERO }, maior34: { ...CONTAGEM_ZERO } },
+      massivaDesatualizada,
+      ultimoLoteMassiva: massivaDesatualizada
+        ? { dataImport: ultimoBatchMassivaBruto.dt_import, horaImport: ultimoBatchMassivaBruto.hr_import }
+        : null,
     };
   }
 
@@ -603,6 +630,10 @@ async function obterResumo(db, filtros) {
     prazoFinal,
     atrasadas,
     faixasDias,
+    massivaDesatualizada,
+    ultimoLoteMassiva: massivaDesatualizada
+      ? { dataImport: ultimoBatchMassivaBruto.dt_import, horaImport: ultimoBatchMassivaBruto.hr_import }
+      : null,
   };
 }
 
@@ -665,10 +696,15 @@ async function obterOpcoesFiltro(db, filtros = {}) {
 async function obterDetalhe(db, filtros) {
   await desligarNestedLoop(db);
   const fontes = fontesAtivas(filtros.tipoServico);
-  const [ultimoBatchMassiva, ultimoBatchLeitura] = await Promise.all([
+  const [ultimoBatchMassivaBruto, ultimoBatchLeitura] = await Promise.all([
     fontes.massiva ? obterUltimoBatchMassiva(db) : null,
     fontes.leitura || fontes.releitura ? obterUltimoBatchLeitura(db) : null,
   ]);
+
+  // Mesma regra de obterResumo — lote de massiva que não é de hoje não entra
+  // na tabela de detalhe (senão a linha ficaria parecendo situação atual).
+  const ultimoBatchMassiva =
+    ultimoBatchMassivaBruto && ultimoBatchMassivaBruto.dt_import === hojeBr() ? ultimoBatchMassivaBruto : null;
 
   if (!ultimoBatchMassiva && !ultimoBatchLeitura) {
     return { dataImport: null, horaImport: null, linhas: [] };

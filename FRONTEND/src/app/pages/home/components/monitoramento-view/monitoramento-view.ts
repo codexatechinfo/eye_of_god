@@ -60,10 +60,20 @@ export class MonitoramentoView implements OnInit {
     return this.colaboradoresService.colaboradores().length;
   }
 
+  // Na aba Massivas, "em campo" só conta quem tem pelo menos um livro de
+  // massiva na atividade de hoje — usuário corrigiu a suposição anterior
+  // (contava qualquer atividade, leitura/releitura incluída, inflando os
+  // números da aba errada). Na aba Monitoramento de Livros o comportamento
+  // já estava certo (usuário confirmou), então segue sem filtro extra ali.
   private agentesEmCampoLista() {
-    return this.colaboradoresService
+    const todos = this.colaboradoresService
       .colaboradores()
       .filter(c => this.colaboradoresService.atividadeDe(c.colaborador));
+    if (this.escopo !== 'massiva') return todos;
+    return todos.filter(c => {
+      const atividade = this.colaboradoresService.atividadeDe(c.colaborador);
+      return atividade?.livros.some(l => l.tipoServico === 'massiva') ?? false;
+    });
   }
 
   agentesEmCampo(): number {
@@ -132,6 +142,44 @@ export class MonitoramentoView implements OnInit {
 
   formatarTempoParado(minutos: number): string {
     return formatarTempoParado(minutos);
+  }
+
+  // Modal "Agentes em campo" (item 2) — abre ao clicar no número do card,
+  // lista TODOS os agentes em campo do escopo desta aba (mesma lista de
+  // agentesEmCampoLista(), já filtrada por massiva quando for o caso), com
+  // bateria do aparelho, tempo sem sincronizar e atalho pro mapa.
+  mostrarAgentesEmCampo = signal(false);
+
+  abrirAgentesEmCampo(): void {
+    if (this.agentesEmCampo() > 0) this.mostrarAgentesEmCampo.set(true);
+  }
+
+  fecharAgentesEmCampo(): void {
+    this.mostrarAgentesEmCampo.set(false);
+  }
+
+  listaAgentesEmCampo(): { nome: string; cargo: string; bateria: number | null; minutosParado: number | null }[] {
+    return this.agentesEmCampoLista()
+      .map(c => ({
+        nome: c.colaborador,
+        cargo: c.cargo,
+        bateria: this.colaboradoresService.scalefusionDe(c.colaborador)?.bateria_percentual ?? null,
+        minutosParado: this.colaboradoresService.atividadeDe(c.colaborador)?.minutosParado ?? null,
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }
+
+  // Bateria do aparelho — mesmos limiares de lista-colaboradores.ts#corBateria.
+  corBateria(percentual: number | null): string {
+    if (percentual == null) return 'text-slate-400';
+    if (percentual <= 20) return 'text-red-600';
+    if (percentual <= 50) return 'text-amber-600';
+    return 'text-emerald-600';
+  }
+
+  verNoMapa(nome: string): void {
+    this.colaboradoresService.verNoMapa(nome);
+    this.fecharAgentesEmCampo();
   }
 
   // atividade.totalRealizadas/totalPendentes soma TODOS os livros do
@@ -369,6 +417,22 @@ export class MonitoramentoView implements OnInit {
 
   abrirHistorico(livro: string): void {
     this.monitoramentoService.abrirHistoricoLivro(livro);
+  }
+
+  // Clique no valor da célula Regional/Leiturista filtra a tabela por aquele
+  // valor exato (item 4). stopPropagation() é obrigatório — a linha inteira
+  // já tem (click)="abrirHistorico(...)", sem isso o clique acionaria os
+  // dois.
+  filtrarPorRegional(regional: string, evento: Event): void {
+    evento.stopPropagation();
+    this.monitoramentoService.filtroRegional.set(regional);
+    this.monitoramentoService.buscarTudo();
+  }
+
+  filtrarPorLeiturista(leiturista: string, evento: Event): void {
+    evento.stopPropagation();
+    this.monitoramentoService.filtroColaborador.set(leiturista);
+    this.monitoramentoService.buscarTudo();
   }
 
   onStatusChange(): void {

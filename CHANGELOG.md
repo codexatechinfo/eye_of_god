@@ -36,6 +36,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   tiver mais de 24h. Ver Adendo 2 da [ADR
   0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
 
+- Modal "Agentes em campo" (Monitoramento de Livros/Massivas) — abre ao clicar no número do card,
+  lista todos os agentes daquela aba com bateria do aparelho, tempo sem sincronizar e botão "Ver no
+  mapa" (troca pra aba Trilho e centraliza na posição real do colaborador). Ver [ADR
+  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
+
 ### Alterado
 
 - Painel lateral de detalhe (aba Trilho): mostrava a timeline de UM livro só, aberto livro por
@@ -111,7 +116,36 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   em azul, as UCs do(s) livro(s) do dia que ainda não foram lidas por ninguém, pra dar noção da rota
   completa. Ver Adendo 13 da [ADR 0030](docs/adr/0030-painel-timeline-dia-colaborador.md).
 
+- Monitoramento de Livros/Massivas: "Agentes em campo"/"Comunicação" na aba Massivas agora só
+  contam colaborador com massiva atrelada na atividade de hoje (antes contava qualquer atividade,
+  inflando o número da aba errada) — Monitoramento de Livros não muda. Ver [ADR
+  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
+
+- Monitoramento de Livros/Massivas: barra de filtros separada removida — os mesmos filtros
+  (Regional/Livro/Etapa/Status/Tipo/Prazo regulatório/Leiturista) viraram controles embutidos no
+  cabeçalho da própria tabela "Detalhe por livro", um por coluna; clicar no valor de Regional ou
+  Leiturista numa linha filtra por aquele valor. Válido nas duas abas. Ver [ADR
+  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
+
+- Aba Massivas: quando a coleta contínua não grava nada novo há mais de um dia, os cards (antes
+  mostrando o último lote conhecido, por mais velho que fosse) passam a zerar com um aviso
+  explícito ("Sem coleta de massivas hoje — último lote em ..."), em vez de exibir dado
+  desatualizado como se fosse a situação atual. Ver [ADR
+  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
+
+- Modal de histórico do livro (Monitoramento de Livros/Massivas) perdeu o bloco "UCs do livro" —
+  mantém só a timeline de eventos. Ver [ADR
+  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
+
 ### Corrigido
+
+- Coluna "Prazo regulatório" (Monitoramento de Livros) vinha sempre "—" — causa dupla: a planilha
+  de setembro de `prazo_reg_livros` ainda não tinha sido importada, e a última importação de agosto
+  gravou `mes_ref` num formato errado (`31/08/2026` em vez de `2026-08-01`, mesmo bug já corrigido
+  antes em `calendario_leitura` mas nunca replicado aqui) — nenhuma linha batia com o mês corrente.
+  `prazo_reg_livros` ganhou `colunasDataIso` (mesmo mecanismo de `calendario_leitura`) pra próximas
+  importações gravarem certo, e as 13.892 linhas malformadas foram apagadas do banco. Ver [ADR
+  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
 - Mapa (aba Trilho) mostrava poucos pedestres — usuário reportou "deveriam aparecer bem mais".
   Causa: o filtro que exige "atividade hoje" (pensado só pra rota por leitura, evitar mostrar rota

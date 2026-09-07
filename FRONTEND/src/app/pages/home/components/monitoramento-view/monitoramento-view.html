@@ -1,91 +1,4 @@
 <div class="h-full overflow-y-auto p-6">
-  <!-- Barra de filtros -->
-  <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-3 mb-5">
-    <div class="flex flex-wrap items-center gap-2">
-      <select
-        [ngModel]="monitoramentoService.filtroRegional()"
-        (ngModelChange)="monitoramentoService.filtroRegional.set($event); monitoramentoService.buscarTudo()"
-        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-      >
-        <option value="">Regional · todas</option>
-        <option *ngFor="let regional of monitoramentoService.regionais()" [value]="regional">{{ regional }}</option>
-      </select>
-
-      <input
-        type="text"
-        [ngModel]="monitoramentoService.filtroLivro()"
-        (ngModelChange)="monitoramentoService.filtroLivro.set($event); monitoramentoService.buscarComDebounce()"
-        placeholder="Buscar livro..."
-        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 w-32 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-      />
-
-      <select
-        [ngModel]="monitoramentoService.filtroEtapa()"
-        (ngModelChange)="monitoramentoService.filtroEtapa.set($event); monitoramentoService.buscarTudo()"
-        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-      >
-        <option value="">Etapa · todas</option>
-        <option *ngFor="let etapa of monitoramentoService.etapas()" [value]="etapa">Etapa {{ etapa }}</option>
-      </select>
-
-      <input
-        type="text"
-        [ngModel]="monitoramentoService.filtroColaborador()"
-        (ngModelChange)="monitoramentoService.filtroColaborador.set($event); monitoramentoService.buscarComDebounce()"
-        placeholder="Buscar colaborador..."
-        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 w-44 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-      />
-
-      <select
-        [ngModel]="monitoramentoService.filtroStatus()"
-        (ngModelChange)="monitoramentoService.filtroStatus.set($event); onStatusChange()"
-        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-      >
-        <option value="todos">Status · todos</option>
-        <option value="pendentes">Pendentes</option>
-        <option value="atribuidas">Atribuídas</option>
-        <option value="emExecucao">Em execução</option>
-      </select>
-
-      <!-- Só na aba Monitoramento de Livros — a aba Massivas não tem esse
-           seletor (só existe uma fonte, igual antes da ADR 0006). -->
-      <select
-        *ngIf="escopo === 'leiturarelitura'"
-        [ngModel]="monitoramentoService.filtroTipoServico()"
-        (ngModelChange)="monitoramentoService.filtroTipoServico.set($event); monitoramentoService.onTipoServicoChange()"
-        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-      >
-        <option value="leiturarelitura">Tipo · todos</option>
-        <option value="leitura">Leitura</option>
-        <option value="releitura">Releitura</option>
-      </select>
-
-      <!-- Prazo regulatório (só Monitoramento de Livros — pedido do usuário
-           removeu o equivalente da aba Massivas, ver ADR 0012 Adendo 7).
-           Mesmo signal do badge clicável da barra de resumo
-           (filtroFaixaDias), então dropdown e badge ficam sincronizados
-           sozinhos, sem estado duplicado. -->
-      <select
-        *ngIf="escopo === 'leiturarelitura'"
-        [ngModel]="monitoramentoService.filtroFaixaDias()"
-        (ngModelChange)="monitoramentoService.filtroFaixaDias.set($event); monitoramentoService.buscarTudo()"
-        class="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-      >
-        <option value="">Prazo regulatório · todos</option>
-        <option value="menor27">&lt; 27 dias</option>
-        <option value="igual33">33 dias</option>
-        <option value="maior34">34+ dias</option>
-      </select>
-
-      <button
-        (click)="monitoramentoService.limparFiltros()"
-        class="text-xs font-medium text-slate-400 hover:text-blue-600 cursor-pointer px-1 transition-colors"
-      >
-        Limpar
-      </button>
-    </div>
-  </div>
-
   <div class="flex justify-end mb-3">
     <button
       type="button"
@@ -108,6 +21,27 @@
     {{ monitoramentoService.erro() }}
   </div>
 
+  <!-- Aviso de coleta parada (item 3) — a coleta de massivas roda em loop
+       contínuo; se o último lote gravado não é de hoje, mostrar esse lote
+       velho como status atual seria informação infiel (confirmado pelo
+       usuário). Backend já devolve os cards todos zerados nesse caso — este
+       aviso é o que evita o zero parecer "tudo em dia" por engano. -->
+  <div
+    class="rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs px-4 py-2.5 mb-4 flex items-center gap-2"
+    *ngIf="escopo === 'massiva' && monitoramentoService.resumo()?.massivaDesatualizada"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+    <span>
+      Sem coleta de massivas hoje — último lote encontrado em
+      <b class="tabular-nums">{{ monitoramentoService.resumo()?.ultimoLoteMassiva?.dataImport }} {{ monitoramentoService.resumo()?.ultimoLoteMassiva?.horaImport }}</b>.
+      Os números abaixo ficam zerados até a coleta voltar, pra não mostrar dado desatualizado como se fosse de agora.
+    </span>
+  </div>
+
   <!-- Barra de resumo operacional — mesmo visual nas duas abas (Agentes em
        campo/Comunicação/Progresso são idênticos nas duas, já que são dado
        de colaborador, não de massiva/leitura); só os contadores da direita
@@ -116,7 +50,12 @@
        Livros/Leituras. -->
   <div class="rounded-xl border border-slate-200 bg-white shadow-sm p-4 mb-6" *ngIf="!monitoramentoService.carregando() && !monitoramentoService.erro()">
     <div class="flex flex-wrap items-stretch gap-x-8 gap-y-4">
-      <div>
+      <div
+        class="transition-opacity"
+        [ngClass]="agentesEmCampo() > 0 ? 'cursor-pointer hover:opacity-75' : ''"
+        (click)="abrirAgentesEmCampo()"
+        title="Ver todos os agentes em campo"
+      >
         <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Agentes em campo</div>
         <div class="flex items-baseline gap-1">
           <span class="text-2xl font-extrabold text-slate-800 tabular-nums">{{ agentesEmCampo() }}</span>
@@ -280,11 +219,23 @@
 
   <!-- Tabela de detalhe -->
   <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
       <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wide">Detalhe por livro</h3>
-      <span class="text-[11px] text-slate-400" *ngIf="!monitoramentoService.carregandoDetalhe()">
-        {{ intervaloExibido() }}
-      </span>
+      <div class="flex items-center gap-3">
+        <!-- Filtros ficaram embutidos no cabeçalho da tabela abaixo (por
+             coluna) — este botão limpa todos de uma vez, sem precisar abrir
+             cada seletor. -->
+        <button
+          type="button"
+          (click)="monitoramentoService.limparFiltros()"
+          class="text-[11px] font-medium text-slate-400 hover:text-blue-600 cursor-pointer transition-colors"
+        >
+          Limpar filtros
+        </button>
+        <span class="text-[11px] text-slate-400" *ngIf="!monitoramentoService.carregandoDetalhe()">
+          {{ intervaloExibido() }}
+        </span>
+      </div>
     </div>
 
     <div class="text-center text-slate-400 text-sm py-10" *ngIf="monitoramentoService.carregandoDetalhe()">Carregando tabela...</div>
@@ -339,6 +290,102 @@
               Dias em atraso{{ indicadorOrdenacao('diasAtraso') }}
             </th>
           </tr>
+          <!-- Filtros embutidos por coluna (item 4) — mesmos signals que
+               antes ficavam na barra separada acima da tabela; só as
+               colunas com filtro de verdade no backend ganham um controle
+               aqui (as outras ficam com a célula vazia, mantendo o
+               alinhamento das colunas). -->
+          <tr class="text-left border-b border-slate-200 bg-slate-50">
+            <th class="px-2 py-1.5 font-normal">
+              <select
+                [ngModel]="monitoramentoService.filtroRegional()"
+                (ngModelChange)="monitoramentoService.filtroRegional.set($event); monitoramentoService.buscarTudo()"
+                (click)="$event.stopPropagation()"
+                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
+              >
+                <option value="">Todas</option>
+                <option *ngFor="let regional of monitoramentoService.regionais()" [value]="regional">{{ regional }}</option>
+              </select>
+            </th>
+            <th class="px-2 py-1.5 font-normal">
+              <input
+                type="text"
+                [ngModel]="monitoramentoService.filtroLivro()"
+                (ngModelChange)="monitoramentoService.filtroLivro.set($event); monitoramentoService.buscarComDebounce()"
+                (click)="$event.stopPropagation()"
+                placeholder="Buscar..."
+                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </th>
+            <th class="px-2 py-1.5 font-normal">
+              <select
+                [ngModel]="monitoramentoService.filtroEtapa()"
+                (ngModelChange)="monitoramentoService.filtroEtapa.set($event); monitoramentoService.buscarTudo()"
+                (click)="$event.stopPropagation()"
+                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
+              >
+                <option value="">Todas</option>
+                <option *ngFor="let etapa of monitoramentoService.etapas()" [value]="etapa">{{ etapa }}</option>
+              </select>
+            </th>
+            <th class="px-2 py-1.5 font-normal">
+              <select
+                [ngModel]="monitoramentoService.filtroStatus()"
+                (ngModelChange)="monitoramentoService.filtroStatus.set($event); onStatusChange()"
+                (click)="$event.stopPropagation()"
+                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
+              >
+                <option value="todos">Todos</option>
+                <option value="pendentes">Pendentes</option>
+                <option value="atribuidas">Atribuídas</option>
+                <option value="emExecucao">Em execução</option>
+              </select>
+            </th>
+            <th *ngIf="escopo === 'leiturarelitura'" class="px-2 py-1.5 font-normal">
+              <select
+                [ngModel]="monitoramentoService.filtroTipoServico()"
+                (ngModelChange)="monitoramentoService.filtroTipoServico.set($event); monitoramentoService.onTipoServicoChange()"
+                (click)="$event.stopPropagation()"
+                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
+              >
+                <option value="leiturarelitura">Todos</option>
+                <option value="leitura">Leitura</option>
+                <option value="releitura">Releitura</option>
+              </select>
+            </th>
+            <th class="px-2 py-1.5"></th>
+            <th class="px-2 py-1.5"></th>
+            <!-- Prazo regulatório (só Monitoramento de Livros — a aba
+                 Massivas não tem esse seletor, ver ADR 0012 Adendo 7). Mesmo
+                 signal do badge clicável da barra de resumo (filtroFaixaDias),
+                 dropdown e badge ficam sincronizados sozinhos. -->
+            <th *ngIf="escopo === 'leiturarelitura'" class="px-2 py-1.5 font-normal">
+              <select
+                [ngModel]="monitoramentoService.filtroFaixaDias()"
+                (ngModelChange)="monitoramentoService.filtroFaixaDias.set($event); monitoramentoService.buscarTudo()"
+                (click)="$event.stopPropagation()"
+                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
+              >
+                <option value="">Todos</option>
+                <option value="menor27">&lt; 27 dias</option>
+                <option value="igual33">33 dias</option>
+                <option value="maior34">34+ dias</option>
+              </select>
+            </th>
+            <th class="px-2 py-1.5"></th>
+            <th class="px-2 py-1.5"></th>
+            <th class="px-2 py-1.5 font-normal">
+              <input
+                type="text"
+                [ngModel]="monitoramentoService.filtroColaborador()"
+                (ngModelChange)="monitoramentoService.filtroColaborador.set($event); monitoramentoService.buscarComDebounce()"
+                (click)="$event.stopPropagation()"
+                placeholder="Buscar..."
+                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </th>
+            <th class="px-2 py-1.5"></th>
+          </tr>
         </thead>
         <tbody>
           <tr
@@ -351,7 +398,12 @@
               'bg-red-50/70': corLinha(linha) === 'vermelho'
             }"
           >
-            <td class="px-3 py-1.5 text-slate-600">{{ linha.regional || '—' }}</td>
+            <td
+              class="px-3 py-1.5 text-slate-600"
+              [ngClass]="linha.regional ? 'cursor-pointer hover:text-blue-600 hover:underline' : ''"
+              [title]="linha.regional ? 'Filtrar por ' + linha.regional : ''"
+              (click)="linha.regional && filtrarPorRegional(linha.regional, $event)"
+            >{{ linha.regional || '—' }}</td>
             <td class="px-3 py-1.5 font-semibold text-slate-700">{{ linha.livro }}</td>
             <td class="px-3 py-1.5 text-slate-600">{{ linha.etapa }}</td>
             <td class="px-3 py-1.5">
@@ -403,7 +455,12 @@
                 <span class="text-[10.5px] tabular-nums text-slate-500 w-8 text-right">{{ percentualLinha(linha) | number: '1.0-0' }}%</span>
               </div>
             </td>
-            <td class="px-3 py-1.5 text-slate-600 truncate max-w-[180px]" [title]="linha.leiturista || ''">{{ linha.leiturista || '—' }}</td>
+            <td
+              class="px-3 py-1.5 text-slate-600 truncate max-w-[180px]"
+              [ngClass]="linha.leiturista ? 'cursor-pointer hover:text-blue-600 hover:underline' : ''"
+              [title]="linha.leiturista ? 'Filtrar por ' + linha.leiturista : ''"
+              (click)="linha.leiturista && filtrarPorLeiturista(linha.leiturista, $event)"
+            >{{ linha.leiturista || '—' }}</td>
             <td
               class="px-3 py-1.5 text-right tabular-nums font-semibold"
               [ngClass]="{
@@ -552,45 +609,6 @@
             </div>
           </li>
         </ol>
-
-        <div class="mt-5 pt-4 border-t border-slate-100">
-          <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">UCs do livro</h4>
-          <div class="text-center text-slate-400 text-sm py-6" *ngIf="monitoramentoService.carregandoUcsLivro()">Carregando UCs...</div>
-          <div class="text-center text-red-500 text-sm py-6" *ngIf="monitoramentoService.erroUcsLivro() && !monitoramentoService.carregandoUcsLivro()">
-            {{ monitoramentoService.erroUcsLivro() }}
-          </div>
-          <div
-            class="text-center text-slate-400 text-sm py-6"
-            *ngIf="!monitoramentoService.carregandoUcsLivro() && !monitoramentoService.erroUcsLivro() && !monitoramentoService.ucsLivro().length"
-          >
-            Nenhuma UC encontrada para este livro.
-          </div>
-
-          <div class="overflow-x-auto" *ngIf="!monitoramentoService.carregandoUcsLivro() && monitoramentoService.ucsLivro().length">
-            <table class="w-full text-[11px]">
-              <thead>
-                <tr class="text-left text-slate-400 uppercase tracking-wide text-[9.5px]">
-                  <th class="py-1 pr-2">UC</th>
-                  <th class="py-1 pr-2">Código</th>
-                  <th class="py-1 pr-2">Situação</th>
-                  <th class="py-1 pr-2">Colaborador</th>
-                  <th class="py-1 pr-2">Último import</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr class="border-t border-slate-50" *ngFor="let uc of monitoramentoService.ucsLivro()">
-                  <td class="py-1 pr-2 font-semibold text-slate-700 tabular-nums">{{ uc.uc }}</td>
-                  <td class="py-1 pr-2 tabular-nums" [class.text-emerald-600]="uc.codigo" [class.text-red-500]="!uc.codigo">
-                    {{ uc.codigo || 'Não realizada' }}
-                  </td>
-                  <td class="py-1 pr-2 text-slate-600">{{ uc.situacao || '—' }}</td>
-                  <td class="py-1 pr-2 text-slate-600">{{ uc.colaborador || '—' }}</td>
-                  <td class="py-1 pr-2 text-slate-400 tabular-nums">{{ uc.data_import }} {{ uc.hora_import }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -640,6 +658,79 @@
             <span class="shrink-0 text-[11px] font-bold text-red-600 tabular-nums bg-red-50 px-2 py-1 rounded-full">
               {{ formatarTempoParado(c.minutosParado) }}
             </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lista de todos os agentes em campo (item 2) — aberta ao clicar no
+       número do card "Agentes em campo". Mesmo padrão de modal dos dois
+       acima, com bateria do aparelho, tempo sem sincronizar e atalho pro
+       mapa por agente. -->
+  <div
+    *ngIf="mostrarAgentesEmCampo()"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+    (click)="fecharAgentesEmCampo()"
+  >
+    <div
+      class="w-full max-w-lg max-h-[80vh] flex flex-col rounded-xl bg-white shadow-xl overflow-hidden"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-slate-800">Agentes em campo</h3>
+          <p class="text-[11px] text-slate-400">{{ agentesEmCampo() }} colaborador(es) em campo agora</p>
+        </div>
+        <button
+          type="button"
+          (click)="fecharAgentesEmCampo()"
+          class="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto px-5 py-2">
+        <div class="text-center text-slate-400 text-sm py-10" *ngIf="!listaAgentesEmCampo().length">
+          Nenhum agente em campo no momento.
+        </div>
+        <div class="divide-y divide-slate-100">
+          <div class="py-3 flex items-center justify-between gap-3" *ngFor="let a of listaAgentesEmCampo()">
+            <div class="min-w-0">
+              <div class="text-xs font-semibold text-slate-700 truncate">{{ a.nome }}</div>
+              <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                <span
+                  class="inline-flex items-center gap-0.5 font-semibold tabular-nums"
+                  [ngClass]="corBateria(a.bateria)"
+                  *ngIf="a.bateria !== null; else semBateria"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="7" width="18" height="10" rx="2" />
+                    <line x1="22" y1="10" x2="22" y2="14" />
+                  </svg>
+                  {{ a.bateria }}%
+                </span>
+                <ng-template #semBateria><span>Sem dado de bateria</span></ng-template>
+                <span>·</span>
+                <span>{{ a.minutosParado !== null ? 'sem sincronizar há ' + formatarTempoParado(a.minutosParado) : 'nunca sincronizou' }}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              (click)="verNoMapa(a.nome)"
+              class="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors cursor-pointer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4Z" />
+                <line x1="8" y1="2" x2="8" y2="18" />
+                <line x1="16" y1="6" x2="16" y2="22" />
+              </svg>
+              Ver no mapa
+            </button>
           </div>
         </div>
       </div>

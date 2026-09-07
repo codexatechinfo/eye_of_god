@@ -25,6 +25,14 @@ export interface ResumoMonitoramento {
   prazoFinal: ContagemMonitoramento;
   atrasadas: ContagemMonitoramento;
   faixasDias: FaixasDias;
+  // Coleta de massivas roda em loop contínuo — se o último lote gravado não
+  // é de hoje, a coleta está parada e os contadores acima vêm todos
+  // zerados de propósito (backend trata como "sem dado", ver
+  // monitoramentoService.js#obterResumo) em vez de mostrar um lote velho
+  // como se fosse a situação atual. `ultimoLoteMassiva` só vem preenchido
+  // nesse caso, pra a tela avisar quando foi a última coleta de verdade.
+  massivaDesatualizada: boolean;
+  ultimoLoteMassiva: { dataImport: string; horaImport: string } | null;
 }
 
 export interface OpcoesFiltroMonitoramento {
@@ -96,29 +104,6 @@ export interface HistoricoLivroMonitoramento {
   eventos: HistoricoLivroEvento[];
 }
 
-// Uma linha de UC como vem de GET /massivas/livro-ucs — mesmo shape usado
-// tanto em "atuais" (estado atual de cada UC) quanto em "timeline" (quando
-// cada UC virou realizada). Ver monitoramentoService.js#obterUcsDoLivro.
-export interface UcLivro {
-  uc: string;
-  codigo: string | null;
-  equipamento: string | null;
-  tipo_especificacao: string | null;
-  faturamento: string | null;
-  leitura_atual: string | null;
-  situacao: string | null;
-  colaborador: string | null;
-  data_import: string | null;
-  hora_import: string | null;
-}
-
-export interface UcsLivroMonitoramento {
-  sucesso: boolean;
-  livro: string;
-  atuais: UcLivro[];
-  timeline: UcLivro[];
-}
-
 // Sem providedIn: 'root' de propósito — cada <app-monitoramento-view> (aba
 // Massivas e aba Monitoramento de Livros) precisa da sua própria instância
 // com filtro próprio, não uma só compartilhada entre as duas abas. Ver
@@ -167,14 +152,6 @@ export class MonitoramentoService implements OnDestroy {
   carregandoHistorico = signal(false);
   erroHistorico = signal<string | null>(null);
   private cacheHistorico = new Map<string, HistoricoLivroEvento[]>();
-
-  ucsLivro = signal<UcLivro[]>([]);
-  carregandoUcsLivro = signal(false);
-  erroUcsLivro = signal<string | null>(null);
-  // Sem cache indefinido de propósito: é o estado ATUAL de cada UC, e a
-  // coleta roda 24h contínua — cachear pra sempre deixaria o modal
-  // congelado no valor de quando foi aberto (mesmo bug encontrado e
-  // corrigido em ColaboradoresService.buscarUcsLivro).
 
   private debounceId?: ReturnType<typeof setTimeout>;
   private intervaloId?: ReturnType<typeof setInterval>;
@@ -323,27 +300,6 @@ export class MonitoramentoService implements OnDestroy {
           },
         });
     }
-
-    this.buscarUcsLivro(livro);
-  }
-
-  private buscarUcsLivro(livro: string): void {
-    this.erroUcsLivro.set(null);
-    this.carregandoUcsLivro.set(true);
-    this.ucsLivro.set([]);
-
-    this.http
-      .get<UcsLivroMonitoramento>(`${this.apiUrl}/massivas/livro-ucs`, { params: new HttpParams().set('livro', livro) })
-      .subscribe({
-        next: resposta => {
-          this.ucsLivro.set(resposta.atuais);
-          this.carregandoUcsLivro.set(false);
-        },
-        error: () => {
-          this.erroUcsLivro.set('Não foi possível carregar as UCs do livro.');
-          this.carregandoUcsLivro.set(false);
-        },
-      });
   }
 
   fecharHistoricoLivro(): void {

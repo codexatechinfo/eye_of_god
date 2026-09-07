@@ -63,6 +63,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Cabeçalho da timeline do colaborador (painel da aba Trilho e modal da aba Monitoramento
+  Colaborador) ganhou regional, cargo e % de bateria ao lado do nome — mesmo dado e visual que já
+  existia no card da lista lateral. Ver Adendo 4 da [ADR
+  0036](docs/adr/0036-aba-monitoramento-colaborador.md).
+
 - Aba Monitoramento Colaborador: timeline do colaborador (clique numa linha) agora abre como modal
   centralizado (fundo escurecido, mesmo padrão do "Histórico do livro"), não mais como painel
   deslizando da borda direita — formato que fazia sentido na aba Trilho (ao lado do mapa), mas não

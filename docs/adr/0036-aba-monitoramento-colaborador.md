@@ -174,3 +174,19 @@ encostado na borda direita de um contêiner simulando a aba; `modal` renderiza c
 fundo escurecido cobrindo a área inteira — confirma visualmente que as duas variantes saem
 corretas com o mesmo HTML de conteúdo. `npx tsc --noEmit` e `npx ng build --configuration
 production` limpos.
+
+## Adendo 4 (2026-09-07) — cabeçalho ganha regional, cargo e bateria
+
+Usuário, com print do modal: faltava regional, cargo e % de bateria — só tinha o nome. Mesmo dado e
+visual que já existe no card da lista lateral (aba Trilho), agora também no cabeçalho de
+`ColaboradorDetalhe` (vale pras duas variantes, painel e modal — não é algo específico desta aba):
+ícone de local + regional (`normalizarRegional(colaborador.base)`), badge colorido do cargo (mesmas
+cores de `lista-colaboradores.html`: azul motoqueiro, laranja pedestre, cinza monitor) e badge de
+bateria (`colaboradoresService.scalefusionDe(nome)`, mesmos limiares de cor 20%/50% já usados em
+todo indicador de bateria do app) — só aparece quando existe dado coletado, igual já era na lista.
+
+### Verificação
+
+Réplica com o CSS real compilado do projeto: pin + "UMUARAMA", badge azul "MOTOQUEIRO", ícone +
+"43%" em âmbar (faixa 20-50%) — visual consistente com o resto do app. `npx tsc --noEmit` e `npx ng
+build --configuration production` limpos.

@@ -36,6 +36,38 @@
     <div class="min-w-0">
       <h3 class="text-sm font-bold text-slate-800 truncate">{{ nome }}</h3>
       <p class="text-[11px] text-slate-400 truncate">Execução {{ colaboradoresService.rotuloDataAtividade() }}</p>
+      <!-- Regional/cargo/bateria — mesmo dado e visual do card da lista
+           lateral, só que aqui fica visível também no modal (aba
+           Monitoramento Colaborador), que não tem esse contexto por perto. -->
+      <div class="flex items-center gap-1.5 flex-wrap mt-1" *ngIf="colaboradorAtivo(nome) as colaborador">
+        <span class="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-500">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+          {{ regionalDe(colaborador.base) }}
+        </span>
+        <span
+          class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+          [ngClass]="{
+            'bg-blue-100 text-blue-700': colaborador.cargo === 'LEITURISTA MOTOCICLISTA',
+            'bg-orange-100 text-orange-700': colaborador.cargo === 'LEITURISTA',
+            'bg-slate-200 text-slate-600': colaborador.cargo === 'MONITOR'
+          }"
+        >{{ rotuloCargo(colaborador.cargo) }}</span>
+        <span
+          *ngIf="colaboradoresService.scalefusionDe(nome) as posicao"
+          class="inline-flex items-center gap-0.5 text-[10.5px] font-bold tabular-nums shrink-0"
+          [ngClass]="corBateria(posicao.bateria_percentual)"
+          [title]="'Bateria do aparelho: ' + posicao.bateria_percentual + '%' + (posicao.bateria_carregando ? ' (carregando)' : '')"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="18" height="10" rx="2" />
+            <line x1="22" y1="10" x2="22" y2="14" />
+          </svg>
+          {{ posicao.bateria_percentual }}%
+        </span>
+      </div>
     </div>
     <div class="flex items-center gap-1.5 shrink-0">
       <!-- "Ver no mapa" (pedido explícito do usuário nas abas de

@@ -8,6 +8,7 @@ import {
   formatarDuracao,
   formatarTempoParado,
   LIMITE_PARADO_MINUTOS,
+  normalizarRegional,
   PontoJornada,
 } from '../../../../services/colaboradores.service';
 
@@ -71,6 +72,33 @@ export class ColaboradorDetalhe {
   }
 
   nomeAberto = computed(() => this.colaboradoresService.colaboradorSelecionado());
+
+  // Regional/cargo/bateria no cabeçalho — pedido do usuário ("aqui também
+  // deve indicar") depois de ver o modal só com nome e faltando esse
+  // contexto que já aparecia no card da lista lateral. `colaboradores()`
+  // (cargo/base) e `scalefusionDe()` (bateria) já são a mesma fonte usada
+  // em lista-colaboradores.html — mesmos rótulos/cores, sem duplicar regra.
+  colaboradorAtivo(nome: string) {
+    return this.colaboradoresService.colaboradores().find(c => c.colaborador === nome);
+  }
+
+  regionalDe(base: string): string {
+    return normalizarRegional(base);
+  }
+
+  rotuloCargo(cargo: string): string {
+    if (cargo === 'LEITURISTA MOTOCICLISTA') return 'Motoqueiro';
+    if (cargo === 'LEITURISTA') return 'Pedestre';
+    if (cargo === 'MONITOR') return 'Monitor';
+    return cargo;
+  }
+
+  corBateria(percentual: number | null): string {
+    if (percentual == null) return 'text-slate-400';
+    if (percentual <= 20) return 'text-red-600';
+    if (percentual <= 50) return 'text-amber-600';
+    return 'text-emerald-600';
+  }
 
   // Timeline do DIA inteiro do colaborador aberto, cruzando todos os livros
   // — já vem em ordem cronológica do backend (obterJornadaColaborador), não

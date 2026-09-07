@@ -154,6 +154,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   popover em vez de fechá-lo, e o foco ganhou `preventScroll`. Ver Adendo 3 da [ADR
   0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
+- Popover de filtro por coluna: lista de opções aparecia numa única linha horizontal (só "Todos"
+  visível, resto atrás de uma barra de rolagem lateral) em vez de empilhada — `<button>` é
+  `inline-block` por padrão e herdava `whitespace-nowrap` do `<th>` (fix anterior, pro título da
+  coluna não quebrar linha). Botões de opção ganharam `display: block`. Ver Adendo 4 da [ADR
+  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
+
 - Coluna "Prazo regulatório" (Monitoramento de Livros) vinha sempre "—" — causa dupla: a planilha
   de setembro de `prazo_reg_livros` ainda não tinha sido importada, e a última importação de agosto
   gravou `mes_ref` num formato errado (`31/08/2026` em vez de `2026-08-01`, mesmo bug já corrigido

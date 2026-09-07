@@ -18,7 +18,7 @@
        popover quando ele ficava absolute dentro do <th>. -->
   <div
     *ngIf="aberto()"
-    class="fixed z-40 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1.5 text-left normal-case"
+    class="fixed z-40 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1.5 text-left normal-case whitespace-normal"
     [style.top.px]="posicaoTop()"
     [style.left.px]="posicaoLeft()"
     (click)="$event.stopPropagation()"
@@ -41,7 +41,7 @@
         type="button"
         *ngFor="let opcao of opcoesFiltradas()"
         (click)="selecionar(opcao.valor)"
-        class="w-full text-left px-3 py-1.5 text-[11px] font-normal truncate transition-colors cursor-pointer"
+        class="block w-full text-left px-3 py-1.5 text-[11px] font-normal truncate transition-colors cursor-pointer"
         [ngClass]="opcao.valor === valor ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-slate-600 hover:bg-slate-50'"
       >
         {{ opcao.rotulo }}

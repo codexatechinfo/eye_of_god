@@ -235,3 +235,31 @@ aberto (`aberto: "Situacao"`, 4 opções renderizadas); simular scroll horizonta
 `.scroller` manteve `aberto`/`display: "block"` e ajustou `left` de 336px pra 36px — exatamente o
 delta do scroll, popover acompanhando em vez de fechar. `npx tsc --noEmit` e `npx ng build
 --configuration production` limpos.
+
+## Adendo 4 (2026-09-07) — lista de opções aparecia lateral (linha única, `<button>` é inline-block)
+
+Usuário, com print: com o Adendo 3 aplicado, a lista finalmente aparecia — mas só "Todos" visível,
+o resto das opções (Pendentes/Atribuídas/Em execução) ficava numa faixa horizontal escondida atrás
+de uma barra de rolagem lateral dentro do próprio popover, em vez de empilhado verticalmente.
+
+Causa, duas juntas: (1) `<button>` tem `display: inline-block` por padrão no navegador — sem
+forçar `display: block`, vários botões um atrás do outro tentam ficar na mesma linha, cada um do
+tamanho do seu próprio texto (`w-full`/`width:100%` sozinho não impede isso quando o elemento
+continua *inline*); (2) o Adendo 1 pôs `whitespace-nowrap` em quase todo `<th>` da tabela (pra
+título de coluna não quebrar linha) — como CSS herda pela árvore do DOM (não pela posição visual),
+o popover, mesmo sendo `position: fixed` e aparecendo em outro canto da tela, ainda é filho do
+`<th>` no DOM e herda esse `nowrap`, que reforça o alinhamento em linha única dos botões
+`inline-block`.
+
+Cada `<button>` de opção ganhou a classe `block` (Tailwind, `display: block`) — bloco sempre
+empilha verticalmente, independente do `white-space` herdado. O `<div>` raiz do popover também
+ganhou `whitespace-normal`, pra cortar a herança do `nowrap` na causa (não só no botão) e não
+surpreender de novo se algum texto normal (não-botão) for adicionado ali no futuro.
+
+### Verificação
+
+Réplica nova usando o CSS REAL compilado do projeto (`ng build`, copiado o `styles-*.css` gerado)
+com as mesmas classes Tailwind do componente, lado a lado "antes"/"depois": antes reproduziu o bug
+exato do print (só "Todos" visível, resto cortado, `getComputedStyle` confirmando `display:
+inline-block`); depois mostrou as 4 opções empilhadas, sem barra lateral (`display: block`).
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos.

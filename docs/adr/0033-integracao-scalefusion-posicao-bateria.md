@@ -156,3 +156,27 @@ Dois pedidos na sequência, ambos usando o que já estava coletado:
 retornados. `tsc --noEmit` e `ng build --configuration production` sem erro (só os warnings
 pré-existentes de bundle/leaflet). Não verificado dentro do app de verdade nesta sessão (sem
 credencial de teste) — usuário vai confirmar do lado dele.
+
+## Adendo 2 (2026-09-06) — gate de "atividade hoje" escondia posição real válida
+
+Usuário reportou "poucos pontos no mapa, deveriam aparecer bem mais". Reproduzi a lógica exata do
+mapa direto contra o banco (não só lendo o código) pra achar o corte:
+
+- `atualizarMarcadoresColaboradores()` aplicava `if (!atividadeDe(nome)) continue;` ANTES de decidir
+  se o colaborador tinha posição real (Scalefusion) ou por leitura — herdado do Adendo 1, que só
+  moveu a fonte da posição pro pedestre, sem mexer no gate que já existia ali desde antes (pensado
+  só pro caminho "última UC realizada", pra não mostrar rota de um dia sem atividade).
+- Resultado: um pedestre com GPS fresco (<24h, `posicaoRealValida`) só aparecia no mapa se TAMBÉM
+  tivesse registrado uma leitura hoje — ou seja, dependia de progresso no livro pra mostrar uma
+  informação (posição do celular) que não tem nada a ver com livro. Contado ao vivo: **41
+  colaboradores** tinham posição Scalefusion válida mas ficavam de fora só por esse motivo.
+
+Corrigido: o gate de `atividadeDe` agora só se aplica ao caminho de posição POR LEITURA (o `else`,
+quando não há posição real válida) — a posição real, quando existe e tem menos de 24h, é prova
+suficiente por si só de que o colaborador está em campo, não precisa de leitura nenhuma pra "valer".
+
+### Verificação
+
+Simulação da lógica completa (roster + atividade + localizações + Scalefusion) direto contra o
+banco real: **18 → 56** colaboradores que passariam a aparecer no mapa (mais de 3×) com a correção.
+`tsc --noEmit` e `ng build --configuration production` sem erro.

@@ -715,20 +715,17 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
   }
 
-  // Um marcador por colaborador com posição conhecida (última UC realizada,
-  // qualquer dia) — sem filtro de regional (os círculos que faziam essa
-  // seleção foram removidos). Sempre limpa tudo primeiro: mais simples que
-  // diffar, e o volume (algumas centenas no máximo) não justifica a
-  // complexidade de atualizar em cima da instância existente.
+  // Um marcador por colaborador com posição conhecida (Scalefusion em tempo
+  // real pro pedestre, ou última UC realizada pros demais) — sem filtro de
+  // regional (os círculos que faziam essa seleção foram removidos). Sempre
+  // limpa tudo primeiro: mais simples que diffar, e o volume (algumas
+  // centenas no máximo) não justifica a complexidade de atualizar em cima
+  // da instância existente.
   //
-  // Exige atividade NO DIA FILTRADO (atividadeDe, mesmo gate que a lista da
-  // esquerda usa pra decidir "Nenhuma atividade registrada hoje") — a
-  // posição em si (`localizacoes()`) vem sempre da última UC realizada
-  // alguma vez, sem filtro de data (ver obterUltimaUcRealizadaPorColaborador
-  // no backend); sem esse gate, um colaborador sem serviço no dia
-  // selecionado aparecia no mapa com a rota/posição de um dia qualquer
-  // anterior — usuário reportou com print: card da esquerda mostrando "sem
-  // atividade hoje" e o mesmo colaborador com rota desenhada no mapa.
+  // O gate de "atividade hoje" (atividadeDe) só vale pro caminho de posição
+  // por LEITURA — posição real (Scalefusion) prova sozinha que o
+  // colaborador está em campo agora, não precisa desse gate (ver dentro da
+  // função pra detalhe de cada caminho).
   private atualizarMarcadoresColaboradores(): void {
     if (!this.mapa) return;
 
@@ -749,7 +746,6 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     for (const nome of nomesVistos) {
       const colaborador = porNome.get(nome);
       if (!colaborador) continue;
-      if (!this.colaboradoresService.atividadeDe(nome)) continue;
 
       const ehMoto = colaborador.cargo === 'LEITURISTA MOTOCICLISTA' || colaborador.cargo === 'MONITOR';
       // Posição REAL (Scalefusion) só pro pedestre por enquanto — pedido
@@ -768,11 +764,27 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       let lng: number;
       let tooltip: string;
       if (posicaoRealValida) {
+        // Posição real NÃO passa pelo gate de "atividade hoje" — o próprio
+        // GPS fresco (< 24h) já prova que o colaborador está em campo agora,
+        // independente de ele já ter registrado alguma leitura hoje. Bug
+        // real reportado pelo usuário: 41 pedestres com posição Scalefusion
+        // válida sumiam do mapa só porque ainda não tinham lido nenhuma UC
+        // hoje (gate pensado só pra rota por leitura, ver comentário abaixo).
         lat = Number(posicaoReal!.latitude);
         lng = Number(posicaoReal!.longitude);
         const hora = new Date(posicaoReal!.data_hora_posicao!).toLocaleTimeString('pt-BR');
         tooltip = `${nome} - localização em tempo real (${hora})`;
       } else {
+        // Sem posição real válida: cai pra última UC realizada, que só faz
+        // sentido mostrar se o colaborador teve atividade HOJE (mesmo gate
+        // que a lista da esquerda usa pra decidir "Nenhuma atividade
+        // registrada hoje") — a posição em si (`localizacoes()`) já é
+        // escopada por hoje no backend, mas o COLABORADOR aparecer aqui
+        // ainda depende de atividadeHoje ter processado ele (ex.: livro sem
+        // nenhum ciclo de coleta ainda hoje). Sem esse gate, um colaborador
+        // sem serviço hoje reapareceria com a rota de um dia qualquer
+        // anterior — usuário já reportou esse bug antes com print.
+        if (!this.colaboradoresService.atividadeDe(nome)) continue;
         const loc = localizacaoPorNome.get(nome);
         if (!loc) continue;
         lat = Number(loc.latitude);

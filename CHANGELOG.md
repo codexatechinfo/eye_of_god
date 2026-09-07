@@ -108,6 +108,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Mapa (aba Trilho) mostrava poucos pedestres — usuário reportou "deveriam aparecer bem mais".
+  Causa: o filtro que exige "atividade hoje" (pensado só pra rota por leitura, evitar mostrar rota
+  de um dia sem serviço) também bloqueava a posição REAL do Scalefusion, mesmo fresca — um pedestre
+  só aparecia se também tivesse registrado uma leitura hoje. Corrigido: posição real com menos de
+  24h não passa mais por esse filtro. Confirmado ao vivo: 18 → 56 colaboradores passam a aparecer.
+  Ver Adendo 2 da [ADR 0033](docs/adr/0033-integracao-scalefusion-posicao-bateria.md).
+
 - Contagens de progresso de livro (digitados/naoDigitados/impedimentos, e os totais por colaborador
   que dependem delas — Realizadas/A realizar/Impedimentos) podiam vir muito maiores que o real —
   usuário reportou "Realizadas: 564" com a timeline do dia vazia, e um livro recém-aberto (0/176 no

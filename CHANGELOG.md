@@ -55,6 +55,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   mapa" (troca pra aba Trilho e centraliza na posição real do colaborador). Ver [ADR
   0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
+### Removido
+
+- Barra de filtros (Etapa/Regional/Buscar colaborador/Cargo/Data/Limpar) do topo da lista lateral
+  na aba Trilho — componente `app-filtros-colaboradores` removido. Ver Adendo 2 da [ADR
+  0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
+
 ### Alterado
 
 - Barra de navegação superior mais fina (container, botões das abas, logo, pílula de status e

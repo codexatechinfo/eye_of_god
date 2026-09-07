@@ -131,3 +131,29 @@ Réplica com o CSS real compilado do projeto, header antigo e novo lado a lado, 
 `getBoundingClientRect()`: 125px → 105px (16% mais fino), sem quebrar layout/legibilidade dos
 textos (mantidos `text-xs`, só o respiro ao redor encolheu). `npx tsc --noEmit` e `npx ng build
 --configuration production` limpos.
+
+## Adendo 2 (2026-09-07) — barra de filtros da sidebar removida da aba Trilho
+
+Usuário, com print: remover a barra de filtros (Etapa/Regional/Buscar colaborador/Cargo/Data/
+Limpar) do topo da lista lateral da aba Trilho.
+
+`app-filtros-colaboradores` (componente próprio, 68 linhas, usado só ali — conferido com grep no
+projeto inteiro) removido de `lista-colaboradores.html`, import tirado de `lista-colaboradores.ts`,
+e o componente inteiro apagado (`filtros-colaboradores/`) — ficaria órfão sem nenhum outro lugar
+que o usasse.
+
+Os signals de filtro em `ColaboradoresService` (`filtroEtapa`/`filtroRegional`/
+`filtroColaborador`/`filtroCargo`/`filtroData`) e os métodos que eles disparavam (`buscar`,
+`buscarComDebounce`, `onFiltroDataChange`, `limparFiltros`) **não foram removidos** — continuam
+usados por outras partes do app independente dessa UI: `buscar()` é a chamada que carrega o roster
+inteiro (`colaboradores()`, base de tudo — mapa, as duas abas de Monitoramento etc.), disparada uma
+vez no início independente de filtro; `filtroData` decide "hoje vs. dia passado" em cascata pra
+jornada/localizações/etc.; `regionais()`/`cargos()` já são reaproveitados pelos filtros próprios da
+aba Monitoramento Colaborador (ADR 0036). Sem a UI, os filtros de busca (etapa/regional/
+colaborador/cargo) simplesmente nunca mudam de `''` — equivalente a estarem sempre "limpos", exibe
+o roster inteiro sem filtro, exatamente o efeito esperado ao remover a barra.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos (bundle ligeiramente menor,
+confirma a remoção).

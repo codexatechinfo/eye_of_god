@@ -12,13 +12,12 @@ import {
   OPCOES_CATEGORIA,
   percentualExecucao,
 } from '../../../../services/colaboradores.service';
-import { FiltrosColaboradores } from '../filtros-colaboradores/filtros-colaboradores';
 
 type CorBarra = 'verde' | 'amarelo' | 'vermelho';
 
 @Component({
   selector: 'app-lista-colaboradores',
-  imports: [CommonModule, FormsModule, FiltrosColaboradores],
+  imports: [CommonModule, FormsModule],
   templateUrl: './lista-colaboradores.html',
   styleUrl: './lista-colaboradores.css',
 })

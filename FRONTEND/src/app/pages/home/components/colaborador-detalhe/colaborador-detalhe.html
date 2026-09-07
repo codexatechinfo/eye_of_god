@@ -36,10 +36,12 @@
     <div class="min-w-0">
       <h3 class="text-sm font-bold text-slate-800 truncate">{{ nome }}</h3>
       <p class="text-[11px] text-slate-400 truncate">Execução {{ colaboradoresService.rotuloDataAtividade() }}</p>
-      <!-- Regional/cargo/bateria — mesmo dado e visual do card da lista
-           lateral, só que aqui fica visível também no modal (aba
-           Monitoramento Colaborador), que não tem esse contexto por perto. -->
-      <div class="flex items-center gap-1.5 flex-wrap mt-1" *ngIf="colaboradorAtivo(nome) as colaborador">
+      <!-- Regional/cargo/bateria — só no modal (aba Monitoramento
+           Colaborador, que não tem esse contexto por perto); usuário pediu
+           explicitamente pra NÃO mudar o painel da aba Trilho, que já tinha
+           esse dado no card da lista lateral ao lado. Mesmo visual dos dois
+           lugares. -->
+      <div class="flex items-center gap-1.5 flex-wrap mt-1" *ngIf="variante === 'modal' && colaboradorAtivo(nome) as colaborador">
         <span class="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-500">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />

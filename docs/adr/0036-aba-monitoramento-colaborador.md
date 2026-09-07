@@ -190,3 +190,18 @@ todo indicador de bateria do app) — só aparece quando existe dado coletado, i
 Réplica com o CSS real compilado do projeto: pin + "UMUARAMA", badge azul "MOTOQUEIRO", ícone +
 "43%" em âmbar (faixa 20-50%) — visual consistente com o resto do app. `npx tsc --noEmit` e `npx ng
 build --configuration production` limpos.
+
+## Adendo 5 (2026-09-07) — regional/cargo/bateria só no modal, painel da Trilho não muda
+
+Usuário: reportou que o Adendo 4 tinha vazado pro painel da aba Trilho também — ele só queria o
+dado novo no modal (a Trilho já mostra regional/cargo no card da lista lateral, ao lado do painel;
+duplicar ali seria redundante, mesma categoria de problema já resolvida antes, ver Adendo 4 da ADR
+0037). Bloco de regional/cargo/bateria em `colaborador-detalhe.html` ganhou `variante === 'modal'`
+na condição do `*ngIf` (`*ngIf="variante === 'modal' && colaboradorAtivo(nome) as colaborador"`) —
+só renderiza na aba Monitoramento Colaborador; painel da Trilho volta a mostrar só nome e "Execução
+hoje", como sempre foi.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos (a combinação `&&` + `as` no
+microsyntax do `*ngIf` compila sem erro, é o ponto mais fácil de errar nessa sintaxe).

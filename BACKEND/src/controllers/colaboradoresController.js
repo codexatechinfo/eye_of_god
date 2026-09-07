@@ -4,8 +4,11 @@ const {
   obterUltimaUcRealizadaPorColaborador,
   obterJornadaColaborador,
 } = require('../services/atividadeColaboradoresService');
-const { obterUltimasPosicoes } = require('../services/scalefusionService');
-const { obterUltimasPosicoes: obterUltimasPosicoesSegsat } = require('../services/segsatFrotaService');
+const { obterUltimasPosicoes, obterHistoricoPosicoes } = require('../services/scalefusionService');
+const {
+  obterUltimasPosicoes: obterUltimasPosicoesSegsat,
+  obterHistoricoPosicoes: obterHistoricoPosicoesSegsat,
+} = require('../services/segsatFrotaService');
 
 // "YYYY-MM-DD" -> "DD/MM/YYYY" (mesmo formato de contr_execucao_leitura.data_import).
 function isoParaDataBr(iso) {
@@ -87,6 +90,31 @@ async function segsatPosicoes(req, res) {
   }
 }
 
+// Camada "Rastro executado" do mapa (ADR) — trajeto GPS real do dia
+// (Scalefusion pro pedestre, SEGSAT pro motoqueiro), diferente de
+// "Trajetória do dia" (que conecta os pontos de UC lida, não GPS
+// contínuo). `fonte` vem do FRONTEND (já sabe o cargo do colaborador,
+// mesma regra ehMoto de mapa-bases.ts) — evita reconsultar cargo aqui.
+async function gpsHistorico(req, res) {
+  try {
+    const { colaborador, data, fonte } = req.query;
+    if (!colaborador) {
+      return res.status(400).json({ sucesso: false, erro: 'Parâmetro "colaborador" é obrigatório.' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '')) {
+      return res.status(400).json({ sucesso: false, erro: 'Parâmetro "data" inválido, use YYYY-MM-DD.' });
+    }
+    const pontos =
+      fonte === 'segsat'
+        ? await obterHistoricoPosicoesSegsat(req.db, colaborador, data)
+        : await obterHistoricoPosicoes(req.db, colaborador, data);
+    res.json({ sucesso: true, colaborador, data, pontos });
+  } catch (erro) {
+    console.error('❌ Erro ao obter histórico de GPS do colaborador:', erro);
+    res.status(500).json({ sucesso: false, erro: erro.message });
+  }
+}
+
 async function jornada(req, res) {
   try {
     const { colaborador, data } = req.query;
@@ -105,4 +133,4 @@ async function jornada(req, res) {
   }
 }
 
-module.exports = { ativos, opcoesFiltro, atividadeHoje, localizacoes, scalefusion, segsatPosicoes, jornada };
+module.exports = { ativos, opcoesFiltro, atividadeHoje, localizacoes, scalefusion, segsatPosicoes, gpsHistorico, jornada };

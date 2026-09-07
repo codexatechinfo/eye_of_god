@@ -328,6 +328,22 @@ interface SegsatResponse {
   posicoes: PosicaoSegsat[];
 }
 
+// Um ponto do rastro GPS real do dia (camada "Rastro executado" do mapa) —
+// diferente de PontoJornada (que é por UC lida, inferido da execução), este
+// é a posição bruta do aparelho/moto, uma linha por coleta ao longo do dia.
+export interface PontoGpsHistorico {
+  latitude: string;
+  longitude: string;
+  data_hora_posicao: string;
+}
+
+interface GpsHistoricoResponse {
+  sucesso: boolean;
+  colaborador: string;
+  data: string;
+  pontos: PontoGpsHistorico[];
+}
+
 // N° de meses consecutivos em que uma UC recebeu o MESMO código de
 // impedimento, mais a lista desses meses (mais recente primeiro) — ver
 // monitoramentoService.js#obterRegimeSucessivo. Decide a cor vermelha do
@@ -511,6 +527,13 @@ export class ColaboradoresService {
   // estado. Recalculado sempre que o colaborador selecionado muda enquanto
   // a camada está ligada (ver mapa-bases.ts). null até a primeira busca.
   limitesMunicipais = signal<MunicipioLimite[] | null>(null);
+
+  // Rastro GPS real do dia por colaborador (camada "Rastro executado" do
+  // mapa) — igual a limitesMunicipais, busca opt-in (só quando a camada
+  // está ligada, ver mapa-bases.ts) e por colaborador+dia. `undefined` =
+  // ainda não buscado pra esse colaborador nesta sessão; `[]` = buscado e
+  // não tem nenhum ponto (sem dado real).
+  gpsHistoricoPorColaborador = signal<Map<string, PontoGpsHistorico[]>>(new Map());
 
   // UC com o card de detalhe expandido na timeline (accordion, uma por vez)
   // — signal no service (não local ao componente) porque tanto um clique na
@@ -786,6 +809,26 @@ export class ColaboradoresService {
     this.http.post<LimitesMunicipaisResponse>(`${this.apiUrl}/municipios/limites-por-pontos`, { pontos }).subscribe({
       next: resposta => this.limitesMunicipais.set(resposta.municipios),
       error: () => this.limitesMunicipais.set([]),
+    });
+  }
+
+  // fonte: 'scalefusion' (pedestre/celular) ou 'segsat' (moto) — quem chama
+  // decide com a mesma regra ehMoto de mapa-bases.ts, evita reconsultar
+  // cargo no BACKEND. Segue filtroData (mesma data selecionada no
+  // calendário da sidebar, igual carregarJornada).
+  carregarGpsHistorico(nome: string, fonte: 'scalefusion' | 'segsat'): void {
+    const params = new HttpParams().set('colaborador', nome).set('data', this.filtroData()).set('fonte', fonte);
+    this.http.get<GpsHistoricoResponse>(`${this.apiUrl}/colaboradores/gps-historico`, { params }).subscribe({
+      next: resposta => {
+        const mapa = new Map(this.gpsHistoricoPorColaborador());
+        mapa.set(nome, resposta.pontos);
+        this.gpsHistoricoPorColaborador.set(mapa);
+      },
+      error: () => {
+        const mapa = new Map(this.gpsHistoricoPorColaborador());
+        mapa.set(nome, []);
+        this.gpsHistoricoPorColaborador.set(mapa);
+      },
     });
   }
 

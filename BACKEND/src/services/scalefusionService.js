@@ -154,4 +154,23 @@ async function obterUltimasPosicoes(db) {
   return rows;
 }
 
-module.exports = { coletarPosicoes, obterNomeEPrefixo, obterUltimasPosicoes };
+// Histórico do dia inteiro (não só a última posição) — alimenta a camada
+// "Rastro executado" do mapa (ADR): trajeto GPS real do aparelho, diferente
+// da "Trajetória do dia" (que conecta só os pontos de UC lida, inferido da
+// execução, não GPS contínuo). `dataIso` é "YYYY-MM-DD" — comparado direto
+// contra `data_hora_posicao::date` porque a coluna já é `timestamptz` (ao
+// contrário do resto do schema em texto DD/MM/YYYY, aqui não tem o risco de
+// fuso horário dos campos de texto).
+async function obterHistoricoPosicoes(db, colaborador, dataIso) {
+  const { rows } = await db.query(
+    `SELECT latitude, longitude, data_hora_posicao
+     FROM scalefusion
+     WHERE colaborador = $1 AND data_hora_posicao::date = $2::date
+       AND latitude IS NOT NULL AND longitude IS NOT NULL
+     ORDER BY data_hora_posicao ASC`,
+    [colaborador, dataIso],
+  );
+  return rows;
+}
+
+module.exports = { coletarPosicoes, obterNomeEPrefixo, obterUltimasPosicoes, obterHistoricoPosicoes };

@@ -66,6 +66,24 @@
         </div>
       </div>
 
+      <!-- Total de leituras (realizadas + a realizar) — antes só existia no
+           card expandido da lista lateral (esquerda), duplicado aqui pra
+           evitar ter que olhar dois lugares (usuário: "cards redundantes",
+           ver ADR). -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="4" width="14" height="17" rx="2" />
+            <path d="M9 3.5h6a1 1 0 0 1 1 1V6H8V4.5a1 1 0 0 1 1-1z" />
+            <path d="m9 13 2 2 4-4" />
+          </svg>
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Leituras</div>
+          <div class="text-xs font-bold text-blue-700 truncate">{{ (colaboradoresService.atividadeDe(nome)?.totalRealizadas ?? 0) + (colaboradoresService.atividadeDe(nome)?.totalPendentes ?? 0) }}</div>
+        </div>
+      </div>
+
       <!-- Livros em execução -->
       <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
         <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
@@ -76,6 +94,20 @@
         <div class="min-w-0 leading-tight">
           <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Livros em execução</div>
           <div class="text-xs font-bold text-blue-700 truncate">{{ colaboradoresService.atividadeDe(nome)?.totalEmExecucao ?? 0 }}</div>
+        </div>
+      </div>
+
+      <!-- Total de livros (mesmo motivo do card "Leituras" acima). -->
+      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+          </svg>
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Livros</div>
+          <div class="text-xs font-bold text-blue-700 truncate">{{ colaboradoresService.atividadeDe(nome)?.totalLivros ?? 0 }}</div>
         </div>
       </div>
 

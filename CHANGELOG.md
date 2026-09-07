@@ -7,6 +7,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Nova camada "Rastro executado" no mapa (aba Trilho) — trajeto GPS REAL do dia (Scalefusion pro
+  pedestre, SEGSAT pro motoqueiro), independente da já existente "Trajetória do dia" (que conecta
+  só os pontos de UC lida, inferido da execução, não GPS contínuo). As duas ficam marcáveis/
+  desmarcáveis separadamente. Ver [ADR
+  0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
+
 - Nova aba "Monitoramento Colaborador" — mesmo modelo visual da aba Monitoramento de Livros
   (barra de resumo + tabela com filtro embutido no cabeçalho), mas com uma linha por colaborador em
   vez de por livro: nome, cargo, regional, bateria do aparelho, último registro de leitura,
@@ -50,6 +56,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
 ### Alterado
+
+- Card expandido do colaborador na lista lateral (aba Trilho) perdeu o grid de 8 indicadores (Km
+  percorrido, Sem sincronizar, Leituras, Realizadas, A realizar, Impedimentos, Livros, Livros em
+  execução) — 6 já apareciam idênticos no painel de detalhe, que abre junto (mesma seleção). Os 2
+  que só existiam ali (Leituras total e Livros total) migraram pro painel de detalhe. Ver [ADR
+  0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
 
 - Barra de navegação superior invertida pro tema claro (era escura, gradiente `slate-900`/texto
   branco) — logo, abas, pílula de status e botão "Sair" ajustados pro fundo branco. Aba

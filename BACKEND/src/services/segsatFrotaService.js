@@ -148,4 +148,19 @@ async function obterUltimasPosicoes(db) {
   return rows;
 }
 
-module.exports = { coletarPosicoes, obterUltimasPosicoes };
+// Histórico do dia inteiro — mesmo raciocínio de obterHistoricoPosicoes em
+// scalefusionService.js (camada "Rastro executado" do mapa, trajeto GPS
+// real da moto, diferente da "Trajetória do dia" inferida das UCs lidas).
+async function obterHistoricoPosicoes(db, colaborador, dataIso) {
+  const { rows } = await db.query(
+    `SELECT latitude, longitude, data_hora_posicao
+     FROM segsat_posicoes
+     WHERE colaborador = $1 AND data_hora_posicao::date = $2::date
+       AND latitude IS NOT NULL AND longitude IS NOT NULL
+     ORDER BY data_hora_posicao ASC`,
+    [colaborador, dataIso],
+  );
+  return rows;
+}
+
+module.exports = { coletarPosicoes, obterUltimasPosicoes, obterHistoricoPosicoes };

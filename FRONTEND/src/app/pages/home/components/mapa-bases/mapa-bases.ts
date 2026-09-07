@@ -5,6 +5,7 @@ import {
   corDaUc,
   ehCodigoDeImpedimento,
   MunicipioLimite,
+  PontoGpsHistorico,
   PontoJornada,
 } from '../../../../services/colaboradores.service';
 
@@ -366,17 +367,25 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   private nomeAgenteEmDestaque: string | null = null;
   private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo por livro
   private grupoLimitesMunicipais = L.layerGroup(); // camada 5: contorno IBGE
+  private grupoRastroGps = L.layerGroup(); // camada 1: rastro GPS real do dia
 
   // Ligadas por padrão (preserva o comportamento atual, sempre visível até
-  // hoje); as duas camadas novas nascem desligadas (opt-in, ninguém pediu
-  // que aparecessem por padrão e "Limites municipais" custa um fetch de 399
-  // polígonos). "Rastro executado" e "Paradas e gaps" não têm signal — os
-  // checkboxes deles ficam desabilitados no template (funcionalidade futura).
+  // hoje); as camadas opt-in nascem desligadas (ninguém pediu que
+  // aparecessem por padrão, e tanto "Limites municipais" quanto "Rastro
+  // executado" custam uma busca extra — polígonos IBGE e histórico de GPS,
+  // respectivamente). "Paradas e gaps" continua sem signal — o checkbox
+  // fica desabilitado no template (funcionalidade futura, sem dado ainda).
   camadaPontos = signal(true);
   camadaSequencia = signal(true);
   camadaAgentes = signal(true);
   camadaSetorPlanejado = signal(false);
   camadaLimitesMunicipais = signal(false);
+  camadaRastroGps = signal(false);
+  // Última chave (colaborador+data+fonte) pra qual "Rastro executado" já
+  // buscou — mesmo raciocínio de limitesMunicipaisChaveAtual, evita
+  // rebuscar a cada refresh de 60s do mesmo colaborador/dia.
+  private rastroGpsChaveAtual: string | null = null;
+  private polilinhaRastroGps: L.Polyline | null = null;
 
   constructor(public colaboradoresService: ColaboradoresService) {
     effect(() => {
@@ -455,6 +464,48 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       if (dados === null) return;
       this.renderizarLimitesMunicipais(dados);
     });
+
+    // "Rastro executado" — trajeto GPS REAL do dia (Scalefusion pro
+    // pedestre, SEGSAT pro motoqueiro), diferente de "Trajetória do dia"
+    // (que conecta só os pontos de UC lida — inferido da execução, não GPS
+    // contínuo). Usuário pediu as duas camadas independentes, pra marcar e
+    // desmarcar cada uma. Mesmo padrão de "Limites municipais" acima: busca
+    // opt-in (só com a camada ligada), por colaborador+data+fonte
+    // (rastroGpsChaveAtual evita rebuscar a cada refresh de 60s).
+    effect(() => {
+      const ligado = this.camadaRastroGps();
+      this.alternarGrupo(this.grupoRastroGps, ligado);
+      if (!ligado) return;
+
+      const nome = this.colaboradoresService.colaboradorSelecionado();
+      if (!nome) {
+        this.rastroGpsChaveAtual = null;
+        this.grupoRastroGps.clearLayers();
+        this.polilinhaRastroGps = null;
+        return;
+      }
+      // Mesma regra ehMoto de atualizarMarcadoresColaboradores/verNoMapa —
+      // decide qual fonte de GPS pedir (a moto rastreia via SEGSAT, o
+      // celular via Scalefusion).
+      const colaborador = this.colaboradoresService.colaboradores().find(c => c.colaborador === nome);
+      const ehMoto = colaborador?.cargo === 'LEITURISTA MOTOCICLISTA' || colaborador?.cargo === 'MONITOR';
+      const fonte = ehMoto ? 'segsat' : 'scalefusion';
+      const chave = `${nome}|${this.colaboradoresService.filtroData()}|${fonte}`;
+      if (chave === this.rastroGpsChaveAtual) return;
+
+      this.rastroGpsChaveAtual = chave;
+      this.colaboradoresService.carregarGpsHistorico(nome, fonte);
+    });
+    // Redesenha (substitui, não acumula) sempre que o resultado da busca
+    // acima chegar, ou o refresh de 60s trouxer pontos novos pro mesmo
+    // colaborador/dia.
+    effect(() => {
+      const nome = this.colaboradoresService.colaboradorSelecionado();
+      if (!nome) return;
+      const pontos = this.colaboradoresService.gpsHistoricoPorColaborador().get(nome);
+      if (pontos === undefined) return;
+      this.renderizarRastroGps(pontos);
+    });
   }
 
   // Mesmo filtro (Number.isFinite explícito, mais estrito que o
@@ -516,6 +567,28 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
   }
 
+  // Rastro GPS real do dia — linha cinza tracejada e fina, de propósito
+  // discreta: é uma camada de conferência/apoio ("onde o aparelho
+  // realmente esteve"), não a rota principal (essa continua sendo
+  // "Trajetória do dia", mais grossa e colorida por tipo de transição —
+  // ver atualizarRotaJornada). `weight`/`dashArray` escolhidos pra não
+  // competir visualmente com ela quando as duas estão ligadas juntas.
+  private renderizarRastroGps(pontos: PontoGpsHistorico[]): void {
+    this.grupoRastroGps.clearLayers();
+    this.polilinhaRastroGps = null;
+    const validos = pontos.filter(p => p.latitude && p.longitude);
+    if (validos.length < 2) return;
+    const latLngs: L.LatLngTuple[] = validos.map(p => [Number(p.latitude), Number(p.longitude)]);
+    this.polilinhaRastroGps = L.polyline(latLngs, {
+      color: '#6b7280',
+      weight: 2,
+      opacity: 0.55,
+      dashArray: '2 6',
+    })
+      .bindTooltip('Rastro GPS real do dia')
+      .addTo(this.grupoRastroGps);
+  }
+
   // Controle Leaflet custom (não um painel Angular sobreposto) — só assim
   // ele empilha naturalmente no mesmo canto/ordem do controle de tipos de
   // mapa. DOM montado à mão com L.DomUtil (mesmo padrão que o próprio
@@ -574,7 +647,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       label.appendChild(document.createTextNode(' ' + texto));
     };
 
-    itemDesabilitado('Rastro executado');
+    itemAtivo('Rastro executado', this.camadaRastroGps);
     itemAtivo('Pontos coletados', this.camadaPontos);
     itemDesabilitado('Paradas e gaps');
     itemAtivo('Setor planejado', this.camadaSetorPlanejado);
@@ -653,6 +726,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     this.alternarGrupo(this.grupoAgentes, this.camadaAgentes());
     this.alternarGrupo(this.grupoSetorPlanejado, this.camadaSetorPlanejado());
     this.alternarGrupo(this.grupoLimitesMunicipais, this.camadaLimitesMunicipais());
+    this.alternarGrupo(this.grupoRastroGps, this.camadaRastroGps());
     // Sempre no mapa — não é uma camada do painel, não tem toggle.
     this.grupoAgenteAtual.addTo(this.mapa);
 

@@ -1,7 +1,37 @@
-<!-- Painel com a timeline do DIA do colaborador selecionado (cruza todos os
-     livros dele, não mais um livro isolado): ocupa a área do mapa, sem
-     cobrir o header nem a barra de filtros que ficam acima dela -->
-<div *ngIf="nomeAberto() as nome" class="absolute inset-y-0 right-0 w-full max-w-xs z-[1100] bg-white border-l border-slate-200 shadow-2xl flex flex-col">
+<!-- Timeline do DIA do colaborador selecionado (cruza todos os livros dele,
+     não mais um livro isolado). Duas molduras possíveis pro MESMO conteúdo
+     (ver `variante` em colaborador-detalhe.ts) — o conteúdo em si
+     (`conteudo`, header + grid + timeline) fica num único lugar, nunca
+     duplicado entre elas. -->
+<ng-container *ngIf="nomeAberto() as nome">
+  <!-- 'painel' (padrão, aba Trilho) — desliza da borda direita, ocupa a
+       área do mapa sem cobrir header/filtros que ficam acima dela. -->
+  <div
+    *ngIf="variante !== 'modal'"
+    class="absolute inset-y-0 right-0 w-full max-w-xs z-[1100] bg-white border-l border-slate-200 shadow-2xl flex flex-col"
+  >
+    <ng-container *ngTemplateOutlet="conteudo; context: { nome: nome }"></ng-container>
+  </div>
+
+  <!-- 'modal' (aba Monitoramento Colaborador — usuário pediu explicitamente
+       este formato em vez do painel lateral, com print do modal "Histórico
+       do livro" como referência): mesmo padrão visual dos outros modais do
+       app (fundo escurecido, caixa branca centralizada). -->
+  <div
+    *ngIf="variante === 'modal'"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+    (click)="fechar()"
+  >
+    <div
+      class="w-full max-w-2xl max-h-[80vh] flex flex-col rounded-xl bg-white shadow-xl overflow-hidden"
+      (click)="$event.stopPropagation()"
+    >
+      <ng-container *ngTemplateOutlet="conteudo; context: { nome: nome }"></ng-container>
+    </div>
+  </div>
+</ng-container>
+
+<ng-template #conteudo let-nome="nome">
   <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
     <div class="min-w-0">
       <h3 class="text-sm font-bold text-slate-800 truncate">{{ nome }}</h3>
@@ -448,4 +478,4 @@
       </ng-container>
     </ol>
   </div>
-</div>
+</ng-template>

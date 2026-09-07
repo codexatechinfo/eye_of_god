@@ -63,6 +63,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Aba Monitoramento Colaborador: timeline do colaborador (clique numa linha) agora abre como modal
+  centralizado (fundo escurecido, mesmo padrão do "Histórico do livro"), não mais como painel
+  deslizando da borda direita — formato que fazia sentido na aba Trilho (ao lado do mapa), mas não
+  aqui. Aba Trilho não muda. Ver Adendo 3 da [ADR
+  0036](docs/adr/0036-aba-monitoramento-colaborador.md).
+
 - Barra de navegação superior mais fina (container, botões das abas, logo, pílula de status e
   botão "Sair" com menos respiro vertical — cerca de 16% mais baixa no total). Ver Adendo 1 da
   [ADR 0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).

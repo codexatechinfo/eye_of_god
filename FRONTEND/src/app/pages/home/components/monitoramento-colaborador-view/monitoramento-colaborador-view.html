@@ -342,9 +342,13 @@
     </div>
   </div>
 
-  <!-- Painel "detalhe de execução do dia" — mesmo componente da aba Trilho
+  <!-- Modal "detalhe de execução do dia" — mesmo componente da aba Trilho
        (app-colaborador-detalhe), aberto pelo clique na linha
-       (abrirDetalhe()). Ele mesmo decide se mostra (colaboradorSelecionado)
-       e já tem o botão "Ver no mapa" (troca pra aba Trilho e centraliza). -->
-  <app-colaborador-detalhe></app-colaborador-detalhe>
+       (abrirDetalhe()). variante="modal" troca a moldura pro mesmo padrão
+       visual do modal "Histórico do livro" (fundo escurecido, caixa
+       centralizada) em vez do painel deslizante da aba Trilho — pedido
+       explícito do usuário, com print do modal de referência. Ele mesmo
+       decide se mostra (colaboradorSelecionado) e já tem o botão "Ver no
+       mapa" (troca pra aba Trilho e centraliza). -->
+  <app-colaborador-detalhe variante="modal"></app-colaborador-detalhe>
 </div>

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, QueryList, ViewChildren, computed, effect } from '@angular/core';
+import { Component, ElementRef, HostListener, Input, QueryList, ViewChildren, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
   ColaboradoresService,
@@ -18,6 +18,15 @@ import {
   styleUrl: './colaborador-detalhe.css',
 })
 export class ColaboradorDetalhe {
+  // 'painel' (padrão, aba Trilho): desliza da borda direita, sem cobrir a
+  // tela — o mapa continua visível ao lado. 'modal' (aba Monitoramento
+  // Colaborador, sem mapa por perto pra "encostar"): centralizado com
+  // fundo escurecido, mesmo padrão visual dos outros modais do app
+  // ("Histórico do livro" etc. em monitoramento-view.html). Conteúdo
+  // (header + timeline) é o MESMO nos dois — só a moldura muda, ver
+  // colaborador-detalhe.html.
+  @Input() variante: 'painel' | 'modal' = 'painel';
+
   // Marcadas com #linhaUc no template (uma por UC da timeline) — usadas
   // pra rolar até a UC focada (clique num ponto do mapa, ver mapa-bases.ts).
   @ViewChildren('linhaUc') private linhas!: QueryList<ElementRef<HTMLElement>>;

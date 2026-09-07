@@ -142,3 +142,35 @@ Réplica isolada reproduzindo a ORDEM REAL de eventos do DOM (clique disparado d
 exceção nova): sem o fix, painel abre e fecha no mesmo clique (`colaboradorSelecionado` volta a
 `null`); com o fix, painel permanece aberto com o colaborador certo selecionado. `npx tsc --noEmit`
 e `npx ng build --configuration production` limpos.
+
+## Adendo 3 (2026-09-07) — timeline vira modal centralizado, não painel lateral
+
+Usuário, com print do modal "Histórico do livro" (monitoramento-view.html) como referência: "não é
+aba lateral, é algo como isso aqui" — a timeline do colaborador nesta aba devia abrir como um modal
+centralizado (fundo escurecido, caixa branca no meio da tela), não como o painel que desliza da
+borda direita (o mesmo formato já usado na aba Trilho, que fazia sentido lá por ficar ao lado do
+mapa, mas não tem porquê aqui, sem mapa por perto).
+
+Em vez de duplicar as ~400 linhas de conteúdo da timeline (grid de indicadores + lista cronológica
++ card de UC expandido) num componente novo, `ColaboradorDetalhe` ganhou um `@Input() variante:
+'painel' | 'modal' = 'painel'`. O conteúdo (header + corpo) virou um `<ng-template #conteudo>`
+único, reaproveitado por `*ngTemplateOutlet` nas duas molduras possíveis:
+
+- `variante="painel"` (padrão — aba Trilho, `home.html`, sem mudança nenhuma): a mesma
+  `absolute inset-y-0 right-0 ...` de sempre.
+- `variante="modal"` (aba Monitoramento Colaborador): mesmo padrão dos outros modais do app —
+  `fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm` + caixa
+  `max-w-2xl max-h-[80vh] rounded-xl bg-white shadow-xl`, clique no fundo fecha
+  (`(click)="fechar()"`), clique dentro da caixa não propaga (`$event.stopPropagation()`) — idêntico
+  ao "Histórico do livro" da referência.
+
+Zero mudança de comportamento na aba Trilho (o `<app-colaborador-detalhe>` de lá continua sem o
+atributo `variante`, cai no padrão `'painel'`).
+
+### Verificação
+
+Réplica com o CSS real compilado do projeto, as duas molduras lado a lado: `painel` renderiza
+encostado na borda direita de um contêiner simulando a aba; `modal` renderiza centralizado com
+fundo escurecido cobrindo a área inteira — confirma visualmente que as duas variantes saem
+corretas com o mesmo HTML de conteúdo. `npx tsc --noEmit` e `npx ng build --configuration
+production` limpos.

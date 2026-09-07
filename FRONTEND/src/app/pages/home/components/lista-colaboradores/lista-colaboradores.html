@@ -234,7 +234,13 @@
               </div>
             </div>
           </div>
-          <div *ngIf="jornada.semDado" class="text-[10px] text-slate-300 text-center py-1">Sem leituras novas {{ colaboradoresService.rotuloDataAtividade() }}</div>
+          <!-- "Sem dado" aqui é sobre a JORNADA (nenhuma leitura REALIZADA
+               ainda hoje, base_dados_leitura vazia pra ele) — não quer dizer
+               que ele não tem nada atribuído; os livros dele hoje aparecem
+               logo abaixo mesmo assim. Texto antigo ("Sem leituras novas
+               hoje") lia como se contradissesse a lista de livros embaixo —
+               usuário reportou com print. -->
+          <div *ngIf="jornada.semDado" class="text-[10px] text-slate-300 text-center py-1">Nenhuma leitura realizada ainda {{ colaboradoresService.rotuloDataAtividade() }}</div>
         </div>
 
         <!-- Lista de livros com histórico por faixa de hora -->

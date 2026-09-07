@@ -105,3 +105,29 @@ Conclusão: os 79 simplesmente não têm nenhum dispositivo cadastrado na Scalef
 funciona perfeitamente pros outros 273), é uma lacuna de cadastro/provisionamento de aparelho, fora
 do alcance deste sistema corrigir sozinho (ação é do lado da administração da Scalefusion/MDM, não
 deste app). Não gerou mudança de código — reportado ao usuário como achado.
+
+## Adendo 1 (2026-09-07) — texto "Sem leituras novas hoje" lia como contradição + header mais slim
+
+Usuário, com print: colaborador com "Sem leituras novas hoje" no card, e logo abaixo a lista
+"LIVROS HOJE" com 5 livros atribuídos (todos 0/1, nenhum lido ainda). Perguntou: como assim "sem
+leituras" se tem livro ali embaixo?
+
+Não é bug de dado — os dois vêm de fontes diferentes por design: `jornada.semDado` (mensagem
+acima) reflete `base_dados_leitura` vazia pro colaborador na data (nenhuma UC REALIZADA hoje);
+"Livros hoje" (`a.livros`, de `contr_execucao_leitura`/massiva) é a ATRIBUIÇÃO do dia,
+independente de já ter sido lida ou não — um colaborador pode (e frequentemente tem) livro
+atribuído sem ainda ter lido nada dele. O dado está certo; o TEXTO que sugeria contradição
+("sem leituras" bem em cima de uma lista de livros) é que precisava mudar. Trocado pra "Nenhuma
+leitura realizada ainda hoje" — deixa claro que é sobre o que já foi CONCLUÍDO, não sobre o que
+está atribuído.
+
+Também nesta rodada: barra de navegação superior (header) reduzida — container `py-2.5` → `py-1`,
+botões das abas `py-1.5` → `py-1` (+ `px-3` → `px-2.5`), logo `h-7` → `h-5`, pílula de status
+`py-1` → `py-0.5`, botão "Sair" `py-1.5` → `py-1`.
+
+### Verificação
+
+Réplica com o CSS real compilado do projeto, header antigo e novo lado a lado, altura medida via
+`getBoundingClientRect()`: 125px → 105px (16% mais fino), sem quebrar layout/legibilidade dos
+textos (mantidos `text-xs`, só o respiro ao redor encolheu). `npx tsc --noEmit` e `npx ng build
+--configuration production` limpos.

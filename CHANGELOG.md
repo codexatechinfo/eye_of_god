@@ -57,6 +57,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Barra de navegação superior mais fina (container, botões das abas, logo, pílula de status e
+  botão "Sair" com menos respiro vertical — cerca de 16% mais baixa no total). Ver Adendo 1 da
+  [ADR 0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
+
 - Card expandido do colaborador na lista lateral (aba Trilho) perdeu o grid de 8 indicadores (Km
   percorrido, Sem sincronizar, Leituras, Realizadas, A realizar, Impedimentos, Livros, Livros em
   execução) — 6 já apareciam idênticos no painel de detalhe, que abre junto (mesma seleção). Os 2
@@ -166,6 +170,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
 ### Corrigido
+
+- Texto "Sem leituras novas hoje" (card do colaborador, aba Trilho) lia como se contradissesse a
+  lista de livros do dia logo abaixo — não é bug de dado (as duas informações vêm de fontes
+  diferentes: uma é o que já foi lido, outra é o que está atribuído), só o texto confundia. Trocado
+  por "Nenhuma leitura realizada ainda hoje". Ver Adendo 1 da [ADR
+  0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
 
 - Popover de filtro por coluna (item acima) abria deslocado pro lado, sobrepondo a coluna vizinha
   — a tabela rola nos dois eixos (`overflow-x-auto`/`overflow-y-auto`) e recortava o popover

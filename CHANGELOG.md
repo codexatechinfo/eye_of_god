@@ -142,6 +142,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Popover de filtro por coluna (item acima) abria deslocado pro lado, sobrepondo a coluna vizinha
+  — a tabela rola nos dois eixos (`overflow-x-auto`/`overflow-y-auto`) e recortava o popover
+  `position: absolute`. Trocado por `position: fixed` ancorado por coordenada de tela, que escapa
+  desse recorte; ganhou também um limite pra nunca vazar a borda direita da janela. Ver Adendo 2 da
+  [ADR 0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
+
 - Coluna "Prazo regulatório" (Monitoramento de Livros) vinha sempre "—" — causa dupla: a planilha
   de setembro de `prazo_reg_livros` ainda não tinha sido importada, e a última importação de agosto
   gravou `mes_ref` num formato errado (`31/08/2026` em vez de `2026-08-01`, mesmo bug já corrigido

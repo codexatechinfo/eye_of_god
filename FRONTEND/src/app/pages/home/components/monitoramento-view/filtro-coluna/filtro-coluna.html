@@ -1,5 +1,6 @@
 <span class="relative inline-block align-middle">
   <button
+    #botaoFiltro
     type="button"
     (click)="toggle()"
     class="inline-flex items-center justify-center w-4 h-4 ml-1 rounded transition-colors cursor-pointer"
@@ -11,9 +12,15 @@
     </svg>
   </button>
 
+  <!-- fixed (não absolute) e ancorado por coordenada de tela calculada em
+       posicionar() — escapa do clipping do wrapper com scroll da tabela
+       (overflow-x-auto) e do thead sticky, que deslocavam/cortavam o
+       popover quando ele ficava absolute dentro do <th>. -->
   <div
     *ngIf="aberto()"
-    class="absolute z-30 top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1.5 text-left normal-case"
+    class="fixed z-40 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1.5 text-left normal-case"
+    [style.top.px]="posicaoTop()"
+    [style.left.px]="posicaoLeft()"
     (click)="$event.stopPropagation()"
   >
     <div class="px-2 pb-1.5">

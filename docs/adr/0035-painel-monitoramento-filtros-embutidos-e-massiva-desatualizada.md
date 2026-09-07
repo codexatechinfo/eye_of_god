@@ -164,3 +164,41 @@ pré-existentes (budget de bundle, `leaflet` não-ESM). Não foi possível verif
 navegador nesta sessão (sem credencial de login) — revisão de código cuidadosa na ordem de eventos
 do clique (botão do funil abre o popover ANTES do listener de documento rodar, mesmo tick — a
 condição de fechamento não fecha o que acabou de abrir) no lugar de captura de tela.
+
+## Adendo 2 (2026-09-07) — popover "lateral" (position: fixed no lugar de absolute)
+
+Usuário, com print: o popover do Adendo 1 abria deslocado pro lado, sobrepondo a coluna vizinha em
+vez de ficar colado embaixo do título clicado ("a lista suspensa está lateral").
+
+Causa: o popover era `position: absolute` (ancorado no `<span>` wrapper do próprio botão), dentro
+de um `<th>` que mora num `<thead sticky top-0>`, dentro de um `<div overflow-x-auto
+overflow-y-auto>` (a tabela "Detalhe por livro" rola nas duas direções). `overflow-x-auto` no
+ancestral RECORTA (clip) qualquer conteúdo que vaze da sua caixa, incluindo um descendente
+`absolute` — como o popover (`w-52`, 208px) quase sempre vaza a coluna estreita onde nasce, ficava
+cortado/redesenhado de um jeito que parecia "deslocado pro lado".
+
+Troca: `position: fixed`, ancorado por COORDENADA DE TELA calculada no momento do clique
+(`getBoundingClientRect()` do próprio botão do funil, em `posicionar()`) em vez de depender do
+fluxo normal do CSS. `fixed` tem como *containing block* o viewport (não o `<div
+overflow-x-auto>`), então escapa do clipping do ancestral por completo — resolve a causa raiz, não
+só o sintoma. Efeitos colaterais que essa troca trouxe, e como foram tratados:
+
+- **Clamp de borda direita**: se o botão está perto do fim da tela, `left = rect.left` faria o
+  popover (208px de largura) vazar a janela. `posicionar()` calcula o espaço disponível à direita
+  do botão e, se não couber, encosta a borda DIREITA do popover na borda direita do botão em vez
+  da esquerda (`Math.max(8, rect.right - 208)`).
+- **Coordenada fica velha se a página/tabela rolar**: `fixed` não acompanha o scroll do
+  `<div overflow-y-auto>` da tabela nem da página como `absolute` acompanharia dentro do próprio
+  fluxo. Mais simples que recalcular a cada evento de scroll: fecha o popover em qualquer scroll
+  (`window.addEventListener('scroll', ..., true)` — `capture: true` porque o scroll do `<div>`
+  interno não borbulha até `window`/`document`) e em qualquer resize da janela.
+
+### Verificação
+
+Réplica estática fora do projeto (mesma estrutura de tabela/thead sticky/scroll duplo, mesma
+função `posicionar()`), servida por um servidor Node descartável e aberta na Browser pane —
+confirmado ao vivo: popover abre exatamente colado embaixo do título clicado, sem deslocamento
+lateral (era o bug reportado). Matemática do clamp de borda conferida separadamente (`espacoDisponivel
+= innerWidth - rect.left`; `rect.left=1200, rect.right=1216, innerWidth=1280` → `left=1008`,
+`left+208=1216`, dentro da janela). `npx tsc --noEmit` e `npx ng build --configuration production`
+limpos.

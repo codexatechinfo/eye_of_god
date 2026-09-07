@@ -177,6 +177,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Aba Monitoramento Colaborador: clicar numa linha da tabela abria a timeline e fechava de volta no
+  mesmo clique (o listener de "clicar fora fecha o painel" não tinha exceção pra essa aba nova,
+  mesma classe de bug já corrigida uma vez pro mapa/lista lateral). Ver Adendo 2 da [ADR
+  0036](docs/adr/0036-aba-monitoramento-colaborador.md).
+
 - Texto "Sem leituras novas hoje" (card do colaborador, aba Trilho) lia como se contradissesse a
   lista de livros do dia logo abaixo — não é bug de dado (as duas informações vêm de fontes
   diferentes: uma é o que já foi lido, outra é o que está atribuído), só o texto confundia. Trocado

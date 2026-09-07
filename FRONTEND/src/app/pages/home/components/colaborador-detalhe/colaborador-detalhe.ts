@@ -34,13 +34,15 @@ export class ColaboradorDetalhe {
     });
   }
 
-  // Cliques DENTRO do mapa (app-mapa-bases) ou da lista lateral
-  // (app-lista-colaboradores) não fecham o painel — um clique no marcador
-  // do colaborador ou no nome dele na lista, que ABRE o painel (ou troca
-  // pra outro colaborador), bolha até `document` no mesmo evento, e como o
-  // alvo não está dentro do elemento do painel, fechava de volta
-  // imediatamente (bug real: clicar no nome na lista "não fazia nada" —
-  // abria e fechava no mesmo clique).
+  // Cliques DENTRO do mapa (app-mapa-bases), da lista lateral
+  // (app-lista-colaboradores) ou da tabela da aba Monitoramento Colaborador
+  // (app-monitoramento-colaborador-view) não fecham o painel — um clique
+  // que ABRE o painel (ou troca pra outro colaborador) bolha até
+  // `document` no mesmo evento, e como o alvo não está dentro do elemento
+  // do painel, fechava de volta imediatamente (bug real: clicar num
+  // colaborador "não fazia nada" — abria e fechava no mesmo clique; já
+  // resolvido uma vez pro mapa/lista, reapareceu igual quando a aba
+  // Monitoramento Colaborador passou a abrir este painel também).
   @HostListener('document:click', ['$event'])
   aoClicarFora(evento: MouseEvent): void {
     if (!this.colaboradoresService.colaboradorSelecionado()) return;
@@ -48,6 +50,7 @@ export class ColaboradorDetalhe {
     if (this.elementRef.nativeElement.contains(alvo)) return;
     if (document.querySelector('app-mapa-bases')?.contains(alvo)) return;
     if (document.querySelector('app-lista-colaboradores')?.contains(alvo)) return;
+    if (document.querySelector('app-monitoramento-colaborador-view')?.contains(alvo)) return;
     this.fechar();
   }
 

@@ -117,3 +117,28 @@ Réplica estática com o CSS real compilado do projeto (mesmo header inteiro, `a
 legível, aba ativa destacada em azul claro na posição certa (logo após Trilho), pílula de status e
 "Última importação" com contraste adequado no fundo branco. `npx tsc --noEmit` e `npx ng build
 --configuration production` limpos.
+
+## Adendo 2 (2026-09-07) — clicar no colaborador abria e fechava o painel no mesmo clique
+
+Usuário: clicar numa linha da tabela não abria a timeline.
+
+Causa — mesma classe de bug que `ColaboradorDetalhe` já tinha resolvido uma vez (ver comentário
+original de `aoClicarFora`, escrito quando o painel só existia na aba Trilho): o clique na linha
+primeiro roda `abrirDetalhe()` (bolha a partir do `<tr>`, fase de bubble — dispara ANTES de chegar
+no `document`), que abre o painel; o MESMO clique continua borbulhando até `document`, onde o
+listener `aoClicarFora` do `ColaboradorDetalhe` dispara e fecha de volta, porque só tinha exceção
+pra clique dentro de `app-mapa-bases`/`app-lista-colaboradores` (os dois lugares que já abriam o
+painel quando esse guard foi escrito) — a aba Monitoramento Colaborador nunca tinha sido
+adicionada à lista, então todo clique numa linha abria e fechava no mesmo evento, parecendo "não
+fazer nada".
+
+Adicionada a exceção: `document.querySelector('app-monitoramento-colaborador-view')?.contains(alvo)`
+na lista de "cliques que não devem fechar o painel", em `colaborador-detalhe.ts`.
+
+### Verificação
+
+Réplica isolada reproduzindo a ORDEM REAL de eventos do DOM (clique disparado de verdade num
+`<tr>`, deixado borbulhar até `document`, mesma lógica de `aoClicarFora` copiada com/sem a
+exceção nova): sem o fix, painel abre e fecha no mesmo clique (`colaboradorSelecionado` volta a
+`null`); com o fix, painel permanece aberto com o colaborador certo selecionado. `npx tsc --noEmit`
+e `npx ng build --configuration production` limpos.

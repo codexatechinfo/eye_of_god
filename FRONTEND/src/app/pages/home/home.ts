@@ -8,14 +8,17 @@ import { ListaColaboradores } from './components/lista-colaboradores/lista-colab
 import { ColaboradorDetalhe } from './components/colaborador-detalhe/colaborador-detalhe';
 import { MapaBases } from './components/mapa-bases/mapa-bases';
 import { MonitoramentoView } from './components/monitoramento-view/monitoramento-view';
+import { MonitoramentoColaboradorView } from './components/monitoramento-colaborador-view/monitoramento-colaborador-view';
 import { ImportacaoView } from './components/importacao-view/importacao-view';
 import { ColaboradoresService } from '../../services/colaboradores.service';
 
 type StatusColeta = 'coletando' | 'parada' | 'offline' | null;
 // 'monitoramento' é a aba Trilho (rótulo mudou, chave não — ver ADR 0006).
 // 'livros' é Monitoramento de Livros (leitura/releitura); 'massivas' é a
-// aba nova, dedicada só a massiva (ver ADR 0010).
-type Aba = 'monitoramento' | 'livros' | 'massivas' | 'importacao';
+// aba dedicada só a massiva (ver ADR 0010); 'colaborador' é a aba
+// Monitoramento Colaborador (mesmo modelo visual, tabela por colaborador em
+// vez de por livro — ver ADR 0036).
+type Aba = 'monitoramento' | 'livros' | 'massivas' | 'colaborador' | 'importacao';
 
 interface StatusJob {
   ativo: boolean;
@@ -31,7 +34,7 @@ interface StatusColetaResponse {
 
 @Component({
   selector: 'app-home',
-  imports: [CommonModule, ListaColaboradores, ColaboradorDetalhe, MapaBases, MonitoramentoView, ImportacaoView],
+  imports: [CommonModule, ListaColaboradores, ColaboradorDetalhe, MapaBases, MonitoramentoView, MonitoramentoColaboradorView, ImportacaoView],
   templateUrl: './home.html',
   styleUrl: './home.css',
 })
@@ -45,6 +48,7 @@ export class Home implements OnInit, OnDestroy {
   // junto) em vez de destruir ao trocar de aba. Ver home.html.
   jaAbriuLivros = signal(false);
   jaAbriuMassivas = signal(false);
+  jaAbriuColaborador = signal(false);
 
   private intervaloId?: ReturnType<typeof setInterval>;
   private readonly INTERVALO_VERIFICACAO_MS = 30000;
@@ -96,6 +100,7 @@ export class Home implements OnInit, OnDestroy {
     this.abaAtiva.set(aba);
     if (aba === 'livros') this.jaAbriuLivros.set(true);
     if (aba === 'massivas') this.jaAbriuMassivas.set(true);
+    if (aba === 'colaborador') this.jaAbriuColaborador.set(true);
   }
 
   podeImportar(): boolean {

@@ -7,6 +7,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Nova aba "Monitoramento Colaborador" — mesmo modelo visual da aba Monitoramento de Livros
+  (barra de resumo + tabela com filtro embutido no cabeçalho), mas com uma linha por colaborador em
+  vez de por livro: nome, cargo, regional, bateria do aparelho, último registro de leitura,
+  progresso e status (Ativo/Parado/Sem sincronismo/Sem serviço/Afastados, clicáveis, filtram a
+  tabela). Clicar numa linha abre o mesmo painel de timeline do dia já usado na aba Trilho, que
+  ganhou um botão "Ver no mapa" (troca pra aba Trilho e centraliza). Ver [ADR
+  0036](docs/adr/0036-aba-monitoramento-colaborador.md).
+
 - Coleta contínua de posição e bateria dos aparelhos de campo via API Scalefusion (FIMM) — nova
   tabela `scalefusion` (histórico, uma linha por coleta com posição nova), job rodando a cada 5min
   (mesmo intervalo do cache da API). Casa o nome do colaborador embutido no dispositivo contra o

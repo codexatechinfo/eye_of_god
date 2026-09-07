@@ -119,6 +119,39 @@
         </button>
 
         <button
+          type="button"
+          (click)="selecionarAba('colaborador')"
+          class="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(59,130,246,0.45)]"
+          [ngClass]="
+            abaAtiva() === 'colaborador'
+              ? 'text-white border-white/10 hover:border-blue-400/40'
+              : 'text-slate-400 border-transparent hover:text-white hover:border-blue-400/40'
+          "
+        >
+          <span
+            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-400/25 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          ></span>
+          <span
+            class="pointer-events-none absolute inset-0 transition-colors duration-300"
+            [ngClass]="abaAtiva() === 'colaborador' ? 'bg-white/10 group-hover:bg-white/[0.06]' : 'group-hover:bg-white/[0.06]'"
+          ></span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="relative h-3.5 w-3.5 shrink-0 transition-transform duration-300 group-hover:scale-110"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span class="relative">MONITORAMENTO COLABORADOR</span>
+        </button>
+
+        <button
           *ngIf="podeImportar()"
           type="button"
           (click)="selecionarAba('importacao')"
@@ -245,6 +278,10 @@
 
   <div class="flex-1 min-h-0" *ngIf="abaAtiva() === 'massivas' || jaAbriuMassivas()" [hidden]="abaAtiva() !== 'massivas'">
     <app-monitoramento-view class="block h-full" escopo="massiva"></app-monitoramento-view>
+  </div>
+
+  <div class="flex-1 min-h-0" *ngIf="abaAtiva() === 'colaborador' || jaAbriuColaborador()" [hidden]="abaAtiva() !== 'colaborador'">
+    <app-monitoramento-colaborador-view class="block h-full"></app-monitoramento-colaborador-view>
   </div>
 
   <div class="flex-1 min-h-0 overflow-y-auto" *ngIf="abaAtiva() === 'importacao'">

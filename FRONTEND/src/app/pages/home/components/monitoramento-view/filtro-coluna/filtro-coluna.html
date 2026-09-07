@@ -1,0 +1,45 @@
+<span class="relative inline-block align-middle">
+  <button
+    type="button"
+    (click)="toggle()"
+    class="inline-flex items-center justify-center w-4 h-4 ml-1 rounded transition-colors cursor-pointer"
+    [ngClass]="valor ? 'text-blue-600' : 'text-slate-300 hover:text-slate-500'"
+    [title]="valor ? 'Filtro ativo — clique pra mudar' : 'Filtrar'"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" [attr.fill]="valor ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  </button>
+
+  <div
+    *ngIf="aberto()"
+    class="absolute z-30 top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1.5 text-left normal-case"
+    (click)="$event.stopPropagation()"
+  >
+    <div class="px-2 pb-1.5">
+      <input
+        #campoBusca
+        type="text"
+        [ngModel]="busca()"
+        (ngModelChange)="onBuscaChange($event)"
+        (keydown.escape)="onTeclaEscape()"
+        (keydown.enter)="!opcoes && fechar()"
+        [placeholder]="placeholder"
+        class="w-full text-[11px] font-normal border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+      />
+    </div>
+
+    <div class="max-h-52 overflow-y-auto" *ngIf="opcoes">
+      <button
+        type="button"
+        *ngFor="let opcao of opcoesFiltradas()"
+        (click)="selecionar(opcao.valor)"
+        class="w-full text-left px-3 py-1.5 text-[11px] font-normal truncate transition-colors cursor-pointer"
+        [ngClass]="opcao.valor === valor ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-slate-600 hover:bg-slate-50'"
+      >
+        {{ opcao.rotulo }}
+      </button>
+      <div class="px-3 py-1.5 text-[11px] text-slate-400" *ngIf="opcoesFiltradas().length <= 1">Nenhuma opção encontrada</div>
+    </div>
+  </div>
+</span>

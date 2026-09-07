@@ -253,138 +253,53 @@
       <table class="w-full text-xs">
         <thead class="sticky top-0 bg-slate-50 z-10">
           <tr class="text-left text-slate-500 border-b border-slate-200">
-            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('regional')">
-              Regional{{ indicadorOrdenacao('regional') }}
+            <th class="px-3 py-2 font-semibold select-none whitespace-nowrap">
+              <span class="cursor-pointer hover:text-slate-700" (click)="ordenarPor('regional')">Regional{{ indicadorOrdenacao('regional') }}</span>
+              <app-filtro-coluna [valor]="monitoramentoService.filtroRegional()" [opcoes]="opcoesRegional()" placeholder="Buscar regional..." (valorChange)="aplicarFiltroRegional($event)" />
             </th>
-            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('livro')">
-              Livro{{ indicadorOrdenacao('livro') }}
+            <th class="px-3 py-2 font-semibold select-none whitespace-nowrap">
+              <span class="cursor-pointer hover:text-slate-700" (click)="ordenarPor('livro')">Livro{{ indicadorOrdenacao('livro') }}</span>
+              <app-filtro-coluna [valor]="monitoramentoService.filtroLivro()" [opcoes]="null" placeholder="Buscar livro..." (valorChange)="aplicarFiltroLivro($event)" />
             </th>
-            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('etapa')">
-              Etapa{{ indicadorOrdenacao('etapa') }}
+            <th class="px-3 py-2 font-semibold select-none whitespace-nowrap">
+              <span class="cursor-pointer hover:text-slate-700" (click)="ordenarPor('etapa')">Etapa{{ indicadorOrdenacao('etapa') }}</span>
+              <app-filtro-coluna [valor]="monitoramentoService.filtroEtapa()" [opcoes]="opcoesEtapa()" placeholder="Buscar etapa..." (valorChange)="aplicarFiltroEtapa($event)" />
             </th>
-            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('status')">
-              Situação{{ indicadorOrdenacao('status') }}
+            <th class="px-3 py-2 font-semibold select-none whitespace-nowrap">
+              <span class="cursor-pointer hover:text-slate-700" (click)="ordenarPor('status')">Situação{{ indicadorOrdenacao('status') }}</span>
+              <app-filtro-coluna [valor]="monitoramentoService.filtroStatus()" [opcoes]="OPCOES_STATUS" placeholder="Buscar situação..." (valorChange)="aplicarFiltroStatus($event)" />
             </th>
-            <th *ngIf="escopo === 'leiturarelitura'" class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('tipoServico')">
-              Tipo{{ indicadorOrdenacao('tipoServico') }}
+            <th *ngIf="escopo === 'leiturarelitura'" class="px-3 py-2 font-semibold select-none whitespace-nowrap">
+              <span class="cursor-pointer hover:text-slate-700" (click)="ordenarPor('tipoServico')">Tipo{{ indicadorOrdenacao('tipoServico') }}</span>
+              <app-filtro-coluna [valor]="monitoramentoService.filtroTipoServico()" [opcoes]="OPCOES_TIPO_SERVICO" placeholder="Buscar tipo..." (valorChange)="aplicarFiltroTipoServico($event)" />
             </th>
-            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('dataRecebimento')">
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700 whitespace-nowrap" (click)="ordenarPor('dataRecebimento')">
               Recebido em{{ indicadorOrdenacao('dataRecebimento') }}
             </th>
-            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('dt_prev_limite')">
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700 whitespace-nowrap" (click)="ordenarPor('dt_prev_limite')">
               Data limite{{ indicadorOrdenacao('dt_prev_limite') }}
             </th>
-            <th *ngIf="escopo === 'leiturarelitura'" class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('diasPrazoRegulatorio')" title="Dias efetivos frente ao prazo regulatório (prazo_reg_livros) — '—' quando o livro não tem correspondência na planilha do mês">
-              Prazo regulatório{{ indicadorOrdenacao('diasPrazoRegulatorio') }}
+            <!-- Prazo regulatório (só Monitoramento de Livros — a aba
+                 Massivas não tem esse filtro, ver ADR 0012 Adendo 7). Mesmo
+                 signal do badge clicável da barra de resumo (filtroFaixaDias),
+                 popover e badge ficam sincronizados sozinhos. -->
+            <th *ngIf="escopo === 'leiturarelitura'" class="px-3 py-2 font-semibold text-right select-none whitespace-nowrap" title="Dias efetivos frente ao prazo regulatório (prazo_reg_livros) — '—' quando o livro não tem correspondência na planilha do mês">
+              <span class="cursor-pointer hover:text-slate-700" (click)="ordenarPor('diasPrazoRegulatorio')">Prazo regulatório{{ indicadorOrdenacao('diasPrazoRegulatorio') }}</span>
+              <app-filtro-coluna [valor]="monitoramentoService.filtroFaixaDias()" [opcoes]="OPCOES_PRAZO_FAIXA" placeholder="Buscar faixa..." (valorChange)="aplicarFiltroFaixaDias($event)" />
             </th>
-            <th class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('quantidade')">
+            <th class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700 whitespace-nowrap" (click)="ordenarPor('quantidade')">
               {{ escopo === 'leiturarelitura' ? 'Realizados/Não realizados' : 'Executados/Pendentes' }}{{ indicadorOrdenacao('quantidade') }}
             </th>
-            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('percentual')">
+            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700 whitespace-nowrap" (click)="ordenarPor('percentual')">
               Progresso{{ indicadorOrdenacao('percentual') }}
             </th>
-            <th class="px-3 py-2 font-semibold cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('leiturista')">
-              Leiturista{{ indicadorOrdenacao('leiturista') }}
+            <th class="px-3 py-2 font-semibold select-none whitespace-nowrap">
+              <span class="cursor-pointer hover:text-slate-700" (click)="ordenarPor('leiturista')">Leiturista{{ indicadorOrdenacao('leiturista') }}</span>
+              <app-filtro-coluna [valor]="monitoramentoService.filtroColaborador()" [opcoes]="null" placeholder="Buscar leiturista..." (valorChange)="aplicarFiltroLeiturista($event)" />
             </th>
-            <th class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700" (click)="ordenarPor('diasAtraso')">
+            <th class="px-3 py-2 font-semibold text-right cursor-pointer select-none hover:text-slate-700 whitespace-nowrap" (click)="ordenarPor('diasAtraso')">
               Dias em atraso{{ indicadorOrdenacao('diasAtraso') }}
             </th>
-          </tr>
-          <!-- Filtros embutidos por coluna (item 4) — mesmos signals que
-               antes ficavam na barra separada acima da tabela; só as
-               colunas com filtro de verdade no backend ganham um controle
-               aqui (as outras ficam com a célula vazia, mantendo o
-               alinhamento das colunas). -->
-          <tr class="text-left border-b border-slate-200 bg-slate-50">
-            <th class="px-2 py-1.5 font-normal">
-              <select
-                [ngModel]="monitoramentoService.filtroRegional()"
-                (ngModelChange)="monitoramentoService.filtroRegional.set($event); monitoramentoService.buscarTudo()"
-                (click)="$event.stopPropagation()"
-                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
-              >
-                <option value="">Todas</option>
-                <option *ngFor="let regional of monitoramentoService.regionais()" [value]="regional">{{ regional }}</option>
-              </select>
-            </th>
-            <th class="px-2 py-1.5 font-normal">
-              <input
-                type="text"
-                [ngModel]="monitoramentoService.filtroLivro()"
-                (ngModelChange)="monitoramentoService.filtroLivro.set($event); monitoramentoService.buscarComDebounce()"
-                (click)="$event.stopPropagation()"
-                placeholder="Buscar..."
-                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </th>
-            <th class="px-2 py-1.5 font-normal">
-              <select
-                [ngModel]="monitoramentoService.filtroEtapa()"
-                (ngModelChange)="monitoramentoService.filtroEtapa.set($event); monitoramentoService.buscarTudo()"
-                (click)="$event.stopPropagation()"
-                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
-              >
-                <option value="">Todas</option>
-                <option *ngFor="let etapa of monitoramentoService.etapas()" [value]="etapa">{{ etapa }}</option>
-              </select>
-            </th>
-            <th class="px-2 py-1.5 font-normal">
-              <select
-                [ngModel]="monitoramentoService.filtroStatus()"
-                (ngModelChange)="monitoramentoService.filtroStatus.set($event); onStatusChange()"
-                (click)="$event.stopPropagation()"
-                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
-              >
-                <option value="todos">Todos</option>
-                <option value="pendentes">Pendentes</option>
-                <option value="atribuidas">Atribuídas</option>
-                <option value="emExecucao">Em execução</option>
-              </select>
-            </th>
-            <th *ngIf="escopo === 'leiturarelitura'" class="px-2 py-1.5 font-normal">
-              <select
-                [ngModel]="monitoramentoService.filtroTipoServico()"
-                (ngModelChange)="monitoramentoService.filtroTipoServico.set($event); monitoramentoService.onTipoServicoChange()"
-                (click)="$event.stopPropagation()"
-                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
-              >
-                <option value="leiturarelitura">Todos</option>
-                <option value="leitura">Leitura</option>
-                <option value="releitura">Releitura</option>
-              </select>
-            </th>
-            <th class="px-2 py-1.5"></th>
-            <th class="px-2 py-1.5"></th>
-            <!-- Prazo regulatório (só Monitoramento de Livros — a aba
-                 Massivas não tem esse seletor, ver ADR 0012 Adendo 7). Mesmo
-                 signal do badge clicável da barra de resumo (filtroFaixaDias),
-                 dropdown e badge ficam sincronizados sozinhos. -->
-            <th *ngIf="escopo === 'leiturarelitura'" class="px-2 py-1.5 font-normal">
-              <select
-                [ngModel]="monitoramentoService.filtroFaixaDias()"
-                (ngModelChange)="monitoramentoService.filtroFaixaDias.set($event); monitoramentoService.buscarTudo()"
-                (click)="$event.stopPropagation()"
-                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
-              >
-                <option value="">Todos</option>
-                <option value="menor27">&lt; 27 dias</option>
-                <option value="igual33">33 dias</option>
-                <option value="maior34">34+ dias</option>
-              </select>
-            </th>
-            <th class="px-2 py-1.5"></th>
-            <th class="px-2 py-1.5"></th>
-            <th class="px-2 py-1.5 font-normal">
-              <input
-                type="text"
-                [ngModel]="monitoramentoService.filtroColaborador()"
-                (ngModelChange)="monitoramentoService.filtroColaborador.set($event); monitoramentoService.buscarComDebounce()"
-                (click)="$event.stopPropagation()"
-                placeholder="Buscar..."
-                class="w-full text-[10.5px] border border-slate-200 rounded px-1 py-1 focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </th>
-            <th class="px-2 py-1.5"></th>
           </tr>
         </thead>
         <tbody>

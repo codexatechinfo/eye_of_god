@@ -1,8 +1,16 @@
 import { Component, Input, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DetalheLinha, EscopoMonitoramento, MonitoramentoService, StatusMonitoramento } from '../../../../services/monitoramento.service';
+import {
+  DetalheLinha,
+  EscopoMonitoramento,
+  FaixaDiasMonitoramento,
+  MonitoramentoService,
+  StatusMonitoramento,
+  TipoServico,
+} from '../../../../services/monitoramento.service';
 import { ColaboradoresService, formatarTempoParado, LIMITE_PARADO_MINUTOS } from '../../../../services/colaboradores.service';
+import { FiltroColuna, OpcaoFiltroColuna } from './filtro-coluna/filtro-coluna';
 
 type CorLinha = 'verde' | 'amarelo' | 'vermelho';
 type ColunaOrdenavel =
@@ -22,7 +30,7 @@ type DirecaoOrdenacao = 'asc' | 'desc';
 
 @Component({
   selector: 'app-monitoramento-view',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, FiltroColuna],
   templateUrl: './monitoramento-view.html',
   styleUrl: './monitoramento-view.css',
   // Instância própria por aba — a de Massivas e a de Monitoramento de
@@ -425,14 +433,83 @@ export class MonitoramentoView implements OnInit {
   // dois.
   filtrarPorRegional(regional: string, evento: Event): void {
     evento.stopPropagation();
-    this.monitoramentoService.filtroRegional.set(regional);
-    this.monitoramentoService.buscarTudo();
+    this.aplicarFiltroRegional(regional);
   }
 
   filtrarPorLeiturista(leiturista: string, evento: Event): void {
     evento.stopPropagation();
-    this.monitoramentoService.filtroColaborador.set(leiturista);
+    this.aplicarFiltroLeiturista(leiturista);
+  }
+
+  // Filtros "estilo Excel" embutidos no cabeçalho (item 4, refeito depois do
+  // usuário achar a barra de campos sempre visível "ridícula" — agora cada
+  // coluna tem só um ícone de funil que abre o popover, ver
+  // filtro-coluna.ts). `opcoes[0]` de cada lista é sempre a entrada de
+  // "limpar" — Regional/Etapa usam '' (mesmo sentinela de sempre pro filtro
+  // vazio), Status/Tipo já tinham seu próprio sentinela ('todos'/
+  // 'leiturarelitura') antes disso existir, mantido igual pra não mudar o
+  // contrato com o backend.
+  readonly OPCOES_STATUS: OpcaoFiltroColuna[] = [
+    { valor: 'todos', rotulo: 'Todos' },
+    { valor: 'pendentes', rotulo: 'Pendentes' },
+    { valor: 'atribuidas', rotulo: 'Atribuídas' },
+    { valor: 'emExecucao', rotulo: 'Em execução' },
+  ];
+
+  readonly OPCOES_TIPO_SERVICO: OpcaoFiltroColuna[] = [
+    { valor: 'leiturarelitura', rotulo: 'Todos' },
+    { valor: 'leitura', rotulo: 'Leitura' },
+    { valor: 'releitura', rotulo: 'Releitura' },
+  ];
+
+  readonly OPCOES_PRAZO_FAIXA: OpcaoFiltroColuna[] = [
+    { valor: '', rotulo: 'Todos' },
+    { valor: 'menor27', rotulo: '< 27 dias' },
+    { valor: 'igual33', rotulo: '33 dias' },
+    { valor: 'maior34', rotulo: '34+ dias' },
+  ];
+
+  opcoesRegional(): OpcaoFiltroColuna[] {
+    return [{ valor: '', rotulo: 'Todas' }, ...this.monitoramentoService.regionais().map(r => ({ valor: r, rotulo: r }))];
+  }
+
+  opcoesEtapa(): OpcaoFiltroColuna[] {
+    return [{ valor: '', rotulo: 'Todas' }, ...this.monitoramentoService.etapas().map(e => ({ valor: e, rotulo: `Etapa ${e}` }))];
+  }
+
+  aplicarFiltroRegional(valor: string): void {
+    this.monitoramentoService.filtroRegional.set(valor);
     this.monitoramentoService.buscarTudo();
+  }
+
+  aplicarFiltroLivro(valor: string): void {
+    this.monitoramentoService.filtroLivro.set(valor);
+    this.monitoramentoService.buscarComDebounce();
+  }
+
+  aplicarFiltroEtapa(valor: string): void {
+    this.monitoramentoService.filtroEtapa.set(valor);
+    this.monitoramentoService.buscarTudo();
+  }
+
+  aplicarFiltroStatus(valor: string): void {
+    this.monitoramentoService.filtroStatus.set(valor as StatusMonitoramento);
+    this.onStatusChange();
+  }
+
+  aplicarFiltroTipoServico(valor: string): void {
+    this.monitoramentoService.filtroTipoServico.set(valor as TipoServico);
+    this.monitoramentoService.onTipoServicoChange();
+  }
+
+  aplicarFiltroFaixaDias(valor: string): void {
+    this.monitoramentoService.filtroFaixaDias.set(valor as FaixaDiasMonitoramento);
+    this.monitoramentoService.buscarTudo();
+  }
+
+  aplicarFiltroLeiturista(valor: string): void {
+    this.monitoramentoService.filtroColaborador.set(valor);
+    this.monitoramentoService.buscarComDebounce();
   }
 
   onStatusChange(): void {

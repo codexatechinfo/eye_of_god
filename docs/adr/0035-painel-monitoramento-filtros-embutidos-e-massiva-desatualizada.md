@@ -129,3 +129,38 @@ uso dele no FRONTEND estava fora de escopo do pedido).
   (`massivaDesatualizada: false`, `total.livros: 937`).
 - `DELETE` de `prazo_reg_livros` confirmado: antes 2 valores de `mes_ref` (13.880 + 13.892 linhas),
   depois só `'2026-08-01'` (13.880).
+
+## Adendo 1 (2026-09-07) — filtros viram popover "estilo Excel" no cabeçalho
+
+A primeira versão do item 4 (mostrada acima) botou os filtros como `<select>`/`<input>` sempre
+visíveis numa segunda linha do `<thead>`. Usuário, com print: *"ficou ridículo os filtros é pra
+ficarem como se fosse no excel clico no título e mostra a lista suspensa com opção de digitar"*.
+
+Segunda linha do `<thead>` removida. Cada título de coluna filtrável ganhou um ícone de funil ao
+lado (preenchido/azul quando o filtro está ativo, vazio/cinza quando não) — clicar nele abre um
+popover ancorado embaixo do próprio título, com campo de busca no topo e, pras colunas com lista
+fechada de valores (Regional/Etapa/Situação/Tipo/Prazo regulatório), as opções abaixo filtradas
+pelo texto digitado; clicar numa opção aplica e fecha. Pras colunas de texto livre (Livro/
+Leiturista, sem lista possível — são nomes/números livres) o próprio campo de busca é o filtro,
+sem lista embaixo.
+
+Componente novo e reutilizável, `FiltroColuna`
+(`monitoramento-view/filtro-coluna/filtro-coluna.ts`), pra não repetir o popover 7 vezes:
+`[opcoes]` null vira o modo texto-livre, `[opcoes]` preenchido vira o modo lista (`opcoes[0]` é
+sempre a entrada de "limpar" tipo `{valor:'', rotulo:'Todas'}`, fixa no topo mesmo com busca
+digitada — mesma ideia do "(Selecionar tudo)" do Excel não sumir da lista). Fecha sozinho ao
+clicar fora (`@HostListener('document:click')` comparando contra o próprio `elementRef`) — sem
+overlay de tela cheia, que atrapalharia interagir com outra coluna ou rolar a tabela enquanto um
+filtro está aberto. Foca o campo de busca automaticamente ao abrir.
+
+Os métodos que já existiam (`aplicarFiltroRegional`/`aplicarFiltroEtapa`/etc., criados junto com a
+primeira versão do item 4) não mudaram — só a UI que os chama trocou de `<select>`/`<input>`
+sempre visível pra popover sob demanda.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos, mesmos avisos
+pré-existentes (budget de bundle, `leaflet` não-ESM). Não foi possível verificar visualmente no
+navegador nesta sessão (sem credencial de login) — revisão de código cuidadosa na ordem de eventos
+do clique (botão do funil abre o popover ANTES do listener de documento rodar, mesmo tick — a
+condição de fechamento não fecha o que acabou de abrir) no lugar de captura de tela.

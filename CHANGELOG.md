@@ -122,10 +122,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
 - Monitoramento de Livros/Massivas: barra de filtros separada removida — os mesmos filtros
-  (Regional/Livro/Etapa/Status/Tipo/Prazo regulatório/Leiturista) viraram controles embutidos no
-  cabeçalho da própria tabela "Detalhe por livro", um por coluna; clicar no valor de Regional ou
-  Leiturista numa linha filtra por aquele valor. Válido nas duas abas. Ver [ADR
-  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
+  (Regional/Livro/Etapa/Status/Tipo/Prazo regulatório/Leiturista) viraram um ícone de funil ao lado
+  do título de cada coluna na tabela "Detalhe por livro" ("estilo Excel": clique abre popover com
+  busca + lista de opções); clicar no valor de Regional ou Leiturista numa linha também filtra por
+  aquele valor. Válido nas duas abas. Ver [ADR
+  0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md) (Adendo 1
+  pela versão em popover — a primeira, com filtro sempre visível numa segunda linha do cabeçalho,
+  foi trocada a pedido do usuário).
 
 - Aba Massivas: quando a coleta contínua não grava nada novo há mais de um dia, os cards (antes
   mostrando o último lote conhecido, por mais velho que fosse) passam a zerar com um aviso

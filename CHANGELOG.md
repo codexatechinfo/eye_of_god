@@ -12,8 +12,8 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   vez de por livro: nome, cargo, regional, bateria do aparelho, último registro de leitura,
   progresso e status (Ativo/Parado/Sem sincronismo/Sem serviço/Afastados, clicáveis, filtram a
   tabela). Clicar numa linha abre o mesmo painel de timeline do dia já usado na aba Trilho, que
-  ganhou um botão "Ver no mapa" (troca pra aba Trilho e centraliza). Ver [ADR
-  0036](docs/adr/0036-aba-monitoramento-colaborador.md).
+  ganhou um botão "Ver no mapa" (troca pra aba Trilho e centraliza). Posicionada logo após Trilho
+  na barra de navegação. Ver [ADR 0036](docs/adr/0036-aba-monitoramento-colaborador.md).
 
 - Coleta contínua de posição e bateria dos aparelhos de campo via API Scalefusion (FIMM) — nova
   tabela `scalefusion` (histórico, uma linha por coleta com posição nova), job rodando a cada 5min
@@ -50,6 +50,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
 ### Alterado
+
+- Barra de navegação superior invertida pro tema claro (era escura, gradiente `slate-900`/texto
+  branco) — logo, abas, pílula de status e botão "Sair" ajustados pro fundo branco. Aba
+  "Monitoramento Colaborador" reposicionada logo após "Trilho" (estava por último). Ver Adendo 1 da
+  [ADR 0036](docs/adr/0036-aba-monitoramento-colaborador.md).
 
 - Painel lateral de detalhe (aba Trilho): mostrava a timeline de UM livro só, aberto livro por
   livro. Agora clicar num colaborador (na lista ou no ícone do mapa) abre a timeline do DIA

@@ -89,3 +89,31 @@ aba Trilho, onde só re-centraliza sem trocar de aba). Reaproveita
   (`painel top ANTES: 322.0px` / `DEPOIS: 322.0px`) — confirma que `app-colaborador-detalhe` não
   rola junto com a tabela.
 - Não foi possível testar visualmente no app real nesta sessão (sem credencial de login).
+
+## Adendo 1 (2026-09-07) — aba reordenada + header em tema claro
+
+Usuário: a aba nova tinha que ficar logo após Trilho (estava depois de Massivas), e a barra
+superior inteira devia inverter pro tema claro (era escura, `bg-gradient-to-r from-slate-900
+via-slate-800 to-slate-900`, texto branco/`slate-400`).
+
+- Ordem das abas em `home.html`: Trilho, **Monitoramento Colaborador**, Monitoramento de Livros,
+  Massivas, Importação.
+- Header: `bg-white border-b border-slate-200 shadow-sm` no lugar do gradiente escuro. Aba ativa
+  passa de `text-white`/`bg-white/10` pra `text-slate-900`/`bg-blue-50` (com borda azul clara);
+  inativa de `text-slate-400` pra `text-slate-500` (hover `text-slate-900`). Overlay de hover no
+  tema escuro usava branco translúcido (`bg-white/[0.06]`) — no claro passa a preto translúcido
+  (`bg-slate-900/[0.04]`), mesma ideia invertida. Pílula de status (Coletando/Parada/Offline) e
+  "Última importação" trocam de tons `400` (pensados pra contraste em fundo escuro) por `600`
+  (contraste em fundo branco) — sem isso o texto ficaria claro demais pra ler. Botão "Sair" segue o
+  mesmo padrão (fundo `slate-100` em vez de `slate-800/80`).
+- Logo A2L: dois dos cinco `<path>` do SVG usavam `fill="#FFFFFF"` (as letras "A" e "L") —
+  invisíveis em fundo branco. Trocado pra `#0F172A` (mesmo tom de `slate-900`); os acentos laranja
+  (`#F28C28`) e azul (`#006DFF`) da marca não mudam.
+
+### Verificação
+
+Réplica estática com o CSS real compilado do projeto (mesmo header inteiro, `abaAtiva` fixado em
+"colaborador" e status "coletando" pra renderizar todos os estados de cor de uma vez) — logo
+legível, aba ativa destacada em azul claro na posição certa (logo após Trilho), pílula de status e
+"Última importação" com contraste adequado no fundo branco. `npx tsc --noEmit` e `npx ng build
+--configuration production` limpos.

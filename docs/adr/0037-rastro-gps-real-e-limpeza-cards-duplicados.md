@@ -185,3 +185,31 @@ elemento raiz) e uma pílula flutuante (`position: absolute`, topo centralizado,
 Réplica com o CSS real compilado do projeto: pílula branca translúcida, ícone azul girando,
 centralizada no topo — visual limpo, não cobre o mapa. `npx tsc --noEmit` e `npx ng build
 --configuration production` limpos.
+
+## Adendo 4 (2026-09-07) — "Rastro executado" ligado não mostrava nada
+
+Usuário, com print: ligou a camada e só via a "Trajetória do dia" de sempre, nada do rastro GPS
+novo.
+
+Investigação eliminou hipóteses de dado/lógica antes de chegar na causa real: `obterHistoricoPosicoes`
+testado direto contra o banco pra três motoqueiros reais de hoje — retorna pontos válidos
+normalmente (28 a 330 por dia, dependendo do colaborador); a lógica dos dois `effect()` (decidir
+quando buscar, redesenhar quando o dado chega) revisada e confirmada correta linha a linha, sem
+race condition. A causa era puramente visual: o estilo escolhido (`dashArray: '2 6'`, `opacity:
+0.55`, cinza claro `#6b7280`) pensado pra ficar "discreto" tinha um problema real — pontos de GPS
+consecutivos ficam bem próximos um do outro, e cada segmento curto entre dois pontos não tem
+comprimento suficiente pra sequer desenhar um traço completo do padrão tracejado. Confirmado ao
+vivo com Leaflet de verdade (sem tile de mapa, só isolando a linha) usando coordenadas reais de um
+motoqueiro (80 pontos, rota real): o tracejado sai cheio de buracos, quase invisível; a MESMA
+trilha em linha sólida sai nítida.
+
+Estilo trocado: linha sólida, mais escura (`#475569` em vez de `#6b7280`), um pouco mais grossa
+(`weight: 2.5`) e mais opaca (`0.75`) — ainda visualmente mais discreta que "Trajetória do dia"
+(`weight: 3`, cores vivas por tipo de transição), mas agora realmente aparece.
+
+### Verificação
+
+Réplica isolada com Leaflet real e 80 pontos reais de um motoqueiro (rota com ida e volta, boa
+variação espacial) — estilo antigo (tracejado) renderiza fragmentado e apagado; estilo novo
+(sólido) renderiza como uma linha contínua e legível. `npx tsc --noEmit` e `npx ng build
+--configuration production` limpos.

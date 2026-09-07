@@ -568,12 +568,17 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     }
   }
 
-  // Rastro GPS real do dia — linha cinza tracejada e fina, de propósito
-  // discreta: é uma camada de conferência/apoio ("onde o aparelho
-  // realmente esteve"), não a rota principal (essa continua sendo
-  // "Trajetória do dia", mais grossa e colorida por tipo de transição —
-  // ver atualizarRotaJornada). `weight`/`dashArray` escolhidos pra não
-  // competir visualmente com ela quando as duas estão ligadas juntas.
+  // Rastro GPS real do dia. Primeira versão usava linha tracejada fina
+  // (dashArray '2 6', opacity 0.55) pra ficar discreta — usuário reportou
+  // "não estou vendo nada" depois de ligar a camada. Causa: pontos de GPS
+  // consecutivos costumam estar bem próximos um do outro (segmento curto),
+  // e um dashArray precisa de comprimento de traço suficiente pra sequer
+  // desenhar um tracinho — testado ao vivo com uma trilha real (Leaflet,
+  // sem tile de mapa, só pra isolar a linha): o tracejado fica cheio de
+  // buracos, quase invisível; a mesma trilha em linha SÓLIDA fica nítida.
+  // Trocado pra sólida, mais escura e mais grossa — ainda mais discreta que
+  // "Trajetória do dia" (weight 3, cores vivas por tipo de transição, ver
+  // atualizarRotaJornada), mas agora realmente visível.
   private renderizarRastroGps(pontos: PontoGpsHistorico[]): void {
     this.grupoRastroGps.clearLayers();
     this.polilinhaRastroGps = null;
@@ -581,10 +586,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     if (validos.length < 2) return;
     const latLngs: L.LatLngTuple[] = validos.map(p => [Number(p.latitude), Number(p.longitude)]);
     this.polilinhaRastroGps = L.polyline(latLngs, {
-      color: '#6b7280',
-      weight: 2,
-      opacity: 0.55,
-      dashArray: '2 6',
+      color: '#475569',
+      weight: 2.5,
+      opacity: 0.75,
     })
       .bindTooltip('Rastro GPS real do dia')
       .addTo(this.grupoRastroGps);

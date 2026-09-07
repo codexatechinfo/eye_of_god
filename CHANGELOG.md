@@ -193,6 +193,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Camada "Rastro executado" (item acima) ligada não mostrava nenhuma linha — o estilo tracejado
+  fino escolhido pra ficar discreto tinha um problema real de renderização com segmentos curtos
+  entre pontos de GPS próximos (o traço nem chegava a desenhar). Trocado por linha sólida, mais
+  escura e um pouco mais grossa. Ver Adendo 4 da [ADR
+  0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
+
 - Aba Monitoramento Colaborador: clicar numa linha da tabela abria a timeline e fechava de volta no
   mesmo clique (o listener de "clicar fora fecha o painel" não tinha exceção pra essa aba nova,
   mesma classe de bug já corrigida uma vez pro mapa/lista lateral). Ver Adendo 2 da [ADR

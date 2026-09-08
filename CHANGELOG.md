@@ -200,6 +200,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Tooltip "última leitura em ..." do motoqueiro/pedestre no mapa (e a coluna "Último registro" da
+  aba Monitoramento Colaborador) podia mostrar um horário mais antigo que o real, divergindo da
+  timeline do colaborador — acontecia quando a leitura genuinamente mais recente do dia não tinha
+  coordenada minerada; a consulta usava a mesma exigência de coordenada tanto pra escolher a
+  posição do pino (correto) quanto pro horário exibido (incorreto). Separado em duas consultas: o
+  horário mostrado agora é sempre a leitura mais recente de verdade; a posição do pino continua
+  caindo na leitura mais recente COM coordenada (aproximação necessária). Ver Adendo 6 da [ADR
+  0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
+
 - Painel de detalhe do colaborador (aba Trilho) fechava sozinho ao arrastar (pan) o mapa — soltar o
   botão do mouse depois de arrastar dispara um `click` nativo no `document`, que o listener de
   "clicar fora fecha o painel" não conseguia distinguir de um clique de dispensa genuíno. Corrigido

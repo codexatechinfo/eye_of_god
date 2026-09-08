@@ -841,15 +841,29 @@ async function obterSuspensoesHoje(db, dataConsultaIso) {
 // ao instante do CICLO DE RASPAGEM, não ao da leitura real; reescrita
 // direto sobre a fonte certa em vez de remendar o filtro de novo.
 //
-// O JOIN com coordenadas_ucs_mineradas (ADR 0021) fica DENTRO do
-// DISTINCT ON de propósito (não é um LEFT JOIN nem um filtro aplicado
-// depois): isso faz o ORDER BY ... LIMIT 1 implícito do DISTINCT ON
-// escolher, pra cada colaborador, a leitura mais recente do dia dentre as
-// que TÊM coordenada — pula automaticamente pra uma leitura anterior DO
-// MESMO DIA se a mais recente não tiver match (só ~4% das UCs não têm).
-// Colaborador só fica de fora se NENHUMA leitura dele naquele dia tiver
-// coordenada, ou se ele não leu nada naquele dia — nos dois casos, correto
-// sumir do mapa (não cair pra outro dia).
+// O JOIN com coordenadas_ucs_mineradas (ADR 0021) é usado só pra achar a
+// POSIÇÃO do pino no mapa — precisa de coordenada, então pula pra uma
+// leitura anterior DO MESMO DIA que tenha match se a mais recente não
+// tiver (só ~4% das UCs não têm, ver Adendo 5 da ADR 0037).
+//
+// `data_import`/`hora_import` retornados, porém, vêm de uma CTE SEPARADA
+// (`ultima_leitura`), sem exigir coordenada — bug real reportado pelo
+// usuário com print (Adendo 5 da ADR 0037): quando a leitura mais recente
+// do dia não tinha coordenada minerada, o INNER JOIN antigo (dentro do
+// mesmo DISTINCT ON usado pra escolher a posição) fazia o texto "última
+// leitura em HH:MM:SS" mostrar o horário de uma leitura MAIS ANTIGA (a
+// última COM coordenada), divergindo do que a timeline do colaborador
+// (`obterJornadaColaborador`, sem essa exigência) mostrava como real
+// última leitura do dia. Separar as duas CTEs resolve: o horário exibido
+// sempre bate com a timeline; a posição do pino continua caindo na leitura
+// mais recente que TEM coordenada (aproximação necessária — sem
+// coordenada não tem onde desenhar o pino), agora sem contaminar o
+// horário mostrado ao lado.
+//
+// Colaborador só fica sem posição (lat/lng null) se NENHUMA leitura dele
+// naquele dia tiver coordenada — nesse caso o horário ainda vem certo,
+// só o pino que o frontend não desenha (mapa-bases.ts já descarta
+// lat/lng não finito).
 //
 // `livro` vem de `base_dados_leitura` sem zero à esquerda (`livro::int`,
 // ver ADR 0025 — formato diverge de `contr_execucao_leitura`); reformatado
@@ -861,17 +875,31 @@ async function obterSuspensoesHoje(db, dataConsultaIso) {
 async function obterUltimaUcRealizadaPorColaborador(db, dataBr) {
   const { rows } = await db.query(
     `
-    SELECT DISTINCT ON (b.nome_do_usuario)
-      b.nome_do_usuario AS colaborador, b.unidade_consumidora AS uc,
-      LPAD(b.livro::text, 6, '0') AS livro,
-      b.data_da_leitura AS data_import, b.hora_da_leitura AS hora_import,
-      m.latitude, m.longitude
-    FROM base_dados_leitura b
-    JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = b.unidade_consumidora
-    WHERE b.nome_do_usuario IS NOT NULL
-      AND b.data_da_leitura = $1
-      AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
-    ORDER BY b.nome_do_usuario, b.hora_da_leitura DESC, (b.especificacao = 'CON') DESC
+    WITH ultima_leitura AS (
+      SELECT DISTINCT ON (b.nome_do_usuario)
+        b.nome_do_usuario AS colaborador,
+        b.data_da_leitura AS data_import, b.hora_da_leitura AS hora_import
+      FROM base_dados_leitura b
+      WHERE b.nome_do_usuario IS NOT NULL
+        AND b.data_da_leitura = $1
+        AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+      ORDER BY b.nome_do_usuario, b.hora_da_leitura DESC, (b.especificacao = 'CON') DESC
+    ), ultima_posicao AS (
+      SELECT DISTINCT ON (b.nome_do_usuario)
+        b.nome_do_usuario AS colaborador, b.unidade_consumidora AS uc,
+        LPAD(b.livro::text, 6, '0') AS livro,
+        m.latitude, m.longitude
+      FROM base_dados_leitura b
+      JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = b.unidade_consumidora
+      WHERE b.nome_do_usuario IS NOT NULL
+        AND b.data_da_leitura = $1
+        AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+      ORDER BY b.nome_do_usuario, b.hora_da_leitura DESC, (b.especificacao = 'CON') DESC
+    )
+    SELECT l.colaborador, p.uc, p.livro, l.data_import, l.hora_import, p.latitude, p.longitude
+    FROM ultima_leitura l
+    LEFT JOIN ultima_posicao p ON p.colaborador = l.colaborador
+    ORDER BY l.colaborador
     `,
     [dataBr],
   );

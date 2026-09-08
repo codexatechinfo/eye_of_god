@@ -307,3 +307,53 @@ remoção de marcador (`this.grupoPontos.removeLayer`) foram todos trocados pro 
 cobre arrasto iniciado ou terminado em qualquer lugar da página. `npx tsc --noEmit` e `npx ng build
 --configuration production` limpos (sem erros novos, só os warnings pré-existentes de budget do
 bundle e do pacote `leaflet` não ser ESM).
+
+## Adendo 6 (2026-09-07) — "Rastro executado" sem dado (gap de cadastro) + "última leitura" com horário errado
+
+Usuário, com print de um motoqueiro específico (Paulo Aparecido de Azevedo Ferreira): (1) "Rastro
+executado" continuava sem exibir nada; (2) o ícone do motoqueiro no mapa mostrava tooltip "última
+leitura em 07/09/2026 13:20:33", mas a UC mais recente na timeline dele (115936467) tinha horário
+13:32:42 — mais tarde, ou seja, o tooltip não era realmente a "última" leitura.
+
+### Item 1 — investigado, não é bug de código
+
+Consultado direto no banco pra este colaborador: **zero linhas em `segsat_posicoes` hoje, e zero
+linhas na tabela de mapeamento `segsat` (placa↔colaborador) com o nome dele** — ele nunca teve
+veículo vinculado nessa planilha. Ampliando a consulta pra todos os motoqueiros ativos: **58 de 286
+(20%) têm mapeamento em `segsat`; só 21 têm alguma posição registrada hoje**. Mesma classe de
+achado já documentada no Contexto desta ADR pro gap de Scalefusion (79/352 sem dispositivo
+cadastrado) — aqui a lacuna é proporcionalmente maior (80% dos motoqueiros sem veículo mapeado).
+Não é bug de correspondência de nome nem de lógica de coleta (`coletarPosicoes` funciona
+perfeitamente pros 58 que estão mapeados); é lacuna de cadastro/provisionamento da planilha SEGSAT
+(ADR 0034), fora do alcance deste sistema resolver sozinho — reportado ao usuário como achado, sem
+mudança de código. "Rastro executado" só pode mostrar rastro pra quem tem posição coletada.
+
+### Item 2 — bug real, corrigido
+
+Causa: `obterUltimaUcRealizadaPorColaborador` (fonte do tooltip "última leitura" e da coluna
+"Último registro" da aba Monitoramento Colaborador) usava um `JOIN` (não `LEFT JOIN`) com
+`coordenadas_ucs_mineradas` **dentro do mesmo `DISTINCT ON`** que escolhe a leitura mais recente do
+colaborador — decisão de design original documentada no próprio comentário da função (pular pra
+uma leitura anterior do mesmo dia se a mais recente não tiver coordenada minerada, pra sempre
+conseguir posicionar o pino no mapa). Funcionava pra POSIÇÃO, mas o mesmo `JOIN` também filtrava
+qual `hora_import` era retornado — quando a leitura genuinamente mais recente (UC 115936467, sem
+coordenada minerada — confirmado: zero linhas pra ela em `coordenadas_ucs_mineradas`) ficava de
+fora, o horário exibido regredia pra uma leitura mais antiga (UC 43353258, que tem coordenada),
+divergindo da timeline (`obterJornadaColaborador`, que não exige coordenada pra listar uma UC).
+
+Corrigido separando as duas responsabilidades em CTEs distintas: `ultima_leitura` (sem exigir
+coordenada — sempre a leitura genuinamente mais recente do dia, o que é mostrado como
+`data_import`/`hora_import`) e `ultima_posicao` (com o `JOIN`, escolhe a leitura mais recente COM
+coordenada — o que decide `latitude`/`longitude` do pino), unidas por `LEFT JOIN` no final. O
+horário exibido agora sempre bate com a timeline; a posição do pino continua sendo uma aproximação
+(a leitura com coordenada mais próxima no tempo) quando a leitura real mais recente não tem
+coordenada — inevitável, não tem onde desenhar um pino sem coordenada, mas pelo menos não finge
+mais que aquele é o horário real.
+
+### Verificação
+
+Testado direto contra o banco, antes e depois, pro colaborador do print: antes, `hora_import`
+`13:20:33` (UC 43353258, errado); depois, `hora_import` `13:32:42` (bate com a timeline), mantendo
+`latitude`/`longitude` do UC 43353258 (aproximação necessária, coerente). Rodada a função pra TODOS
+os colaboradores do dia (24 linhas) — nenhuma ficou sem posição que já não ficasse sem antes (mesma
+cobertura de lat/lng, só o horário mudou). `npm test` (18/18) limpo.

@@ -7,6 +7,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Camada "Paradas e gaps" no mapa (aba Trilho), agora funcionando de verdade — controla a
+  visibilidade dos marcadores de pausa e dos segmentos coloridos que indicam troca de
+  livro/município, independente das camadas "Pontos coletados"/"Trajetória do dia" (antes, esses
+  indicadores estavam presos a essas duas e não tinham como ser escondidos separadamente; o
+  checkbox já existia no painel mas nunca tinha sido implementado). Vem ligada por padrão. Ver
+  Adendo 5 da [ADR 0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
+
 - Spinner no mapa ("Carregando rota do colaborador...") enquanto a jornada do dia é buscada, depois
   de abrir um colaborador ou clicar "Ver no mapa" — antes a rota simplesmente demorava a aparecer,
   sem nenhum indicativo de carregamento. Não aparece no refresh silencioso de 60s. Ver Adendo 3 da
@@ -192,6 +199,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
 ### Corrigido
+
+- Painel de detalhe do colaborador (aba Trilho) fechava sozinho ao arrastar (pan) o mapa — soltar o
+  botão do mouse depois de arrastar dispara um `click` nativo no `document`, que o listener de
+  "clicar fora fecha o painel" não conseguia distinguir de um clique de dispensa genuíno. Corrigido
+  rastreando a posição do `mousedown`: só fecha se o `click` terminar a até 5px de onde começou.
+  Ver Adendo 5 da [ADR 0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
+
+- "Setor planejado" (polígono do mapa) esticava do Paraná até o oceano Atlântico — UC sem
+  coordenada minerada chegava com `latitude`/`longitude` `null`, e `Number(null)` vira `0`
+  (finito, não pego pelo filtro anterior), gerando um ponto fantasma em cima do
+  Equador/Greenwich que distorcia o casco convexo. Corrigido filtrando coordenadas nulas ANTES do
+  `Number()`. Ver Adendo 5 da [ADR 0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
 
 - Camada "Rastro executado" (item acima) ligada não mostrava nenhuma linha — o estilo tracejado
   fino escolhido pra ficar discreto tinha um problema real de renderização com segmentos curtos

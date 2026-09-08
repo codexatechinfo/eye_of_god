@@ -259,6 +259,14 @@ function corDoSegmento(item: PontoJornada): string {
   return COR_SEGMENTO_NORMAL;
 }
 
+// Mesmo critério de corDoSegmento — usado pra decidir se o segmento vai pra
+// grupoSequencia (normal, cinza) ou grupoParadasGaps (pausa/mudou de
+// livro/mudou de município), pra que o checkbox "Paradas e gaps" consiga
+// esconder só esses indicadores especiais sem afetar a linha de trajeto normal.
+function ehSegmentoEspecial(item: PontoJornada): boolean {
+  return item.tipo_intervalo === 'pausa' || !!item.mudou_livro || !!item.mudou_municipio;
+}
+
 function tooltipDoPonto(item: PontoJornada): string {
   const livro = ` · Livro ${item.livro}`;
   const endereco = item.endereco ? ` — ${item.endereco}` : '';
@@ -332,6 +340,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // ponto porque uma UC mais nova chegou) — CircleMarker/Marker sozinhos não
   // bastam pra distinguir "pausa" de "último ponto", os dois são L.Marker.
   private segmentosRota: L.Polyline[] = [];
+  // Segmentos "especiais" (pausa/mudou de livro/mudou de município) — mesma
+  // lógica de segmentosRota, mas moram em grupoParadasGaps em vez de
+  // grupoSequencia (ver ehSegmentoEspecial).
+  private segmentosParadasGaps: L.Polyline[] = [];
   private pontosJornada = new Map<string, { marcador: L.CircleMarker | L.Marker; tipo: 'normal' | 'pausa' | 'ultimo' }>();
   private colaboradorComBoundsAplicado: string | null = null;
   // Um polígono por LIVRO (não mais um casco convexo do dia inteiro) — se o
@@ -369,19 +381,27 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo por livro
   private grupoLimitesMunicipais = L.layerGroup(); // camada 5: contorno IBGE
   private grupoRastroGps = L.layerGroup(); // camada 1: rastro GPS real do dia
+  // "Paradas e gaps" — pausas (ícone de pausa no lugar da bolinha normal) e
+  // transições de livro/município (segmento fúcsia/teal em vez do cinza
+  // normal) moram AQUI, não mais dentro de grupoPontos/grupoSequencia.
+  // Usuário reportou: desmarcar "Trajetória do dia" também sumia com esses
+  // indicadores especiais, sem jeito de controlar só eles — o checkbox
+  // "Paradas e gaps" já existia no painel (desabilitado, funcionalidade
+  // futura) exatamente pra isso.
+  private grupoParadasGaps = L.layerGroup(); // camada 3: pausas e transições
 
   // Ligadas por padrão (preserva o comportamento atual, sempre visível até
   // hoje); as camadas opt-in nascem desligadas (ninguém pediu que
   // aparecessem por padrão, e tanto "Limites municipais" quanto "Rastro
   // executado" custam uma busca extra — polígonos IBGE e histórico de GPS,
-  // respectivamente). "Paradas e gaps" continua sem signal — o checkbox
-  // fica desabilitado no template (funcionalidade futura, sem dado ainda).
+  // respectivamente).
   camadaPontos = signal(true);
   camadaSequencia = signal(true);
   camadaAgentes = signal(true);
   camadaSetorPlanejado = signal(false);
   camadaLimitesMunicipais = signal(false);
   camadaRastroGps = signal(false);
+  camadaParadasGaps = signal(true);
   // Última chave (colaborador+data+fonte) pra qual "Rastro executado" já
   // buscou — mesmo raciocínio de limitesMunicipaisChaveAtual, evita
   // rebuscar a cada refresh de 60s do mesmo colaborador/dia.
@@ -429,6 +449,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     effect(() => this.alternarGrupo(this.grupoSequencia, this.camadaSequencia()));
     effect(() => this.alternarGrupo(this.grupoAgentes, this.camadaAgentes()));
     effect(() => this.alternarGrupo(this.grupoSetorPlanejado, this.camadaSetorPlanejado()));
+    effect(() => this.alternarGrupo(this.grupoParadasGaps, this.camadaParadasGaps()));
     // "Limites municipais" é por DIA do colaborador aberto (só o(s)
     // município(s) que ele tocou hoje, não a malha inteira do estado — ver
     // ADR 0022 Adendo 2). Só busca de novo quando o colaborador/data muda,
@@ -509,12 +530,20 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     });
   }
 
-  // Mesmo filtro (Number.isFinite explícito, mais estrito que o
-  // truthy-string de pontosJornada/rotaJornada) usado tanto pelo casco
-  // convexo quanto pela busca de limites municipais — ver comentário de
-  // cascoConvexo sobre por que NaN não pode vazar pra nenhum dos dois.
+  // Usado tanto pelo casco convexo ("Setor planejado") quanto pela busca de
+  // limites municipais. Filtro truthy ANTES do Number() é obrigatório, não
+  // cosmético: usuário reportou o polígono de "Setor planejado" esticando
+  // até o oceano, saindo do Paraná até o Espírito Santo — causa era UC sem
+  // coordenada minerada (LEFT JOIN em coordenadas_ucs_mineradas, ver
+  // obterJornadaColaborador), que chega aqui como `latitude`/`longitude`
+  // `null`. `Number(null)` é `0` (finito!), não `NaN` — sem o filtro
+  // truthy, esse ponto fantasma em (lat_real, 0) ou (0, lng_real) entrava
+  // no casco convexo e esticava o polígono até a longitude/latitude 0, bem
+  // longe do Paraná. `Number.isFinite` sozinho nunca pegava isso (só
+  // protege contra `Number(undefined)` = `NaN`, não contra `null` = `0`).
   private pontosValidosDoDia(pontos: PontoJornada[]): L.LatLngTuple[] {
     return pontos
+      .filter(item => item.latitude && item.longitude)
       .map((item): L.LatLngTuple => [Number(item.latitude), Number(item.longitude)])
       .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
   }
@@ -641,20 +670,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       label.appendChild(document.createTextNode(' ' + texto));
     };
 
-    const itemDesabilitado = (texto: string) => {
-      const label = L.DomUtil.create('label', '', overlays) as HTMLLabelElement;
-      label.style.opacity = '0.5';
-      label.style.cursor = 'not-allowed';
-      label.title = 'Ainda não implementado';
-      const input = L.DomUtil.create('input', 'leaflet-control-layers-selector', label) as HTMLInputElement;
-      input.type = 'checkbox';
-      input.disabled = true;
-      label.appendChild(document.createTextNode(' ' + texto));
-    };
-
     itemAtivo('Rastro executado', this.camadaRastroGps);
     itemAtivo('Pontos coletados', this.camadaPontos);
-    itemDesabilitado('Paradas e gaps');
+    itemAtivo('Paradas e gaps', this.camadaParadasGaps);
     itemAtivo('Setor planejado', this.camadaSetorPlanejado);
     itemAtivo('Limites municipais', this.camadaLimitesMunicipais);
     itemAtivo('Demais agentes', this.camadaAgentes);
@@ -732,6 +750,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     this.alternarGrupo(this.grupoSetorPlanejado, this.camadaSetorPlanejado());
     this.alternarGrupo(this.grupoLimitesMunicipais, this.camadaLimitesMunicipais());
     this.alternarGrupo(this.grupoRastroGps, this.camadaRastroGps());
+    this.alternarGrupo(this.grupoParadasGaps, this.camadaParadasGaps());
     // Sempre no mapa — não é uma camada do painel, não tem toggle.
     this.grupoAgenteAtual.addTo(this.mapa);
 
@@ -905,13 +924,22 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // colaborador — nos refreshes automáticos seguintes do mesmo dia (a cada
   // 60s), só atualiza pontos/linhas, sem mexer no zoom/pan que o usuário já
   // ajustou manualmente.
+  // "Pausa" mora em grupoParadasGaps (some junto com os segmentos especiais
+  // quando o checkbox é desmarcado); "normal"/"ultimo" continuam em
+  // grupoPontos.
+  private grupoDoTipoPonto(tipo: 'normal' | 'pausa' | 'ultimo'): L.LayerGroup {
+    return tipo === 'pausa' ? this.grupoParadasGaps : this.grupoPontos;
+  }
+
   private atualizarRotaJornada(colaboradorAberto: string | null, pontos: PontoJornada[]): void {
     if (!this.mapa) return;
 
     if (!colaboradorAberto) {
       for (const linha of this.segmentosRota) this.grupoSequencia.removeLayer(linha);
       this.segmentosRota = [];
-      for (const { marcador } of this.pontosJornada.values()) this.grupoPontos.removeLayer(marcador);
+      for (const linha of this.segmentosParadasGaps) this.grupoParadasGaps.removeLayer(linha);
+      this.segmentosParadasGaps = [];
+      for (const { marcador, tipo } of this.pontosJornada.values()) this.grupoDoTipoPonto(tipo).removeLayer(marcador);
       this.pontosJornada.clear();
       for (const poligono of this.poligonosSetorPlanejado.values()) this.grupoSetorPlanejado.removeLayer(poligono);
       this.poligonosSetorPlanejado.clear();
@@ -929,6 +957,8 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     // não chegou).
     for (const linha of this.segmentosRota) this.grupoSequencia.removeLayer(linha);
     this.segmentosRota = [];
+    for (const linha of this.segmentosParadasGaps) this.grupoParadasGaps.removeLayer(linha);
+    this.segmentosParadasGaps = [];
     for (let i = 1; i < validos.length; i++) {
       const anterior = validos[i - 1];
       const atual = validos[i];
@@ -943,8 +973,13 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         [Number(anterior.latitude), Number(anterior.longitude)],
         [Number(atual.latitude), Number(atual.longitude)],
       ];
+      // Segmento especial (pausa/mudou de livro/mudou de município) vai pra
+      // grupoParadasGaps; segmento normal continua em grupoSequencia — é o
+      // que permite o checkbox "Paradas e gaps" esconder só os especiais.
+      const especial = ehSegmentoEspecial(atual);
+      const grupoDoSegmento = especial ? this.grupoParadasGaps : this.grupoSequencia;
       const linha = L.polyline(pontosSegmento, { color: corDoSegmento(atual), weight: 3, opacity: 0.8 }).addTo(
-        this.grupoSequencia,
+        grupoDoSegmento,
       );
       // Clicar na linha centraliza o mapa na região onde a transição
       // aconteceu — os dois pontos do segmento podem estar bem distantes um
@@ -954,7 +989,8 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         if (!this.mapa) return;
         this.mapa.fitBounds(L.latLngBounds(pontosSegmento), { padding: [60, 60], maxZoom: ZOOM_FOCO });
       });
-      this.segmentosRota.push(linha);
+      if (especial) this.segmentosParadasGaps.push(linha);
+      else this.segmentosRota.push(linha);
     }
 
     // Setor planejado: um casco convexo POR LIVRO (não mais um só pro dia
@@ -1033,7 +1069,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         } else {
           // Trocou de tipo (virou pausa, deixou de ser o último ponto, etc.)
           // — CircleMarker e Marker não convertem um no outro, recria.
-          this.grupoPontos.removeLayer(existente.marcador);
+          // Remove do grupo de ORIGEM (tipo antigo) — "pausa" mora em
+          // grupoParadasGaps, os demais em grupoPontos.
+          this.grupoDoTipoPonto(existente.tipo).removeLayer(existente.marcador);
           this.pontosJornada.delete(item.uc);
         }
       }
@@ -1051,7 +1089,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
                   fillColor: cor,
                   fillOpacity: 0.95,
                 });
-        marcador.addTo(this.grupoPontos).bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
+        marcador
+          .addTo(this.grupoDoTipoPonto(tipo))
+          .bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
         // Clicar no ponto foca E expande a UC na timeline do painel (item 3
         // do pedido) — os dois juntos, sem precisar de um segundo clique na
         // lista. O marcador é reaproveitado entre refreshes (nunca recriado
@@ -1072,9 +1112,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         this.pontosJornada.set(item.uc, { marcador, tipo });
       }
     }
-    for (const [uc, { marcador }] of this.pontosJornada) {
+    for (const [uc, { marcador, tipo }] of this.pontosJornada) {
       if (!vistos.has(uc)) {
-        this.grupoPontos.removeLayer(marcador);
+        this.grupoDoTipoPonto(tipo).removeLayer(marcador);
         this.pontosJornada.delete(uc);
       }
     }

@@ -213,3 +213,97 @@ Réplica isolada com Leaflet real e 80 pontos reais de um motoqueiro (rota com i
 variação espacial) — estilo antigo (tracejado) renderiza fragmentado e apagado; estilo novo
 (sólido) renderiza como uma linha contínua e legível. `npx tsc --noEmit` e `npx ng build
 --configuration production` limpos.
+
+## Adendo 5 (2026-09-07) — "Setor planejado" no oceano, "Paradas e gaps" ligado a "Trajetória do dia" e painel fechando ao arrastar o mapa
+
+Usuário, com 2 prints e um pedido de 5 itens: (1) e (2) voltaram a perguntar o que é "Rastro
+executado" e "Trajetória do dia" — resposta é a mesma do item 1 original e do Adendo 4 (execução ≠
+GPS real; ver acima), possivelmente o print é anterior à correção visual do Adendo 4. (3) o
+polígono de "Setor planejado" de um colaborador esticava do Paraná até dentro do oceano Atlântico.
+(4) desmarcar "Trajetória do dia"/"Pontos coletados" também apagava os indicadores de pausa e de
+troca de município/livro, sem jeito de escondê-los separadamente — o checkbox "Paradas e gaps" já
+existia no painel, mas nunca tinha sido implementado (ver Contexto/item 1: era um dos dois
+checkboxes desabilitados "Ainda não implementado"). (5) mover (arrastar) o mapa fazia o painel de
+detalhe do colaborador (e sua execução no mapa) sumir sozinho.
+
+### Item 3 — polígono no oceano
+
+Causa raiz: `pontosValidosDoDia()` (usada tanto pelo casco convexo de "Setor planejado" quanto por
+"Limites municipais") chamava `Number(item.latitude)`/`Number(item.longitude)` direto, sem checar
+antes se o valor existia. UCs cuja coordenada não foi minerada (`LEFT JOIN` com
+`coordenadas_ucs_mineradas` em `obterJornadaColaborador`, que pode não casar) chegam com
+`latitude`/`longitude` `null` — e `Number(null)` é `0` (finito, passa `Number.isFinite` sem
+problema), não `NaN`. Esse ponto fantasma em `(lat_real, 0)` ou `(0, lng_real)` — ou seja,
+exatamente em cima da linha do Equador/meridiano de Greenwich, longe do Paraná — entrava no casco
+convexo e esticava o polígono até lá, cruzando o oceano no caminho.
+
+Corrigido filtrando `latitude`/`longitude` truthy ANTES do `Number()` (mesmo padrão já usado em
+`validos` no restante do arquivo — `pontosValidosDoDia` era a única função que ainda não seguia
+essa regra):
+
+```ts
+private pontosValidosDoDia(pontos: PontoJornada[]): L.LatLngTuple[] {
+  return pontos
+    .filter(item => item.latitude && item.longitude)
+    .map((item): L.LatLngTuple => [Number(item.latitude), Number(item.longitude)])
+    .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+}
+```
+
+### Item 4 — "Paradas e gaps" ativado
+
+Antes, marcadores de pausa (`tipo === 'pausa'`) moravam em `grupoPontos` junto com os pontos
+normais, e os segmentos coloridos (pausa/mudou de livro/mudou de município — ver `corDoSegmento`)
+moravam em `grupoSequencia` junto com os segmentos normais. Não existia camada separada pra eles,
+então desligar "Pontos coletados" ou "Trajetória do dia" (as únicas duas camadas que realmente
+existiam ali) levava esses indicadores junto — mesmo sem o usuário querer especificamente escondê-
+los.
+
+Criada `grupoParadasGaps`, camada nova de verdade (signal `camadaParadasGaps`, `effect` de
+sincronização, item ativo no painel — substituindo o antigo checkbox desabilitado). Roteamento em
+`atualizarRotaJornada()`:
+
+- Segmento (linha entre dois pontos consecutivos): vai pra `grupoParadasGaps` quando
+  `tipo_intervalo === 'pausa' || mudou_livro || mudou_municipio` (`ehSegmentoEspecial`, mesmo
+  critério de `corDoSegmento`); senão continua em `grupoSequencia`. Precisou de um array de
+  rastreio próprio (`segmentosParadasGaps`, espelhando `segmentosRota`) pra saber o que remover a
+  cada refresh.
+- Marcador de ponto: `tipo === 'pausa'` vai pra `grupoParadasGaps`; `'normal'`/`'ultimo'` continuam
+  em `grupoPontos` (novo helper `grupoDoTipoPonto(tipo)`). Os três lugares que antes chamavam
+  `this.grupoPontos.removeLayer(...)` direto (reset ao fechar o painel, remoção por troca de tipo
+  entre refreshes, limpeza final de UCs que saíram da lista) passaram a usar o helper — sem isso, o
+  marcador de uma UC que virou "pausa" ficaria "preso" tentando ser removido do grupo errado.
+
+Camada nova nasce **ligada por padrão** (`camadaParadasGaps = signal(true)`) — preserva o
+comportamento atual (indicadores sempre visíveis) até o usuário optar por desmarcar.
+
+### Item 5 — painel fechando ao arrastar o mapa
+
+Investigação descartou qualquer `colaboradorSelecionado.set(null)` explícito fora de
+`ColaboradorDetalhe.fechar()` e qualquer handler de `moveend`/`dragend`/`zoomend` no mapa (nenhum
+existe). O culpado é um comportamento nativo do browser/Leaflet: soltar o botão do mouse depois de
+arrastar (pan) o mapa dispara um evento `click` normal no `document` — que `aoClicarFora` (o
+`@HostListener('document:click', ...)` que fecha o painel ao clicar fora dele) não tinha como
+distinguir de um clique de dispensa genuíno, já que o alvo do evento (dentro do mapa) não estava na
+lista de exceções... exceto que ESTAVA (`app-mapa-bases` já é exceção) — o caso real reportado
+envolvia arrastar terminando fora da área do mapa (ex.: sobre a lista ou área neutra da página)
+quando `mousedown` começa dentro do mapa, ou vice-versa, escapando das exceções por seletor.
+
+Corrigido de forma mais geral do que enumerar seletores: novo `@HostListener('document:mousedown')`
+guarda a posição do clique; `aoClicarFora` agora só fecha o painel se o `click` terminar a até 5px
+de onde o `mousedown` começou — acima disso, trata como arraste e ignora. Limiar pequeno o
+suficiente pra não perder um clique de dispensa genuíno com leve tremor da mão, grande o bastante
+pra cobrir qualquer arraste real de pan do mapa.
+
+### Verificação
+
+Item 3: mesma função `pontosValidosDoDia` já coberta por teste anterior (Adendo do "Rastro
+executado") — reconferida a lógica: `null`/`undefined`/`''` agora são descartados antes do
+`Number()`, só passam valores realmente numéricos. Item 4: `grep` confirmou que os três pontos de
+remoção de marcador (`this.grupoPontos.removeLayer`) foram todos trocados pro helper
+`grupoDoTipoPonto`, e que `segmentosParadasGaps` é limpo nos mesmos três lugares onde
+`segmentosRota` já era (reset do painel, início do rebuild). Item 5: revisão de código confirma que
+`posicaoMousedown` é atualizado em TODO `mousedown` do documento (não só dentro do mapa), então
+cobre arrasto iniciado ou terminado em qualquer lugar da página. `npx tsc --noEmit` e `npx ng build
+--configuration production` limpos (sem erros novos, só os warnings pré-existentes de budget do
+bundle e do pacote `leaflet` não ser ESM).

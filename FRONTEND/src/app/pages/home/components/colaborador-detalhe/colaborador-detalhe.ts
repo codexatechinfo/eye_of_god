@@ -44,6 +44,19 @@ export class ColaboradorDetalhe {
     });
   }
 
+  // Posição do mousedown mais recente em qualquer lugar do documento — usada
+  // por aoClicarFora pra distinguir um clique de dispensa genuíno de um
+  // clique nativo que o Leaflet dispara ao SOLTAR o mouse depois de
+  // arrastar (pan) o mapa. Sem essa checagem, mover o mapa fechava o painel
+  // sozinho (usuário reportou: "quando vou movimentar o mapa some a
+  // execução do colaborador").
+  private posicaoMousedown: { x: number; y: number } | null = null;
+
+  @HostListener('document:mousedown', ['$event'])
+  aoPressionar(evento: MouseEvent): void {
+    this.posicaoMousedown = { x: evento.clientX, y: evento.clientY };
+  }
+
   // Cliques DENTRO do mapa (app-mapa-bases), da lista lateral
   // (app-lista-colaboradores) ou da tabela da aba Monitoramento Colaborador
   // (app-monitoramento-colaborador-view) não fecham o painel — um clique
@@ -61,6 +74,17 @@ export class ColaboradorDetalhe {
     if (document.querySelector('app-mapa-bases')?.contains(alvo)) return;
     if (document.querySelector('app-lista-colaboradores')?.contains(alvo)) return;
     if (document.querySelector('app-monitoramento-colaborador-view')?.contains(alvo)) return;
+    // Arrastar o mapa (pan) solta o botão longe de onde apertou, e esse
+    // "solta" vira um evento click nativo no fim do arraste — trata como
+    // arraste (não fecha) sempre que o clique acaba a mais de 5px de onde
+    // começou. Limiar pequeno o bastante pra não perder um clique de
+    // dispensa genuíno com leve tremor da mão.
+    const LIMIAR_ARRASTO_PX = 5;
+    if (this.posicaoMousedown) {
+      const dx = evento.clientX - this.posicaoMousedown.x;
+      const dy = evento.clientY - this.posicaoMousedown.y;
+      if (Math.hypot(dx, dy) > LIMIAR_ARRASTO_PX) return;
+    }
     this.fechar();
   }
 

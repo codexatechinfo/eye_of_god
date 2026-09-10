@@ -5,6 +5,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Performance
+
+- Endpoint `/colaboradores/localizacoes` (aba Trilho — alimenta os marcadores do mapa, chamado no
+  carregamento da aba e a cada 60s automaticamente) estava levando ~1,7s por chamada: a consulta faz
+  `DISTINCT ON (nome_do_usuario)` em `base_dados_leitura` (23M linhas), mas nenhum índice existente
+  cobria ao mesmo tempo o filtro por `data_da_leitura` e a ordenação por colaborador exigida pelo
+  `DISTINCT ON`. Criado o índice `idx_base_dados_leitura_data_usuario_hora (empresa_id,
+  data_da_leitura, nome_do_usuario, hora_da_leitura DESC) WHERE nome_do_usuario IS NOT NULL`
+  (`CREATE INDEX CONCURRENTLY`, sem downtime) — tempo medido caiu pra ~350ms na mesma consulta.
+  Índice aplicado direto no banco (projeto não usa framework de migrations — sem arquivo `.sql`
+  correspondente no repositório).
+
 ### Alterado
 
 - Introduzido sistema de tokens de design de marca (cores, tipografia, raio, sombra — bloco

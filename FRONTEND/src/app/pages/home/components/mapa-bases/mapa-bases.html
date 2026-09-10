@@ -1,44 +1,117 @@
-<div class="relative w-full h-full">
-  <div #mapaEl class="w-full h-full"></div>
+<div class="w-full h-full flex flex-col">
+  <!-- Barra superior do mapa — legenda + tipo de mapa + camadas, em fluxo
+       normal (shrink-0), não mais controles Leaflet flutuando no canto
+       topleft nem overlay Angular no bottom-left. Tradução literal de
+       .f-barra do protótipo (olho.html): altura fixa, fundo sup, borda
+       inferior, legenda à esquerda, os dois controles à direita. -->
+  <div class="shrink-0 h-10 bg-sup border-b border-linha flex items-center gap-3 px-3 overflow-x-auto">
+    <!-- Legenda de cores dos pontos/segmentos da timeline — inclui TODAS as
+         categorias que o app já usa (não só as 5 do protótipo): pausa e
+         trocou município também têm cor própria (ver corDaUc/corDoSegmento
+         em mapa-bases.ts). Cores literais (não classes Tailwind) porque são
+         as MESMAS constantes hex já usadas nos marcadores/segmentos do
+         próprio mapa (CORES_PONTO/COR_SEGMENTO_*). -->
+    <div class="flex items-center gap-3 flex-wrap shrink-0">
+      <span
+        *ngFor="let item of legenda"
+        class="flex items-center gap-1.5 text-[10.5px] font-semibold text-fraco whitespace-nowrap"
+        [title]="item.descricao"
+      >
+        <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.background]="item.cor"></span>
+        {{ item.rotulo }}
+      </span>
+    </div>
 
-  <!-- Spinner de carregamento — usuário reportou que a rota demora um tempo
-       considerável pra aparecer no mapa depois de abrir um colaborador (a
-       linha só desenha quando a jornada chega do backend, ver
-       atualizarRotaJornada), sem nenhum indicativo de que algo está
-       carregando. Mesmo indicativo cobre "Rastro GPS" (camada
-       separada, ver camadaRastroGps): a fonte SEGSAT chama a API ao vivo
-       por trás (login + requisição externa, ADR 0034 Adendo 3) em vez de só
-       ler uma tabela local, então também pode demorar. Prioriza a mensagem
-       de jornada quando as duas coincidem (dispara primeiro na prática, ao
-       abrir um colaborador com a camada já ligada). Não bloqueia interação
-       com o mapa de propósito (pointer-events-none) — só avisa, não trava. -->
-  <div
-    *ngIf="colaboradoresService.carregandoJornada() || colaboradoresService.carregandoGpsHistorico()"
-    class="absolute top-3 left-1/2 -translate-x-1/2 z-[1200] flex items-center gap-2 bg-sup/95 border border-linha shadow-lg rounded-full px-3 py-1.5 text-xs font-semibold text-txt pointer-events-none"
-  >
-    <svg class="animate-spin h-3.5 w-3.5 text-azul shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z"></path>
-    </svg>
-    {{ colaboradoresService.carregandoJornada() ? 'Carregando rota do colaborador...' : 'Carregando rastro GPS...' }}
+    <div class="flex-1 min-w-[8px]"></div>
+
+    <!-- Tipo de mapa — antes era o L.control.layers nativo do Leaflet
+         (painel que só expandia no hover); agora botões pill sempre
+         visíveis, padrão .base-sel do protótipo. -->
+    <div class="flex items-center gap-0.5 bg-sup-2 rounded-md p-0.5 shrink-0">
+      <button
+        type="button"
+        *ngFor="let tipo of tiposBase"
+        (click)="selecionarBase(tipo.chave)"
+        class="px-2.5 py-1 rounded text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer"
+        [ngClass]="baseAtiva() === tipo.chave ? 'bg-navy text-white' : 'text-fraco hover:text-azul'"
+      >
+        {{ tipo.rotulo }}
+      </button>
+    </div>
+
+    <!-- Camadas — botão com contador que abre/fecha o dropdown ao clicar
+         (não mais hover-pra-expandir do controle nativo). $event.stopPropagation()
+         no wrapper evita que o próprio clique de abrir feche na mesma hora
+         (ver fecharCamadas(), HostListener document:click no .ts). -->
+    <div class="relative shrink-0" (click)="$event.stopPropagation()">
+      <button
+        type="button"
+        (click)="toggleCamadas()"
+        title="O que o mapa desenha"
+        class="flex items-center gap-1.5 h-[29px] px-2.5 rounded-md bg-sup-2 text-[11px] font-semibold text-fraco hover:text-txt transition-colors cursor-pointer"
+      >
+        Camadas
+        <b class="bg-azul text-white rounded-full min-w-[16px] h-4 px-1 text-[9.5px] font-bold flex items-center justify-center">{{ contagemCamadas() }}</b>
+      </button>
+      <div
+        *ngIf="camadasAbertas()"
+        class="absolute top-[calc(100%+4px)] right-0 bg-sup rounded-lg shadow-xl p-2.5 min-w-[190px] z-[1000] flex flex-col gap-1.5"
+      >
+        <label class="flex items-center gap-1.5 text-[11.5px] text-txt cursor-pointer">
+          <input type="checkbox" class="accent-azul cursor-pointer" [checked]="camadaRastroGps()" (change)="camadaRastroGps.set($any($event.target).checked)" />
+          Rastro GPS
+        </label>
+        <label class="flex items-center gap-1.5 text-[11.5px] text-txt cursor-pointer">
+          <input type="checkbox" class="accent-azul cursor-pointer" [checked]="camadaPontos()" (change)="camadaPontos.set($any($event.target).checked)" />
+          Pontos coletados
+        </label>
+        <label class="flex items-center gap-1.5 text-[11.5px] text-txt cursor-pointer">
+          <input type="checkbox" class="accent-azul cursor-pointer" [checked]="camadaParadasGaps()" (change)="camadaParadasGaps.set($any($event.target).checked)" />
+          Paradas e gaps
+        </label>
+        <label class="flex items-center gap-1.5 text-[11.5px] text-txt cursor-pointer">
+          <input type="checkbox" class="accent-azul cursor-pointer" [checked]="camadaSetorPlanejado()" (change)="camadaSetorPlanejado.set($any($event.target).checked)" />
+          Setor planejado
+        </label>
+        <label class="flex items-center gap-1.5 text-[11.5px] text-txt cursor-pointer">
+          <input type="checkbox" class="accent-azul cursor-pointer" [checked]="camadaLimitesMunicipais()" (change)="camadaLimitesMunicipais.set($any($event.target).checked)" />
+          Limites municipais
+        </label>
+        <label class="flex items-center gap-1.5 text-[11.5px] text-txt cursor-pointer">
+          <input type="checkbox" class="accent-azul cursor-pointer" [checked]="camadaAgentes()" (change)="camadaAgentes.set($any($event.target).checked)" />
+          Demais agentes
+        </label>
+        <label class="flex items-center gap-1.5 text-[11.5px] text-txt cursor-pointer">
+          <input type="checkbox" class="accent-azul cursor-pointer" [checked]="camadaSequencia()" (change)="camadaSequencia.set($any($event.target).checked)" />
+          Trajetória do dia
+        </label>
+      </div>
+    </div>
   </div>
 
-  <!-- Legenda de cores dos pontos/segmentos da timeline — não existia antes
-       (usuário pediu, ver anexo do protótipo pintaLegenda()). Inclui TODAS
-       as categorias que o app já usa (não só as 5 do protótipo): pausa e
-       trocou município também têm cor própria aqui (ver corDaUc/
-       corDoSegmento em mapa-bases.ts). Cores literais (não classes Tailwind)
-       porque são as MESMAS constantes hex já usadas nos marcadores/segmentos
-       do próprio mapa (CORES_PONTO/COR_SEGMENTO_*), não temos token de marca
-       pra "cinza"/"a realizar" nem "trocou livro" fora desses. -->
-  <div class="absolute bottom-3 left-3 z-[1000] flex flex-wrap items-center gap-x-3 gap-y-1 bg-sup/95 border border-linha shadow-sm rounded-lg px-3 py-1.5 max-w-[calc(100%-24px)]">
-    <span
-      *ngFor="let item of legenda"
-      class="flex items-center gap-1.5 text-[10.5px] font-semibold text-fraco whitespace-nowrap"
-      [title]="item.descricao"
+  <div class="relative flex-1 min-h-0">
+    <div #mapaEl class="w-full h-full"></div>
+
+    <!-- Spinner de carregamento — usuário reportou que a rota demora um tempo
+         considerável pra aparecer no mapa depois de abrir um colaborador (a
+         linha só desenha quando a jornada chega do backend, ver
+         atualizarRotaJornada), sem nenhum indicativo de que algo está
+         carregando. Mesmo indicativo cobre "Rastro GPS" (camada
+         separada, ver camadaRastroGps): a fonte SEGSAT chama a API ao vivo
+         por trás (login + requisição externa, ADR 0034 Adendo 3) em vez de só
+         ler uma tabela local, então também pode demorar. Prioriza a mensagem
+         de jornada quando as duas coincidem (dispara primeiro na prática, ao
+         abrir um colaborador com a camada já ligada). Não bloqueia interação
+         com o mapa de propósito (pointer-events-none) — só avisa, não trava. -->
+    <div
+      *ngIf="colaboradoresService.carregandoJornada() || colaboradoresService.carregandoGpsHistorico()"
+      class="absolute top-3 left-1/2 -translate-x-1/2 z-[1200] flex items-center gap-2 bg-sup/95 border border-linha shadow-lg rounded-full px-3 py-1.5 text-xs font-semibold text-txt pointer-events-none"
     >
-      <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.background]="item.cor"></span>
-      {{ item.rotulo }}
-    </span>
+      <svg class="animate-spin h-3.5 w-3.5 text-azul shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      {{ colaboradoresService.carregandoJornada() ? 'Carregando rota do colaborador...' : 'Carregando rastro GPS...' }}
+    </div>
   </div>
 </div>

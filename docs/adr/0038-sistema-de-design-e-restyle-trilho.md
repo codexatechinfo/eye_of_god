@@ -342,3 +342,62 @@ ativo/inativo) + botão de camadas com contador, marcador de início vs último,
 - Duplicidade de "PAULO SERGIO DA SILVA" — aguardando o usuário rodar a query SQL entregue (fora do
   fluxo de código) ou a reimportação de uma base atualizada.
 - Régua de tempo (playback do dia) e aba Risco — inalteradas.
+
+## Adendo 4 — Rodada 4: barra do mapa em fluxo normal, zoom, labels do header, scrollbar
+
+Usuário testou a rodada 3 e apontou 3 problemas concretos, mais uma mensagem solta durante a
+conversa sobre a scrollbar:
+
+**Zoom do mapa** — controle nativo do Leaflet (`+`/`−`) ficava no canto topleft, competindo por
+espaço com os novos controles de tipo de mapa/camadas da rodada 3. Movido pra `bottomright`
+(`zoomControl: false` no `L.map()` + `L.control.zoom({ position: 'bottomright' })` explícito) —
+mesmo canto da atribuição do Leaflet/tiles, "sobe com as outras informações" ali, pedido do usuário.
+
+**Barra superior do mapa (legenda + tipo de mapa + camadas)** — achado da rodada 3: eu tinha
+implementado os 3 como controles Leaflet `L.Control.extend` flutuando no canto topleft (base-sel +
+camadas) mais um overlay Angular solto no bottom-left (legenda), tentando imitar visualmente
+`.f-barra` do protótipo só com posicionamento absoluto. Relendo o CSS do protótipo com mais cuidado
+(`olho.html:564-566`, `.f-barra{height:40px;flex:none;background:var(--sup);border-bottom:1px solid
+var(--linha)}`) ficou claro que `.f-barra` NÃO é overlay — é uma barra real, em fluxo normal, acima
+do canvas do mapa (`.f-centro{display:flex;flex-direction:column}` → `.f-barra` (40px fixo) →
+`#f-tela` (flex:1)). Essa é a causa raiz de "a barra superior ainda não ficou no padrão esperado e
+as legendas não foram lá pra baixo".
+
+Corrigido reestruturando `mapa-bases.html`: o componente virou `flex flex-col`, com uma barra real
+`shrink-0 h-10` no topo (legenda | spacer | tipo de mapa | camadas, tudo dentro da árvore Angular
+normal) e o mapa em si (`#mapaEl` + spinner) num `flex-1 min-h-0` logo abaixo. Isso eliminou também
+a necessidade dos controles Leaflet customizados — `criarControleCamadas`/`montarDomControleCamadas`/
+`criarControleBase`/`montarDomControleBase` (DOM montado à mão com `L.DomUtil`, CSS global em
+`styles.css`) foram REMOVIDOS e viraram estado Angular simples: `baseAtiva`/`camadasAbertas` signals,
+`selecionarBase()`/`toggleCamadas()` métodos, checkboxes ligados direto aos signals `camadaX` já
+existentes no template. Fechar o dropdown de Camadas ao clicar fora usa o mesmo padrão já
+estabelecido em `colaborador-detalhe.ts` (`$event.stopPropagation()` no wrapper + `HostListener
+document:click` no componente).
+
+**Labels do header** — usuário deu o mapeamento explícito: TRILHO=TRILHO, MONITORAMENTO
+COLABORADOR→AGENTES, MONITORAMENTO DE LIVROS→LIVROS, MASSIVAS=MASSIVAS, IMPORTAÇÃO=IMPORTAÇÃO — nomes
+curtos como no protótipo (`#abas .ab`, `olho.html:1112-1117`). Só o texto do botão mudou, `(click)`
+e `abaAtiva()` continuam nos mesmos valores internos (`'colaborador'`/`'livros'` etc.) — nenhuma rota
+nem lógica de seleção de aba mudou.
+
+**Scrollbar** — mensagem solta do usuário durante a rodada ("a barra de scroll lateral tá ocupando
+muito espaço, tá feio, precisa mais discreto mais slim"): scrollbar padrão do SO (grossa, cinza-
+escura) destoava das listas compactas do novo design. Adicionado CSS global (`::-webkit-scrollbar`+
+`scrollbar-width:thin`) em `styles.css`, mesmo padrão do protótipo (`olho.html:53-57`) — track
+transparente, thumb em `--color-linha-2`, escurece pra `--color-fraco` no hover. Vale pra qualquer
+lista com scroll no app, não só a de colaboradores.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness estático cobrindo:
+barra superior do mapa em larguras diferentes (confirmado que só quebra/trunca em containers de
+teste artificialmente estreitos, não na largura real da área do mapa no app — sidebar 320px deixa
+900px+ disponíveis em telas comuns), zoom no canto inferior direito, dropdown de Camadas, header com
+os 5 labels novos, scrollbar fina visível num container de teste com overflow. `grep` confirmou zero
+referência solta aos métodos/classes CSS removidos (`criarControleCamadas`, `montarDomControleBase`,
+`.mapa-base-sel`, `.mapa-camadas-*`) e zero ocorrência dos labels antigos no header.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Régua de tempo (playback do dia) e aba Risco — inalteradas.

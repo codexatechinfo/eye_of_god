@@ -35,6 +35,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   painéis nativos do Leaflet que só expandiam no hover. Ver Adendo 3 da [ADR
   0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+- Restyle da aba Trilho, rodada 4 — a barra de legenda/tipo de mapa/camadas da rodada 3 virou uma
+  barra real acima do mapa (fluxo normal, não mais controles Leaflet flutuando no canto nem overlay
+  solto), corrigindo o posicionamento que ainda não batia com o protótipo; zoom do mapa movido pro
+  canto inferior direito; labels do cabeçalho encurtados (Agentes/Livros no lugar de "Monitoramento
+  Colaborador"/"Monitoramento de Livros"); scrollbar do app inteiro ficou mais fina e discreta. Ver
+  Adendo 4 da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Adicionado
 
 - Camada "Rastro GPS" (mapa, aba Trilho) ganhou marcadores de primeiro e último ponto — contorno

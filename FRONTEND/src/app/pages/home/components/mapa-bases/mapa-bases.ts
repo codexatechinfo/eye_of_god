@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, effect, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as L from 'leaflet';
 import {
@@ -330,6 +330,21 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     { cor: COR_SEGMENTO_MUDOU_MUNICIPIO, rotulo: 'trocou município', descricao: 'trecho em que o colaborador passou de um município para outro' },
   ];
 
+  // Tipo de mapa (base) e painel "Camadas" — rodada 4 do restyle: viraram
+  // uma barra real acima do mapa (.f-barra do protótipo, altura fixa em
+  // fluxo normal, não mais controles Leaflet flutuando no canto), então a
+  // seleção de base e o dropdown de camadas agora são estado Angular
+  // simples (signals), não mais DOM montado à mão com L.DomUtil.
+  readonly tiposBase: { chave: string; rotulo: string }[] = [
+    { chave: 'ruas', rotulo: 'Ruas' },
+    { chave: 'satelite', rotulo: 'Satélite' },
+    { chave: 'sateliteRotulos', rotulo: 'Satélite c/ rótulos' },
+    { chave: 'topografico', rotulo: 'Topográfico' },
+  ];
+  baseAtiva = signal('ruas');
+  camadasAbertas = signal(false);
+  private tilesBase: Record<string, L.Layer> = {};
+
   private mapa?: L.Map;
   private resizeObserver?: ResizeObserver;
 
@@ -410,6 +425,19 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   camadaLimitesMunicipais = signal(false);
   camadaRastroGps = signal(false);
   camadaParadasGaps = signal(true);
+  // Contador do botão "Camadas N" na barra superior.
+  contagemCamadas = computed(
+    () =>
+      [
+        this.camadaPontos(),
+        this.camadaSequencia(),
+        this.camadaAgentes(),
+        this.camadaSetorPlanejado(),
+        this.camadaLimitesMunicipais(),
+        this.camadaRastroGps(),
+        this.camadaParadasGaps(),
+      ].filter(Boolean).length,
+  );
   // Última chave (colaborador+data+fonte) pra qual "Rastro executado" já
   // buscou — mesmo raciocínio de limitesMunicipaisChaveAtual, evita
   // rebuscar a cada refresh de 60s do mesmo colaborador/dia.
@@ -673,106 +701,29 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       .addTo(this.grupoRastroGps);
   }
 
-  // Controle Leaflet custom (não um painel Angular sobreposto) — só assim
-  // ele empilha naturalmente no mesmo canto/ordem do controle de tipos de
-  // mapa. DOM montado à mão com L.DomUtil (mesmo padrão que o próprio
-  // Leaflet usa internamente). Rodada 3 do restyle: botão "Camadas N" com
-  // contador (padrão .cam-caixa/.bt.p do protótipo, ver styles.css) que
-  // ABRE/FECHA a lista ao clicar (classe "aberto"), não mais hover-pra-
-  // expandir do controle nativo — mais previsível em telas touch também.
-  // Os checkboxes só escrevem nos signals camadaX; quem liga/desliga o
-  // grupo de verdade são os effects do construtor (funciona igual não
-  // importa se o signal mudou por aqui ou por outro lugar no futuro).
-  private criarControleCamadas(mapa: L.Map): void {
-    const Controle = L.Control.extend({
-      onAdd: () => this.montarDomControleCamadas(),
-    });
-    new Controle({ position: 'topleft' }).addTo(mapa);
+  // Tipo de mapa e painel "Camadas" agora vivem na barra real acima do mapa
+  // (mapa-bases.html, .f-barra do protótipo) — não mais controles Leaflet
+  // flutuando no canto. selecionarBase troca a tile layer ativa; os
+  // checkboxes de camada escrevem direto nos signals camadaX no template
+  // (quem liga/desliga o grupo de verdade são os effects do construtor).
+  selecionarBase(chave: string): void {
+    if (chave === this.baseAtiva() || !this.mapa) return;
+    this.mapa.removeLayer(this.tilesBase[this.baseAtiva()]);
+    this.mapa.addLayer(this.tilesBase[chave]);
+    this.baseAtiva.set(chave);
   }
 
-  private montarDomControleCamadas(): HTMLElement {
-    const caixa = L.DomUtil.create('div', 'mapa-camadas-caixa');
-    L.DomEvent.disableClickPropagation(caixa);
-    L.DomEvent.disableScrollPropagation(caixa);
-
-    const bt = L.DomUtil.create('button', 'mapa-camadas-bt', caixa) as HTMLButtonElement;
-    bt.type = 'button';
-    bt.title = 'O que o mapa desenha';
-    bt.appendChild(document.createTextNode('Camadas '));
-    const contador = document.createElement('b');
-    bt.appendChild(contador);
-    bt.addEventListener('click', () => caixa.classList.toggle('aberto'));
-
-    const lista = L.DomUtil.create('div', 'mapa-camadas-lista', caixa);
-
-    const sinais: { (): boolean }[] = [];
-    const atualizarContador = () => {
-      contador.textContent = String(sinais.filter(sinal => sinal()).length);
-    };
-
-    const itemAtivo = (texto: string, sinal: { (): boolean; set: (v: boolean) => void }) => {
-      sinais.push(sinal);
-      const label = L.DomUtil.create('label', '', lista) as HTMLLabelElement;
-      const input = L.DomUtil.create('input', '', label) as HTMLInputElement;
-      input.type = 'checkbox';
-      input.checked = sinal();
-      input.addEventListener('change', () => {
-        sinal.set(input.checked);
-        atualizarContador();
-      });
-      label.appendChild(document.createTextNode(' ' + texto));
-    };
-
-    itemAtivo('Rastro GPS', this.camadaRastroGps);
-    itemAtivo('Pontos coletados', this.camadaPontos);
-    itemAtivo('Paradas e gaps', this.camadaParadasGaps);
-    itemAtivo('Setor planejado', this.camadaSetorPlanejado);
-    itemAtivo('Limites municipais', this.camadaLimitesMunicipais);
-    itemAtivo('Demais agentes', this.camadaAgentes);
-    itemAtivo('Trajetória do dia', this.camadaSequencia);
-    atualizarContador();
-
-    return caixa;
+  toggleCamadas(): void {
+    this.camadasAbertas.set(!this.camadasAbertas());
   }
 
-  // Controle de tipo de mapa (Ruas/Satélite/Satélite c/ rótulos/
-  // Topográfico) — antes era o L.control.layers NATIVO do Leaflet (painel
-  // que só aparecia expandido no hover); troca pra botões pill sempre
-  // visíveis (.mapa-base-sel, padrão .base-sel do protótipo), mesma ideia
-  // do controle de Camadas acima. Mesmo canto (topleft) e ordem (antes de
-  // Camadas) do controle nativo que substitui.
-  private criarControleBase(mapa: L.Map, tiles: Record<string, L.Layer>): void {
-    const Controle = L.Control.extend({
-      onAdd: () => this.montarDomControleBase(mapa, tiles),
-    });
-    new Controle({ position: 'topleft' }).addTo(mapa);
-  }
-
-  private montarDomControleBase(mapa: L.Map, tiles: Record<string, L.Layer>): HTMLElement {
-    const caixa = L.DomUtil.create('div', 'mapa-base-sel');
-    L.DomEvent.disableClickPropagation(caixa);
-    L.DomEvent.disableScrollPropagation(caixa);
-
-    const nomes = Object.keys(tiles);
-    let ativo = nomes[0]; // "Ruas" — já é a camada adicionada ao mapa por padrão.
-    const botoes = new Map<string, HTMLButtonElement>();
-
-    for (const nome of nomes) {
-      const bt = L.DomUtil.create('button', nome === ativo ? 'on' : '', caixa) as HTMLButtonElement;
-      bt.type = 'button';
-      bt.textContent = nome;
-      bt.addEventListener('click', () => {
-        if (nome === ativo) return;
-        mapa.removeLayer(tiles[ativo]);
-        mapa.addLayer(tiles[nome]);
-        botoes.get(ativo)?.classList.remove('on');
-        bt.classList.add('on');
-        ativo = nome;
-      });
-      botoes.set(nome, bt);
-    }
-
-    return caixa;
+  // Fecha o dropdown de Camadas ao clicar fora dele — mesmo padrão de
+  // "clicar fora fecha" já usado em colaborador-detalhe.ts (aoClicarFora).
+  // O próprio botão/dropdown chamam $event.stopPropagation() no template,
+  // então só chega aqui um clique genuinamente de fora.
+  @HostListener('document:click')
+  fecharCamadas(): void {
+    if (this.camadasAbertas()) this.camadasAbertas.set(false);
   }
 
   ngAfterViewInit(): void {
@@ -781,7 +732,14 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       zoom: 7,
       scrollWheelZoom: true,
       fadeAnimation: false,
+      // Zoom nativo vai pro canto inferior direito (pedido do usuário —
+      // "sobe com as outras informações", mesmo canto da atribuição do
+      // Leaflet/tiles), não mais topleft (que ficava disputando espaço com
+      // a barra de tipo de mapa/camadas, agora em fluxo normal acima do
+      // mapa, ver mapa-bases.html).
+      zoomControl: false,
     });
+    L.control.zoom({ position: 'bottomright' }).addTo(this.mapa);
 
     // Pane dedicado, acima do overlayPane padrão (zIndex 400) onde vivem
     // "Pontos coletados"/"Paradas e gaps"/"Setor planejado"/"Trajetória do
@@ -822,23 +780,14 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       maxZoom: 17,
     });
 
-    // topleft: o painel de detalhe do colaborador (app-colaborador-detalhe)
-    // cobre o lado direito da tela quando aberto — no canto padrão
-    // (topright) o controle ficaria escondido atrás dele.
-    this.criarControleBase(this.mapa, {
-      Ruas: ruas,
-      Satélite: satelite,
-      'Satélite c/ rótulos': sateliteComRotulos,
-      Topográfico: topografico,
-    });
-
-    // Painel "Camadas" logo abaixo do controle de tipos de mapa (mesmo
-    // canto topleft — Leaflet empilha controles do mesmo canto na ordem em
-    // que são adicionados). Mesmo comportamento visual do controle nativo
-    // (ícone recolhido, expande no hover): construído com as MESMAS classes
-    // CSS do leaflet.css (leaflet-control-layers*), não uma reimplementação
-    // — herda o ícone, sombra, borda arredondada etc. de graça.
-    this.criarControleCamadas(this.mapa);
+    // Chaves batem com this.tiposBase (mapa-bases.html) — "Ruas" já está no
+    // mapa por padrão (this.baseAtiva() nasce 'ruas'), ver selecionarBase().
+    this.tilesBase = {
+      ruas,
+      satelite,
+      sateliteRotulos: sateliteComRotulos,
+      topografico,
+    };
 
     // Os effects de toggle (constructor) já rodaram antes do mapa existir —
     // reaplica o estado inicial de cada grupo agora que this.mapa está pronto

@@ -92,3 +92,60 @@ true` nessas duas e o FRONTEND mostra um aviso antes do usuário confirmar, mas 
   negócio várias vezes ao dia por design).
 - **`xlsx` (SheetJS via npm)** — descartado por vulnerabilidade sem correção disponível no
   registro do npm.
+
+## Adendo 1 (2026-09-10) — célula de data do Excel gravava sempre um dia antes (fuso horário)
+
+Usuário pediu pra importar `prazo_reg_livros.xlsx` de setembro. Reimportação gravou `mes_ref
+= '2026-08-31'` em vez de `'2026-09-01'` — o MESMO sintoma já relatado e "corrigido" em
+2026-09-07 (comentário antigo em `importacaoConfig.js`), só que dessa vez batendo mesmo
+depois daquele fix (`colunasDataIso` + `formatarDataIso`). O fix de 07/09 resolveu o formato
+(DD/MM/YYYY → YYYY-MM-DD), mas não a causa raiz: **toda célula de data do Excel, lida pelo
+`exceljs`, vem como meia-noite UTC** (`new Date('2026-09-01T00:00:00.000Z')`) — não existe
+timezone num serial de data do Excel, e o `exceljs` ancora em UTC ao converter. O código
+extraía o dia com `getFullYear()`/`getMonth()`/`getDate()` (componentes LOCAIS) e com
+`toLocaleDateString('pt-BR')` (também local) — em qualquer timezone de offset negativo
+(America/Sao_Paulo, UTC-3, o fuso do servidor), meia-noite UTC de um dia é 21h do dia
+ANTERIOR local, então essas duas chamadas SEMPRE devolviam o dia errado pra qualquer coluna
+de data cuja célula do Excel estivesse formatada como data (não texto) — não um caso raro
+perto da virada de dia, o deslocamento é fixo e afeta 100% das células desse tipo.
+
+Achado direto: testado com a planilha real (`prazo_reg_livros.xlsx`, célula `A2` = 1º de
+setembro) — `toISOString()` confirma `2026-09-01T00:00:00.000Z`; `getFullYear/getMonth/getDate`
+(local) devolvem `2026-08-31`; `getUTCFullYear/getUTCMonth/getUTCDate` devolvem `2026-09-01`
+(certo). O comentário antigo de `formatarDataIso` tinha a lógica invertida: avisava contra
+`toISOString()` citando a cilada de fuso horário de `PRAZO_CONTR_SQL` — mas aquele caso é de
+um `Date` construído LOCALMENTE no próprio código (`new Date(y, m, d)`, onde local é o certo e
+UTC quebra); aqui a origem é o `exceljs`, que é sempre UTC-anchored — a regra se inverte.
+
+**Impacto real, não só teórico**: confirmado que a importação de `ativos_inativos` feita
+minutos antes (mesma sessão, pedido anterior do usuário) gravou TODAS as colunas de data
+(`admissao`, `45_dias`, `90_dias`, `data_atualizacao`) um dia atrasadas — matrícula 105417
+gravou `admissao = 15/11/2022` quando a planilha tinha `16/11/2022`. Qualquer tabela
+importada com coluna de data em célula Excel nativa (não texto) estava sujeita ao mesmo erro,
+com ou sem `colunasDataIso` — o bug está nas DUAS ramificações de `extrairLinhas` que lidam
+com `valor instanceof Date`.
+
+### Decisão
+
+`formatarDataIso` trocado pra usar `getUTCFullYear`/`getUTCMonth`/`getUTCDate`. O caminho
+padrão (texto DD/MM/YYYY) trocado de `valor.toLocaleDateString('pt-BR')` pra
+`valor.toLocaleDateString('pt-BR', { timeZone: 'UTC' })` — mesma correção, aplicada às duas
+ramificações que convertem `Date` pra string em `extrairLinhas`.
+
+`ativos_inativos` (modo `substituir`, sem chave) e `prazo_reg_livros` de setembro (linhas
+erradas com `mes_ref = '2026-08-31'` apagadas manualmente antes) foram reimportados com o
+código já corrigido, no mesmo dia — nenhuma tabela ficou com dado errado gravado por mais que
+alguns minutos. `calendario_leitura` (usa `colunasDataIso` desde 2026-09-07, mesmo caminho
+afetado) foi conferida: dado atual não mostra o sintoma (`mes_ref` aparece limpo,
+`2026-09-01`/`2026-08-01`/`2026-07-01`, sem nenhum "dia 31" fantasma nem em `prazo_leitura`) —
+mas sem a planilha original de quando foi importada pra comparar célula a célula, não dá pra
+garantir 100% que nunca foi afetada; se o usuário ainda tiver o arquivo fonte, vale reimportar
+pra ter certeza.
+
+### Verificação
+
+Testado direto contra a planilha real (`prazo_reg_livros.xlsx`): célula de data que antes do
+fix virava `'2026-08-31'` agora vira `'2026-09-01'`, batendo com o `toISOString()` da célula.
+Reimport de `prazo_reg_livros` (setembro, 13.892 linhas) e `ativos_inativos` (626 linhas)
+confirmados linha a linha contra a planilha de origem após o fix — datas batendo
+exatamente. `npm test` (18/18) limpo.

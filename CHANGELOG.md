@@ -200,6 +200,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Importação de planilha (`.xlsx`): qualquer coluna de data cuja célula viesse formatada como data
+  nativa do Excel (não texto) gravava sempre um dia ANTES do real — bug de fuso horário no parser
+  (`exceljs` lê célula de data como meia-noite UTC; o código extraía o dia usando componentes
+  LOCAIS, que em qualquer timezone de offset negativo, incluindo o do servidor, America/Sao_Paulo,
+  sempre volta pro dia anterior). Achado ao reimportar `prazo_reg_livros` de setembro (gravou
+  `mes_ref` "2026-08-31" em vez de "2026-09-01") e confirmado também em `ativos_inativos`
+  (`admissao`/`45_dias`/`90_dias`/`data_atualizacao` todos um dia atrasados). Corrigido usando
+  componentes UTC na conversão; as duas tabelas foram reimportadas no mesmo dia com o dado
+  correto. Ver Adendo 1 da [ADR 0005](docs/adr/0005-importacao-de-planilha.md).
+
 - Tooltip "última leitura em ..." do motoqueiro/pedestre no mapa (e a coluna "Último registro" da
   aba Monitoramento Colaborador) podia mostrar um horário mais antigo que o real, divergindo da
   timeline do colaborador — acontecia quando a leitura genuinamente mais recente do dia não tinha

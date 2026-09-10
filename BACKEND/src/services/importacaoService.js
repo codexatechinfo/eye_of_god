@@ -5,13 +5,25 @@ function normalizar(texto) {
   return String(texto ?? '').trim();
 }
 
-// "YYYY-MM-DD" a partir dos componentes LOCAIS do Date (não `toISOString()`,
-// que converte pra UTC e pode voltar um dia — mesma cilada de fuso horário
-// já documentada em PRAZO_CONTR_SQL/monitoramentoService.js).
+// "YYYY-MM-DD" a partir dos componentes UTC do Date — não dos LOCAIS
+// (`getFullYear`/`getMonth`/`getDate` sem qualificador), ao contrário do que
+// o comentário antigo desta função dizia. Achado ao vivo (2026-09-10,
+// reimportação de prazo_reg_livros pro mês de setembro gravou mes_ref
+// "2026-08-31" em vez de "2026-09-01"): célula de data do ExcelJS SEMPRE
+// vem como meia-noite UTC (`new Date('2026-09-01T00:00:00.000Z')`), não
+// meia-noite LOCAL — não existe fuso horário num serial de data do Excel, e
+// o ExcelJS ancora em UTC ao converter. Em qualquer timezone com offset
+// negativo (America/Sao_Paulo, UTC-3, o caso deste servidor), meia-noite
+// UTC de um dia É 21h do dia ANTERIOR local — `getDate()` local devolve o
+// dia errado, sempre, não só perto da virada. O comentário original
+// confundia isso com a cilada oposta (`toISOString()` sobre um Date
+// LOCAL-anchored, como `new Date(y, m, d)` construído no próprio código —
+// aí sim local é o certo e UTC quebra); aqui a origem do Date é o ExcelJS,
+// que é sempre UTC-anchored, então a regra se inverte.
 function formatarDataIso(data) {
-  const ano = data.getFullYear();
-  const mes = String(data.getMonth() + 1).padStart(2, '0');
-  const dia = String(data.getDate()).padStart(2, '0');
+  const ano = data.getUTCFullYear();
+  const mes = String(data.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(data.getUTCDate()).padStart(2, '0');
   return `${ano}-${mes}-${dia}`;
 }
 
@@ -72,8 +84,18 @@ async function extrairLinhas(buffer, colunasValidas, colunasDataIso = []) {
       // Date, que precisa virar essa mesma string, senão quebra os
       // to_date(...) do resto do app. `colunasDataIso` é a exceção
       // conhecida (ver comentário de extrairLinhas).
+      //
+      // `{ timeZone: 'UTC' }` aqui é pelo MESMO motivo do UTC em
+      // formatarDataIso (ver comentário lá): o Date do ExcelJS é sempre
+      // meia-noite UTC, então formatar sem fixar o timezone usa o fuso
+      // LOCAL do processo (America/Sao_Paulo, UTC-3) e devolve o dia
+      // anterior — bug real que afetava toda tabela importada com coluna
+      // de data em formato Excel nativo (célula tipo Date, não texto),
+      // não só as que usam colunasDataIso.
       if (valor instanceof Date) {
-        valor = setColunasDataIso.has(coluna) ? formatarDataIso(valor) : valor.toLocaleDateString('pt-BR');
+        valor = setColunasDataIso.has(coluna)
+          ? formatarDataIso(valor)
+          : valor.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
       }
       if (valor !== null && valor !== undefined && valor !== '') temAlgumValor = true;
       objeto[coluna] = valor === '' ? null : valor;

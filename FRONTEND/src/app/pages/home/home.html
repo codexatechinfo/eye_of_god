@@ -26,23 +26,16 @@
         <button
           type="button"
           (click)="selecionarAba('monitoramento')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
+          class="flex items-center gap-1.5 h-[34px] px-3.5 rounded-md text-xs font-bold tracking-wide transition-colors cursor-pointer"
           [ngClass]="
             abaAtiva() === 'monitoramento'
-              ? 'text-white bg-navy border-navy'
-              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
+              ? 'text-white bg-navy'
+              : 'text-fraco hover:text-txt hover:bg-sup-3'
           "
         >
-          <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          ></span>
-          <span
-            class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'monitoramento' ? '' : 'group-hover:bg-tit/[0.04]'"
-          ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="relative h-3.5 w-3.5 shrink-0 transition-transform duration-300 group-hover:scale-110"
+            class="h-3.5 w-3.5 shrink-0"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -55,7 +48,7 @@
             <rect x="3" y="14" width="7" height="7" rx="1.5" />
             <rect x="14" y="14" width="7" height="7" rx="1.5" />
           </svg>
-          <span class="relative">TRILHO</span>
+          <span>TRILHO</span>
         </button>
 
         <!-- Monitoramento Colaborador logo após Trilho, a pedido do usuário
@@ -63,23 +56,16 @@
         <button
           type="button"
           (click)="selecionarAba('colaborador')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
+          class="flex items-center gap-1.5 h-[34px] px-3.5 rounded-md text-xs font-bold tracking-wide transition-colors cursor-pointer"
           [ngClass]="
             abaAtiva() === 'colaborador'
-              ? 'text-white bg-navy border-navy'
-              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
+              ? 'text-white bg-navy'
+              : 'text-fraco hover:text-txt hover:bg-sup-3'
           "
         >
-          <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          ></span>
-          <span
-            class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'colaborador' ? '' : 'group-hover:bg-tit/[0.04]'"
-          ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="relative h-3.5 w-3.5 shrink-0 transition-transform duration-300 group-hover:scale-110"
+            class="h-3.5 w-3.5 shrink-0"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -90,29 +76,22 @@
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-          <span class="relative">MONITORAMENTO COLABORADOR</span>
+          <span>MONITORAMENTO COLABORADOR</span>
         </button>
 
         <button
           type="button"
           (click)="selecionarAba('livros')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
+          class="flex items-center gap-1.5 h-[34px] px-3.5 rounded-md text-xs font-bold tracking-wide transition-colors cursor-pointer"
           [ngClass]="
             abaAtiva() === 'livros'
-              ? 'text-white bg-navy border-navy'
-              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
+              ? 'text-white bg-navy'
+              : 'text-fraco hover:text-txt hover:bg-sup-3'
           "
         >
-          <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          ></span>
-          <span
-            class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'livros' ? '' : 'group-hover:bg-tit/[0.04]'"
-          ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="relative h-3.5 w-3.5 shrink-0 transition-transform duration-300 group-hover:scale-110"
+            class="h-3.5 w-3.5 shrink-0"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -124,29 +103,22 @@
             <rect x="3" y="10" width="18" height="4" rx="1" />
             <rect x="3" y="17" width="18" height="4" rx="1" />
           </svg>
-          <span class="relative">MONITORAMENTO DE LIVROS</span>
+          <span>MONITORAMENTO DE LIVROS</span>
         </button>
 
         <button
           type="button"
           (click)="selecionarAba('massivas')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
+          class="flex items-center gap-1.5 h-[34px] px-3.5 rounded-md text-xs font-bold tracking-wide transition-colors cursor-pointer"
           [ngClass]="
             abaAtiva() === 'massivas'
-              ? 'text-white bg-navy border-navy'
-              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
+              ? 'text-white bg-navy'
+              : 'text-fraco hover:text-txt hover:bg-sup-3'
           "
         >
-          <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          ></span>
-          <span
-            class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'massivas' ? '' : 'group-hover:bg-tit/[0.04]'"
-          ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="relative h-3.5 w-3.5 shrink-0 transition-transform duration-300 group-hover:scale-110"
+            class="h-3.5 w-3.5 shrink-0"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -158,30 +130,23 @@
             <rect x="10.5" y="3" width="7" height="18" rx="1" />
             <rect x="18" y="3" width="3" height="18" rx="1" />
           </svg>
-          <span class="relative">MASSIVAS</span>
+          <span>MASSIVAS</span>
         </button>
 
         <button
           *ngIf="podeImportar()"
           type="button"
           (click)="selecionarAba('importacao')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
+          class="flex items-center gap-1.5 h-[34px] px-3.5 rounded-md text-xs font-bold tracking-wide transition-colors cursor-pointer"
           [ngClass]="
             abaAtiva() === 'importacao'
-              ? 'text-white bg-navy border-navy'
-              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
+              ? 'text-white bg-navy'
+              : 'text-fraco hover:text-txt hover:bg-sup-3'
           "
         >
-          <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          ></span>
-          <span
-            class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'importacao' ? '' : 'group-hover:bg-tit/[0.04]'"
-          ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="relative h-3.5 w-3.5 shrink-0 transition-transform duration-300 group-hover:scale-110"
+            class="h-3.5 w-3.5 shrink-0"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -193,7 +158,7 @@
             <path d="m7 10 5 5 5-5" />
             <path d="M5 21h14" />
           </svg>
-          <span class="relative">IMPORTAÇÃO</span>
+          <span>IMPORTAÇÃO</span>
         </button>
       </div>
 

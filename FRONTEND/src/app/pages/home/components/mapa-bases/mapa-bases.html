@@ -22,4 +22,23 @@
     </svg>
     {{ colaboradoresService.carregandoJornada() ? 'Carregando rota do colaborador...' : 'Carregando rastro GPS...' }}
   </div>
+
+  <!-- Legenda de cores dos pontos/segmentos da timeline — não existia antes
+       (usuário pediu, ver anexo do protótipo pintaLegenda()). Inclui TODAS
+       as categorias que o app já usa (não só as 5 do protótipo): pausa e
+       trocou município também têm cor própria aqui (ver corDaUc/
+       corDoSegmento em mapa-bases.ts). Cores literais (não classes Tailwind)
+       porque são as MESMAS constantes hex já usadas nos marcadores/segmentos
+       do próprio mapa (CORES_PONTO/COR_SEGMENTO_*), não temos token de marca
+       pra "cinza"/"a realizar" nem "trocou livro" fora desses. -->
+  <div class="absolute bottom-3 left-3 z-[1000] flex flex-wrap items-center gap-x-3 gap-y-1 bg-sup/95 border border-linha shadow-sm rounded-lg px-3 py-1.5 max-w-[calc(100%-24px)]">
+    <span
+      *ngFor="let item of legenda"
+      class="flex items-center gap-1.5 text-[10.5px] font-semibold text-fraco whitespace-nowrap"
+      [title]="item.descricao"
+    >
+      <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.background]="item.cor"></span>
+      {{ item.rotulo }}
+    </span>
+  </div>
 </div>

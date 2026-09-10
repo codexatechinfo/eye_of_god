@@ -262,3 +262,83 @@ preservados; aba ativa em navy sólido; ícones losango/gota — tudo visualment
 ### Pendências (fora desta ADR)
 
 - Decidir sobre a régua de tempo (playback do dia) e a aba Risco — inalteradas, ver seção anterior.
+
+## Adendo 3 — Rodada 3: feedback pós-deploy (filtros, legenda, login, marcador de início)
+
+Usuário testou a rodada 2 no app real e reportou 8 pontos. Cada um investigado no código e/ou no
+protótipo antes de mexer (padrão já estabelecido nos Adendos 1/2):
+
+**Lista duplicando colaboradores** — confirmado como dado (`ativos_inativos` com 2 linhas pro mesmo
+nome), não bug de código. Fora do escopo desta ADR — usuário vai reimportar uma base atualizada;
+entregue a query SQL (SELECT pra identificar + DELETE) direto pro usuário rodar, sem acesso a banco
+nesta sessão pra executar.
+
+**Barra de filtros da lista** (`lista-colaboradores.html`/`.ts`) — a infraestrutura já existia
+inteira em `ColaboradoresService` (`filtroColaborador`/`filtroCargo`/`filtroRegional`/`filtroData`,
+`buscar()`/`buscarComDebounce()`/`onFiltroDataChange()`) mas nunca tinha ganhado UI. Construída a
+tradução literal de `.f-agentes-topo` do protótipo: busca por texto, data + botão "ao vivo",
+selects de regional/cargo, chips de categoria (já existiam) agora com contagem
+(`contagensPorCategoria()`, novo computed no service, reaproveita `pertenceCategoria()`).
+
+**"ao vivo"** — adaptação consciente do conceito do protótipo: lá é "reler a cada 60s sem
+reenquadrar o mapa" (um toggle real de polling manual); aqui o app já poll a sozinho a cada 60s
+enquanto `filtroData()` for hoje (`INTERVALO_ATIVIDADE_MS`, já existia antes desta rodada). Vira um
+atalho pra voltar pro dia atual — destacado (`bg-azul`) quando já está em "hoje", clique chama
+`onFiltroDataChange(hojeIso())`. Não é polling manual como no protótipo, é reativar o polling
+automático que já existe.
+
+**Cabeçalho achatado** (`home.html`) — o estado ativo (`bg-navy text-white`) já batia exatamente com
+o protótipo desde a rodada 2 (`#abas .ab.on`). A diferença real estava no que cercava isso: nosso
+botão tinha borda, brilho no hover, gradiente animado e o ícone crescia no hover — nada disso existe
+no protótipo (`#abas .ab:hover{background:sup3;color:txt}`, sem efeitos). Removido tudo isso dos 5
+botões de aba, mantido ícone (SVG já existente) + texto, ajustado pro tamanho do protótipo (34px
+altura).
+
+**Marcador de início da trajetória** (`mapa-bases.ts`) — já existia marcador dedicado só pro ÚLTIMO
+ponto realizado do dia (`iconeUltimoPonto`, cor dinâmica). Acrescentado o mesmo conceito pro
+PRIMEIRO ponto (`ucPrimeiroPonto`, busca cronológica pra frente — oposto de `ucUltimoPonto`), com um
+ícone novo `ICONE_PRIMEIRO_PONTO` no mesmo padrão visual de `ICONE_RASTRO_INICIO` (contorno vazado,
+cor neutra fixa — não dinâmica, é só posição). Se só há 1 ponto no dia, prioridade pro ícone de
+ÚLTIMO (mais informativo), não desenha os dois sobrepostos.
+
+**Login** (`login.html`) — reestilizado do zero pro padrão de tokens (fundo `fundo`, filete de
+marca, cartão `sup`, ícone de olho novo — SVG flat inline, não o `favicon-olho.png` existente, que é
+uma ilustração 3D detalhada incompatível com o sistema de design desta rodada). Lógica de `login.ts`
+intocada.
+
+**Legenda do mapa** — não existia antes (`grep` sem resultado). Protótipo tem 5 categorias
+(`pintaLegenda()`, olho.html); usuário pediu incluir TODAS as que o app já usa — 7 no total, com as
+mesmas cores hex já usadas nos marcadores/segmentos (`CORES_PONTO`/`COR_SEGMENTO_*`, nenhuma cor
+nova). Nota: "pausa" e "impedimento" compartilham a mesma cor (`#F28C28`) — já era assim no código
+antes desta legenda existir, não é uma inconsistência introduzida agora.
+
+**Controles de tipo de mapa e Camadas** — o seletor de tipo de mapa (Ruas/Satélite/Satélite c/
+rótulos/Topográfico) usava o `L.control.layers` NATIVO do Leaflet (painel que só expandia no hover).
+Substituído por um controle customizado (`criarControleBase`/`montarDomControleBase`, mesmo padrão
+de `L.Control.extend` já usado pelo painel de Camadas) renderizando os 4 tipos como botões pill
+sempre visíveis (`.mapa-base-sel`, CSS global em `styles.css`, mesmo motivo dos outros controles do
+mapa: ficam fora da árvore Angular). O painel "Camadas" manteve a lógica interna 100% igual (7
+checkboxes, mesmos signals) — só o container/toggle visual mudou, de ícone-com-hover-expande pra
+botão "Camadas N" com contador que abre/fecha ao clicar (`.mapa-camadas-caixa`/`.mapa-camadas-bt`,
+mais previsível em touch também). `ICONE_CAMADAS_SVG` (ícone do controle antigo) removido, sem uso.
+
+**Alerta "afastado com atividade"** — revisado (`colaboradores.service.ts`), lógica correta:
+`afastadosComAtividade` cruza atividade real + afastamento cadastrado por nome, um `effect` abre o
+alerta sozinho só quando aparece um nome NOVO (não visto ainda). Usuário nunca viu disparar — não é
+necessariamente bug, só dispara quando as duas condições coincidem no mesmo dia, combinação que pode
+ser rara nos dados atuais. Nenhuma mudança de código nesta rodada.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos (só os avisos pré-existentes).
+Harness estático com o CSS real compilado cobrindo: cabeçalho achatado (ativo vs hover), barra de
+filtros completa com chips contados, legenda com as 7 categorias, controle de tipo de mapa (pill
+ativo/inativo) + botão de camadas com contador, marcador de início vs último, tela de login inteira
+— tudo visualmente coeso. `grep` confirmou zero referência solta a `L.control.layers`/
+`ICONE_CAMADAS_SVG` depois da remoção.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Duplicidade de "PAULO SERGIO DA SILVA" — aguardando o usuário rodar a query SQL entregue (fora do
+  fluxo de código) ou a reimportação de uma base atualizada.
+- Régua de tempo (playback do dia) e aba Risco — inalteradas.

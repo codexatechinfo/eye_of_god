@@ -25,6 +25,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   traçado SVG detalhado. Ver Adendo 2 da [ADR
   0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+- Restyle da aba Trilho, rodada 3 — feedback pós-deploy da rodada 2: barra de filtros da lista
+  (busca, data + atalho "ao vivo" pra voltar a hoje, regional, cargo) ganhou UI (a infraestrutura já
+  existia no service, nunca tinha sido conectada); chips de categoria agora mostram a contagem;
+  cabeçalho achatado (removido borda/brilho/gradiente de hover dos botões de aba, mantido só o
+  preenchimento navy sólido no ativo); tela de login reestilizada pro padrão de tokens; mapa ganhou
+  legenda de cores (7 categorias), marcador de início da trajetória do dia (só tinha marcador pro
+  último ponto) e os controles de tipo de mapa/camadas viraram botões sempre visíveis no lugar dos
+  painéis nativos do Leaflet que só expandiam no hover. Ver Adendo 3 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Adicionado
 
 - Camada "Rastro GPS" (mapa, aba Trilho) ganhou marcadores de primeiro e último ponto — contorno

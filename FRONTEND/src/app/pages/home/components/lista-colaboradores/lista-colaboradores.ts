@@ -6,6 +6,7 @@ import {
   CategoriaAtividade,
   ColaboradoresService,
   formatarTempoParado,
+  hojeIso,
   normalizarRegional,
   OPCOES_CATEGORIA,
   percentualExecucao,
@@ -38,6 +39,40 @@ export class ListaColaboradores {
 
   selecionar(nome: string): void {
     this.colaboradoresService.selecionarColaborador(nome);
+  }
+
+  // Barra de filtros (busca/data/regional/cargo) — infraestrutura já existia
+  // no service (filtroColaborador/filtroCargo/filtroRegional/filtroData,
+  // buscar()/buscarComDebounce()/onFiltroDataChange()) mas nunca tinha UI
+  // aqui, só os chips de categoria. Ver ADR 0038 Adendo 3.
+  aoBuscar(valor: string): void {
+    this.colaboradoresService.filtroColaborador.set(valor);
+    this.colaboradoresService.buscarComDebounce();
+  }
+
+  aoMudarRegional(valor: string): void {
+    this.colaboradoresService.filtroRegional.set(valor);
+    this.colaboradoresService.buscar();
+  }
+
+  aoMudarCargo(valor: string): void {
+    this.colaboradoresService.filtroCargo.set(valor);
+    this.colaboradoresService.buscar();
+  }
+
+  // "ao vivo" — adaptação do conceito do protótipo (lá é "reler a cada 60s
+  // sem reenquadrar o mapa"; aqui já pollamos sozinho a cada 60s enquanto
+  // filtroData() for hoje, ver INTERVALO_ATIVIDADE_MS): vira um atalho pra
+  // voltar pro dia atual (e reativar o polling, que fica pausado num dia
+  // passado).
+  hojeIso = hojeIso;
+
+  voltarParaHoje(): void {
+    this.colaboradoresService.onFiltroDataChange(hojeIso());
+  }
+
+  aoMudarData(valor: string): void {
+    this.colaboradoresService.onFiltroDataChange(valor || hojeIso());
   }
 
   // Cards "Último sincronismo" mostram há QUANTO TEMPO o colaborador não

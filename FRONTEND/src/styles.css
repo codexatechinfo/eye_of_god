@@ -67,21 +67,102 @@
   --shadow-xl: 0 2px 6px rgba(11, 46, 89, .10), 0 18px 48px rgba(11, 46, 89, .14);
 }
 
-/* Painel de camadas do mapa (Leaflet nativo, montado via L.DomUtil.create
-   em mapa-bases.ts — fica fora da árvore do componente Angular, então
-   ViewEncapsulation não alcança; precisa de CSS global mirando as
-   classes nativas do Leaflet). Usa as custom properties do @theme acima
-   (ficam disponíveis globalmente, não só dentro de classes utilitárias). */
-.leaflet-control-layers {
-  border-radius: var(--radius-lg) !important;
-  box-shadow: var(--shadow-sm) !important;
-  border: 1px solid var(--color-linha) !important;
+/* Controles do mapa (tipo de base + camadas), montados via L.DomUtil.create
+   em mapa-bases.ts — ficam fora da árvore do componente Angular, então
+   ViewEncapsulation não alcança; precisa de CSS global. Padrão .base-sel/
+   .cam-caixa do protótipo de referência (olho.html), usando as custom
+   properties do @theme acima (ficam disponíveis globalmente, não só dentro
+   de classes utilitárias). Rodada 3 do restyle da aba Trilho — substitui o
+   L.control.layers nativo (painel que só expandia no hover) por botões
+   pill sempre visíveis, ver ADR 0038. */
+.mapa-base-sel {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  padding: 3px;
+  background: var(--color-sup);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-sans);
 }
-.leaflet-control-layers-toggle {
-  background-color: var(--color-sup) !important;
+.mapa-base-sel button {
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-fraco);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, color .15s;
 }
-.leaflet-control-layers-expanded {
-  background: var(--color-sup) !important;
-  color: var(--color-txt) !important;
-  font-family: var(--font-sans) !important;
+.mapa-base-sel button:hover {
+  color: var(--color-azul);
+}
+.mapa-base-sel button.on {
+  background: var(--color-navy);
+  color: #fff;
+}
+
+.mapa-camadas-caixa {
+  position: relative;
+  font-family: var(--font-sans);
+}
+.mapa-camadas-bt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 29px;
+  padding: 0 10px;
+  border-radius: var(--radius-lg);
+  background: var(--color-sup);
+  box-shadow: var(--shadow-sm);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-fraco);
+  border: none;
+  cursor: pointer;
+}
+.mapa-camadas-bt b {
+  background: var(--color-azul);
+  color: #fff;
+  border-radius: 9999px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mapa-camadas-lista {
+  display: none;
+  flex-direction: column;
+  gap: 7px;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--color-sup);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: 10px;
+  min-width: 190px;
+  z-index: 1000;
+}
+.mapa-camadas-caixa.aberto .mapa-camadas-lista {
+  display: flex;
+}
+.mapa-camadas-lista label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--color-txt);
+  cursor: pointer;
+}
+.mapa-camadas-lista input {
+  accent-color: var(--color-azul);
+  cursor: pointer;
 }

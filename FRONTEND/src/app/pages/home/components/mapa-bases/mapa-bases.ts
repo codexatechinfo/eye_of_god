@@ -159,6 +159,22 @@ const ICONE_RASTRO_FIM = L.divIcon({
   iconAnchor: [7, 7],
 });
 
+// Primeiro ponto REALIZADO da trajetória do dia (camada "Trajetória do
+// dia"/"Pontos coletados") — usuário pediu pra saber onde o dia começou, já
+// que só o último ponto tinha marcador dedicado (iconeUltimoPonto, abaixo).
+// Mesmo padrão visual de ICONE_RASTRO_INICIO (contorno vazado, cor neutra
+// fixa — não dinâmica por corDaUc, é só posição) só que um pouco menor pra
+// não competir com os CircleMarker normais (raio 5) nem com a bandeirinha
+// colorida do último ponto.
+const ICONE_PRIMEIRO_PONTO = L.divIcon({
+  html: `
+    <div style="width:12px;height:12px;border-radius:9999px;background:#fff;border:2.5px solid #0B2E59;box-shadow:0 1px 2px rgba(0,0,0,.35);"></div>
+  `,
+  className: '',
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
+});
+
 // Último ponto de execução do colaborador aberto (1295315.svg, mesmo padrão
 // de fidelidade exata dos Adendos 7/9 de ADR 0030) — passo inicial pra os
 // ícones de colaborador no mapa passarem a representar a localização REAL
@@ -199,16 +215,6 @@ l-11 34 -198 -23 c-419 -48 -897 -87 -1427 -115 -302 -16 -1345 -16 -1635 0
   }
   return icone;
 }
-
-// Ícone do controle "Camadas" — checklist (linhas com quadrado marcável),
-// deliberadamente diferente da pilha de quadrados do controle nativo de
-// tipos de mapa (mesma classe CSS leaflet-control-layers-toggle, ícone
-// diferente) pra dar pra distinguir os dois de relance.
-const ICONE_CAMADAS_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B7684" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-  '<rect x="3" y="4" width="5" height="5" rx="1"/><path d="M12 6.5h9"/>' +
-  '<rect x="3" y="15" width="5" height="5" rx="1"/><path d="M12 17.5h9"/>' +
-  '</svg>';
 
 // Mesma paleta das 4 cores da timeline do painel (colaborador-detalhe.html:
 // bg-ok/bg-tenue(antigo slate-300)/bg-alerta/bg-critico), exceto "cinza" —
@@ -308,6 +314,22 @@ function cascoConvexo(pontos: L.LatLngTuple[]): L.LatLngTuple[] {
 export class MapaBases implements AfterViewInit, OnDestroy {
   @ViewChild('mapaEl') mapaEl!: ElementRef<HTMLDivElement>;
 
+  // Legenda de cores do mapa (mapa-bases.html) — cores literais porque são
+  // as MESMAS constantes hex de CORES_PONTO/COR_SEGMENTO_* acima, não temos
+  // token de marca pra "a realizar"/"trocou livro" fora dali. Pausa e
+  // impedimento compartilham a mesma cor de propósito (já era assim no
+  // código antes desta legenda existir, não é bug novo — ver
+  // COR_SEGMENTO_PAUSA).
+  readonly legenda: { cor: string; rotulo: string; descricao: string }[] = [
+    { cor: CORES_PONTO.verde, rotulo: 'normal', descricao: 'UC lida sem impedimento' },
+    { cor: CORES_PONTO.laranja, rotulo: 'impedimento', descricao: 'obstrução real de campo registrada na leitura' },
+    { cor: CORES_PONTO.vermelho, rotulo: 'reincidente', descricao: 'a mesma UC com o mesmo código de impedimento por mais de um ciclo' },
+    { cor: CORES_PONTO.cinza, rotulo: 'a realizar', descricao: 'UC ainda não visitada' },
+    { cor: COR_SEGMENTO_PAUSA, rotulo: 'pausa', descricao: 'intervalo até este ponto passou do limite normal — mesma cor de impedimento' },
+    { cor: COR_SEGMENTO_MUDOU_LIVRO, rotulo: 'trocou livro', descricao: 'trecho em que o colaborador passou de um livro para outro' },
+    { cor: COR_SEGMENTO_MUDOU_MUNICIPIO, rotulo: 'trocou município', descricao: 'trecho em que o colaborador passou de um município para outro' },
+  ];
+
   private mapa?: L.Map;
   private resizeObserver?: ResizeObserver;
 
@@ -330,7 +352,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // lógica de segmentosRota, mas moram em grupoParadasGaps em vez de
   // grupoSequencia (ver ehSegmentoEspecial).
   private segmentosParadasGaps: L.Polyline[] = [];
-  private pontosJornada = new Map<string, { marcador: L.CircleMarker | L.Marker; tipo: 'normal' | 'pausa' | 'ultimo' }>();
+  private pontosJornada = new Map<string, { marcador: L.CircleMarker | L.Marker; tipo: 'normal' | 'pausa' | 'ultimo' | 'primeiro' }>();
   private colaboradorComBoundsAplicado: string | null = null;
   // Um polígono por LIVRO (não mais um casco convexo do dia inteiro) — se o
   // colaborador tem mais de um livro em execução hoje, cada um ganha o seu
@@ -654,9 +676,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // Controle Leaflet custom (não um painel Angular sobreposto) — só assim
   // ele empilha naturalmente no mesmo canto/ordem do controle de tipos de
   // mapa. DOM montado à mão com L.DomUtil (mesmo padrão que o próprio
-  // Leaflet usa internamente pro L.Control.Layers nativo), reaproveitando as
-  // classes leaflet-control-layers* do leaflet.css já carregado — não
-  // reimplementa o visual, herda ícone/sombra/hover-pra-expandir de graça.
+  // Leaflet usa internamente). Rodada 3 do restyle: botão "Camadas N" com
+  // contador (padrão .cam-caixa/.bt.p do protótipo, ver styles.css) que
+  // ABRE/FECHA a lista ao clicar (classe "aberto"), não mais hover-pra-
+  // expandir do controle nativo — mais previsível em telas touch também.
   // Os checkboxes só escrevem nos signals camadaX; quem liga/desliga o
   // grupo de verdade são os effects do construtor (funciona igual não
   // importa se o signal mudou por aqui ou por outro lugar no futuro).
@@ -668,33 +691,35 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   }
 
   private montarDomControleCamadas(): HTMLElement {
-    const container = L.DomUtil.create('div', 'leaflet-control-layers');
-    L.DomEvent.disableClickPropagation(container);
-    L.DomEvent.disableScrollPropagation(container);
-    container.addEventListener('mouseenter', () => container.classList.add('leaflet-control-layers-expanded'));
-    container.addEventListener('mouseleave', () => container.classList.remove('leaflet-control-layers-expanded'));
+    const caixa = L.DomUtil.create('div', 'mapa-camadas-caixa');
+    L.DomEvent.disableClickPropagation(caixa);
+    L.DomEvent.disableScrollPropagation(caixa);
 
-    const toggle = L.DomUtil.create('a', 'leaflet-control-layers-toggle', container) as HTMLAnchorElement;
-    toggle.href = '#';
-    toggle.title = 'Camadas';
-    toggle.setAttribute('role', 'button');
-    toggle.addEventListener('click', e => e.preventDefault());
-    // Ícone próprio (checklist), não o de pilha de camadas que o controle de
-    // tipos de mapa já usa — inline style vence a regra do leaflet.css
-    // (leaflet-control-layers-toggle) sem precisar de !important nem de um
-    // arquivo de imagem novo no build.
-    toggle.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(ICONE_CAMADAS_SVG)}")`;
-    toggle.style.backgroundSize = '18px 18px';
+    const bt = L.DomUtil.create('button', 'mapa-camadas-bt', caixa) as HTMLButtonElement;
+    bt.type = 'button';
+    bt.title = 'O que o mapa desenha';
+    bt.appendChild(document.createTextNode('Camadas '));
+    const contador = document.createElement('b');
+    bt.appendChild(contador);
+    bt.addEventListener('click', () => caixa.classList.toggle('aberto'));
 
-    const lista = L.DomUtil.create('div', 'leaflet-control-layers-list', container);
-    const overlays = L.DomUtil.create('div', 'leaflet-control-layers-overlays', lista);
+    const lista = L.DomUtil.create('div', 'mapa-camadas-lista', caixa);
+
+    const sinais: { (): boolean }[] = [];
+    const atualizarContador = () => {
+      contador.textContent = String(sinais.filter(sinal => sinal()).length);
+    };
 
     const itemAtivo = (texto: string, sinal: { (): boolean; set: (v: boolean) => void }) => {
-      const label = L.DomUtil.create('label', '', overlays) as HTMLLabelElement;
-      const input = L.DomUtil.create('input', 'leaflet-control-layers-selector', label) as HTMLInputElement;
+      sinais.push(sinal);
+      const label = L.DomUtil.create('label', '', lista) as HTMLLabelElement;
+      const input = L.DomUtil.create('input', '', label) as HTMLInputElement;
       input.type = 'checkbox';
       input.checked = sinal();
-      input.addEventListener('change', () => sinal.set(input.checked));
+      input.addEventListener('change', () => {
+        sinal.set(input.checked);
+        atualizarContador();
+      });
       label.appendChild(document.createTextNode(' ' + texto));
     };
 
@@ -705,8 +730,49 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     itemAtivo('Limites municipais', this.camadaLimitesMunicipais);
     itemAtivo('Demais agentes', this.camadaAgentes);
     itemAtivo('Trajetória do dia', this.camadaSequencia);
+    atualizarContador();
 
-    return container;
+    return caixa;
+  }
+
+  // Controle de tipo de mapa (Ruas/Satélite/Satélite c/ rótulos/
+  // Topográfico) — antes era o L.control.layers NATIVO do Leaflet (painel
+  // que só aparecia expandido no hover); troca pra botões pill sempre
+  // visíveis (.mapa-base-sel, padrão .base-sel do protótipo), mesma ideia
+  // do controle de Camadas acima. Mesmo canto (topleft) e ordem (antes de
+  // Camadas) do controle nativo que substitui.
+  private criarControleBase(mapa: L.Map, tiles: Record<string, L.Layer>): void {
+    const Controle = L.Control.extend({
+      onAdd: () => this.montarDomControleBase(mapa, tiles),
+    });
+    new Controle({ position: 'topleft' }).addTo(mapa);
+  }
+
+  private montarDomControleBase(mapa: L.Map, tiles: Record<string, L.Layer>): HTMLElement {
+    const caixa = L.DomUtil.create('div', 'mapa-base-sel');
+    L.DomEvent.disableClickPropagation(caixa);
+    L.DomEvent.disableScrollPropagation(caixa);
+
+    const nomes = Object.keys(tiles);
+    let ativo = nomes[0]; // "Ruas" — já é a camada adicionada ao mapa por padrão.
+    const botoes = new Map<string, HTMLButtonElement>();
+
+    for (const nome of nomes) {
+      const bt = L.DomUtil.create('button', nome === ativo ? 'on' : '', caixa) as HTMLButtonElement;
+      bt.type = 'button';
+      bt.textContent = nome;
+      bt.addEventListener('click', () => {
+        if (nome === ativo) return;
+        mapa.removeLayer(tiles[ativo]);
+        mapa.addLayer(tiles[nome]);
+        botoes.get(ativo)?.classList.remove('on');
+        bt.classList.add('on');
+        ativo = nome;
+      });
+      botoes.set(nome, bt);
+    }
+
+    return caixa;
   }
 
   ngAfterViewInit(): void {
@@ -759,18 +825,12 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     // topleft: o painel de detalhe do colaborador (app-colaborador-detalhe)
     // cobre o lado direito da tela quando aberto — no canto padrão
     // (topright) o controle ficaria escondido atrás dele.
-    L.control
-      .layers(
-        {
-          Ruas: ruas,
-          Satélite: satelite,
-          'Satélite c/ rótulos': sateliteComRotulos,
-          Topográfico: topografico,
-        },
-        {},
-        { position: 'topleft' },
-      )
-      .addTo(this.mapa);
+    this.criarControleBase(this.mapa, {
+      Ruas: ruas,
+      Satélite: satelite,
+      'Satélite c/ rótulos': sateliteComRotulos,
+      Topográfico: topografico,
+    });
 
     // Painel "Camadas" logo abaixo do controle de tipos de mapa (mesmo
     // canto topleft — Leaflet empilha controles do mesmo canto na ordem em
@@ -966,7 +1026,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // "Pausa" mora em grupoParadasGaps (some junto com os segmentos especiais
   // quando o checkbox é desmarcado); "normal"/"ultimo" continuam em
   // grupoPontos.
-  private grupoDoTipoPonto(tipo: 'normal' | 'pausa' | 'ultimo'): L.LayerGroup {
+  private grupoDoTipoPonto(tipo: 'normal' | 'pausa' | 'ultimo' | 'primeiro'): L.LayerGroup {
     return tipo === 'pausa' ? this.grupoParadasGaps : this.grupoPontos;
   }
 
@@ -1085,16 +1145,31 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     // ele está" — sem código = pendente (ver corDaUc), busca de trás pra
     // frente até achar o último com código.
     const ucUltimoPonto = [...validos].reverse().find(item => item.codigo)?.uc ?? null;
+    // Primeiro ponto REALIZADO cronologicamente (busca pra frente, oposto do
+    // ucUltimoPonto acima) — usuário pediu pra saber onde o dia começou, não
+    // só onde está agora. Se só tem 1 ponto no dia, ucPrimeiroPonto ===
+    // ucUltimoPonto; a checagem do tipo abaixo dá prioridade pro ícone de
+    // ÚLTIMO (mais informativo, cor semântica) pra não desenhar os dois
+    // sobrepostos no mesmo lugar.
+    const ucPrimeiroPonto = validos.find(item => item.codigo)?.uc ?? null;
 
     for (const item of validos) {
       vistos.add(item.uc);
       const latLng: L.LatLngTuple = [Number(item.latitude), Number(item.longitude)];
       const existente = this.pontosJornada.get(item.uc);
       const cor = CORES_PONTO[corDaUc(item, regimeSucessivoPorUc)];
-      // Último ponto tem prioridade sobre "pausa" — o usuário quer sempre
-      // ver onde o colaborador está agora, mesmo que o intervalo até ali
-      // tenha passado do limite.
-      const tipo: 'normal' | 'pausa' | 'ultimo' = item.uc === ucUltimoPonto ? 'ultimo' : item.tipo_intervalo === 'pausa' ? 'pausa' : 'normal';
+      // Último ponto tem prioridade sobre "pausa"/"primeiro" — o usuário
+      // quer sempre ver onde o colaborador está agora, mesmo que o
+      // intervalo até ali tenha passado do limite ou seja também o começo
+      // do dia.
+      const tipo: 'normal' | 'pausa' | 'ultimo' | 'primeiro' =
+        item.uc === ucUltimoPonto
+          ? 'ultimo'
+          : item.uc === ucPrimeiroPonto
+            ? 'primeiro'
+            : item.tipo_intervalo === 'pausa'
+              ? 'pausa'
+              : 'normal';
 
       if (existente) {
         existente.marcador.setLatLng(latLng);
@@ -1104,7 +1179,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
           } else if (tipo === 'ultimo' && existente.marcador instanceof L.Marker) {
             existente.marcador.setIcon(iconeUltimoPonto(cor));
           }
-          existente.marcador.setTooltipContent(tooltipDoPonto(item));
+          existente.marcador.setTooltipContent((tipo === 'primeiro' ? 'Primeiro ponto do dia — ' : '') + tooltipDoPonto(item));
         } else {
           // Trocou de tipo (virou pausa, deixou de ser o último ponto, etc.)
           // — CircleMarker e Marker não convertem um no outro, recria.
@@ -1119,7 +1194,9 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         const marcador: L.CircleMarker | L.Marker =
           tipo === 'ultimo'
             ? L.marker(latLng, { icon: iconeUltimoPonto(cor) })
-            : tipo === 'pausa'
+            : tipo === 'primeiro'
+              ? L.marker(latLng, { icon: ICONE_PRIMEIRO_PONTO })
+              : tipo === 'pausa'
               ? L.marker(latLng, { icon: ICONE_PAUSA })
               : L.circleMarker(latLng, {
                   radius: 5,
@@ -1130,7 +1207,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
                 });
         marcador
           .addTo(this.grupoDoTipoPonto(tipo))
-          .bindTooltip(tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
+          .bindTooltip((tipo === 'primeiro' ? 'Primeiro ponto do dia — ' : '') + tooltipDoPonto(item), { direction: 'top', offset: [0, -6] });
         // Clicar no ponto foca E expande a UC na timeline do painel (item 3
         // do pedido) — os dois juntos, sem precisar de um segundo clique na
         // lista. O marcador é reaproveitado entre refreshes (nunca recriado

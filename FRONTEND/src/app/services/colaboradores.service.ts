@@ -615,6 +615,21 @@ export class ColaboradoresService {
     return lista;
   });
 
+  // Contagem por categoria pros chips da barra de filtros (protótipo mostra
+  // "Ativo 12", "Parado 14" etc. ao lado de cada chip) — reaproveita
+  // pertenceCategoria(), mesma regra que já filtra colaboradoresOrdenados.
+  contagensPorCategoria = computed(() => {
+    const atividade = this.atividadeHoje();
+    const afastamentos = this.afastamentosHoje();
+    const contagem = {} as Record<CategoriaAtividade, number>;
+    for (const opcao of OPCOES_CATEGORIA) {
+      contagem[opcao.valor] = this.colaboradores().filter(c =>
+        pertenceCategoria(atividade[c.colaborador], afastamentos[c.colaborador], opcao.valor),
+      ).length;
+    }
+    return contagem;
+  });
+
   // Etapas com pelo menos um livro em atividade no dia consultado — alimenta
   // o select "Etapa" da barra de filtros. Numérica (não alfabética: "9" tem
   // que vir antes de "18", string sort colocaria "18" primeiro).

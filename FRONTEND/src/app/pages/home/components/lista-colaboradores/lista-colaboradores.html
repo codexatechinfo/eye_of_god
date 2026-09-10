@@ -5,6 +5,69 @@
   </span>
 </div>
 
+<!-- Barra de filtros — busca + data/"ao vivo" + regional/cargo, tradução
+     literal de .f-agentes-topo do protótipo. Infraestrutura (filtroColaborador
+     etc.) já existia no service, só faltava esta UI. -->
+<div class="flex flex-col gap-1.5 px-1 py-1.5 border-b border-linha">
+  <div class="flex items-center gap-1.5 h-[29px] px-2 rounded-md border border-linha bg-sup-2 focus-within:border-azul focus-within:bg-sup transition-colors">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-tenue shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+    <input
+      type="text"
+      placeholder="colaborador, cargo ou regional"
+      autocomplete="off"
+      class="flex-1 min-w-0 text-xs bg-transparent placeholder:text-tenue"
+      [value]="colaboradoresService.filtroColaborador()"
+      (input)="aoBuscar($any($event.target).value)"
+    />
+  </div>
+
+  <div class="flex items-center gap-1.5">
+    <input
+      type="date"
+      title="dia da operação"
+      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt focus:border-azul focus:bg-sup transition-colors"
+      [value]="colaboradoresService.filtroData()"
+      (change)="aoMudarData($any($event.target).value)"
+    />
+    <button
+      type="button"
+      (click)="voltarParaHoje()"
+      title="voltar pro dia atual (mantém atualizando sozinho a cada minuto)"
+      class="shrink-0 h-[29px] px-2.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
+      [ngClass]="
+        colaboradoresService.filtroData() === hojeIso()
+          ? 'bg-azul text-white'
+          : 'bg-sup-2 border border-linha text-fraco hover:text-azul hover:border-azul/50'
+      "
+    >
+      ao vivo
+    </button>
+  </div>
+
+  <div class="flex items-center gap-1.5">
+    <select
+      title="regional"
+      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt focus:border-azul transition-colors"
+      [value]="colaboradoresService.filtroRegional()"
+      (change)="aoMudarRegional($any($event.target).value)"
+    >
+      <option value="">todas as regionais</option>
+      <option *ngFor="let regional of colaboradoresService.regionais()" [value]="regional">{{ regional }}</option>
+    </select>
+    <select
+      title="cargo"
+      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt focus:border-azul transition-colors"
+      [value]="colaboradoresService.filtroCargo()"
+      (change)="aoMudarCargo($any($event.target).value)"
+    >
+      <option value="">todos os cargos</option>
+      <option *ngFor="let cargo of colaboradoresService.cargos()" [value]="cargo">{{ rotuloCargo(cargo) }}</option>
+    </select>
+  </div>
+</div>
+
 <div class="flex flex-wrap gap-1 px-1 py-1.5 border-b border-linha">
   <button
     type="button"
@@ -17,7 +80,7 @@
         : 'bg-sup text-fraco border-linha hover:border-azul/50 hover:text-azul'
     "
   >
-    {{ opcao.rotulo }}
+    {{ opcao.rotulo }} {{ colaboradoresService.contagensPorCategoria()[opcao.valor] }}
   </button>
 </div>
 

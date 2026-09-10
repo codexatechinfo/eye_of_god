@@ -1,5 +1,13 @@
-<div class="h-screen flex flex-col bg-slate-50 overflow-hidden">
-  <header class="shrink-0 bg-white border-b border-slate-200 shadow-sm">
+<div class="h-screen flex flex-col bg-fundo overflow-hidden">
+  <!-- Filete de marca — assinatura visual do padrão A2L, 22% laranja / 78%
+       navy. Fica em fluxo normal (shrink-0), não position:fixed: o resto
+       do arquivo já usa shrink-0/flex-1 min-h-0 consistentemente, então o
+       flexbox absorve os 3px sozinho sem calc() manual em lugar nenhum. -->
+  <div class="shrink-0 h-[3px] w-full flex" aria-hidden="true">
+    <div class="basis-[22%] bg-laranja"></div>
+    <div class="basis-[78%] bg-navy"></div>
+  </div>
+  <header class="shrink-0 bg-sup border-b border-linha shadow-sm">
     <div class="max-w-[1920px] mx-auto px-6 py-1 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-4">
         <div>
@@ -18,19 +26,19 @@
         <button
           type="button"
           (click)="selecionarAba('monitoramento')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(59,130,246,0.25)]"
+          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
           [ngClass]="
             abaAtiva() === 'monitoramento'
-              ? 'text-slate-900 border-blue-200 hover:border-blue-400'
-              : 'text-slate-500 border-transparent hover:text-slate-900 hover:border-blue-300'
+              ? 'text-tit border-azul/30 hover:border-azul'
+              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
           "
         >
           <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-400/0 via-blue-400/15 to-blue-400/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
           ></span>
           <span
             class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'monitoramento' ? 'bg-blue-50 group-hover:bg-blue-50' : 'group-hover:bg-slate-900/[0.04]'"
+            [ngClass]="abaAtiva() === 'monitoramento' ? 'bg-azul/10 group-hover:bg-azul/10' : 'group-hover:bg-tit/[0.04]'"
           ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -55,19 +63,19 @@
         <button
           type="button"
           (click)="selecionarAba('colaborador')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(59,130,246,0.25)]"
+          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
           [ngClass]="
             abaAtiva() === 'colaborador'
-              ? 'text-slate-900 border-blue-200 hover:border-blue-400'
-              : 'text-slate-500 border-transparent hover:text-slate-900 hover:border-blue-300'
+              ? 'text-tit border-azul/30 hover:border-azul'
+              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
           "
         >
           <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-400/0 via-blue-400/15 to-blue-400/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
           ></span>
           <span
             class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'colaborador' ? 'bg-blue-50 group-hover:bg-blue-50' : 'group-hover:bg-slate-900/[0.04]'"
+            [ngClass]="abaAtiva() === 'colaborador' ? 'bg-azul/10 group-hover:bg-azul/10' : 'group-hover:bg-tit/[0.04]'"
           ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -88,19 +96,19 @@
         <button
           type="button"
           (click)="selecionarAba('livros')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(59,130,246,0.25)]"
+          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
           [ngClass]="
             abaAtiva() === 'livros'
-              ? 'text-slate-900 border-blue-200 hover:border-blue-400'
-              : 'text-slate-500 border-transparent hover:text-slate-900 hover:border-blue-300'
+              ? 'text-tit border-azul/30 hover:border-azul'
+              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
           "
         >
           <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-400/0 via-blue-400/15 to-blue-400/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
           ></span>
           <span
             class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'livros' ? 'bg-blue-50 group-hover:bg-blue-50' : 'group-hover:bg-slate-900/[0.04]'"
+            [ngClass]="abaAtiva() === 'livros' ? 'bg-azul/10 group-hover:bg-azul/10' : 'group-hover:bg-tit/[0.04]'"
           ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -122,19 +130,19 @@
         <button
           type="button"
           (click)="selecionarAba('massivas')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(59,130,246,0.25)]"
+          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
           [ngClass]="
             abaAtiva() === 'massivas'
-              ? 'text-slate-900 border-blue-200 hover:border-blue-400'
-              : 'text-slate-500 border-transparent hover:text-slate-900 hover:border-blue-300'
+              ? 'text-tit border-azul/30 hover:border-azul'
+              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
           "
         >
           <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-400/0 via-blue-400/15 to-blue-400/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
           ></span>
           <span
             class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'massivas' ? 'bg-blue-50 group-hover:bg-blue-50' : 'group-hover:bg-slate-900/[0.04]'"
+            [ngClass]="abaAtiva() === 'massivas' ? 'bg-azul/10 group-hover:bg-azul/10' : 'group-hover:bg-tit/[0.04]'"
           ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -157,19 +165,19 @@
           *ngIf="podeImportar()"
           type="button"
           (click)="selecionarAba('importacao')"
-          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(59,130,246,0.25)]"
+          class="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_0_18px_-2px_rgba(0,109,255,0.25)]"
           [ngClass]="
             abaAtiva() === 'importacao'
-              ? 'text-slate-900 border-blue-200 hover:border-blue-400'
-              : 'text-slate-500 border-transparent hover:text-slate-900 hover:border-blue-300'
+              ? 'text-tit border-azul/30 hover:border-azul'
+              : 'text-fraco border-transparent hover:text-tit hover:border-azul/40'
           "
         >
           <span
-            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-400/0 via-blue-400/15 to-blue-400/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            class="pointer-events-none absolute inset-0 bg-gradient-to-r from-azul/0 via-azul/15 to-azul/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
           ></span>
           <span
             class="pointer-events-none absolute inset-0 transition-colors duration-300"
-            [ngClass]="abaAtiva() === 'importacao' ? 'bg-blue-50 group-hover:bg-blue-50' : 'group-hover:bg-slate-900/[0.04]'"
+            [ngClass]="abaAtiva() === 'importacao' ? 'bg-azul/10 group-hover:bg-azul/10' : 'group-hover:bg-tit/[0.04]'"
           ></span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -193,9 +201,9 @@
         <div
           class="flex items-center gap-2 rounded-full border px-2.5 py-0.5 transition-colors"
           [ngClass]="{
-            'bg-emerald-500/10 border-emerald-500/30': statusColeta() === 'coletando',
-            'bg-red-500/10 border-red-500/30': statusColeta() === 'parada' || statusColeta() === 'offline',
-            'bg-amber-400/10 border-amber-400/30': statusColeta() === null
+            'bg-ok/10 border-ok/30': statusColeta() === 'coletando',
+            'bg-critico/10 border-critico/30': statusColeta() === 'parada' || statusColeta() === 'offline',
+            'bg-alerta/10 border-alerta/30': statusColeta() === null
           }"
           [title]="
             statusColeta() === 'coletando' ? 'O job de coleta está ativo e importando dados agora' :
@@ -206,23 +214,23 @@
           <span class="relative flex h-2.5 w-2.5">
             <span
               *ngIf="statusColeta() === 'coletando'"
-              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-ok opacity-75"
             ></span>
             <span
               class="relative inline-flex rounded-full h-2.5 w-2.5"
               [ngClass]="{
-                'bg-emerald-500': statusColeta() === 'coletando',
-                'bg-red-500': statusColeta() === 'parada' || statusColeta() === 'offline',
-                'bg-amber-400': statusColeta() === null
+                'bg-ok': statusColeta() === 'coletando',
+                'bg-critico': statusColeta() === 'parada' || statusColeta() === 'offline',
+                'bg-alerta': statusColeta() === null
               }"
             ></span>
           </span>
           <span
             class="text-xs font-semibold"
             [ngClass]="{
-              'text-emerald-600': statusColeta() === 'coletando',
-              'text-red-600': statusColeta() === 'parada' || statusColeta() === 'offline',
-              'text-amber-600': statusColeta() === null
+              'text-ok': statusColeta() === 'coletando',
+              'text-critico': statusColeta() === 'parada' || statusColeta() === 'offline',
+              'text-alerta': statusColeta() === null
             }"
           >
             {{
@@ -234,15 +242,15 @@
         </div>
 
         <div class="hidden sm:flex flex-col items-end leading-tight">
-          <span class="text-[11px] text-slate-400">Última importação</span>
-          <span class="text-xs text-slate-600 font-medium">
+          <span class="text-[11px] text-tenue">Última importação</span>
+          <span class="text-xs text-txt font-mono font-medium">
             {{ ultimoImport() ? (ultimoImport()!.dataImport + ' ' + ultimoImport()!.horaImport) : '—' }}
           </span>
         </div>
 
         <button
           (click)="logout()"
-          class="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-white bg-slate-100 hover:bg-red-600 border border-slate-200 hover:border-red-500 rounded-lg px-2.5 py-1 transition-colors cursor-pointer"
+          class="flex items-center gap-1.5 text-xs font-medium text-fraco hover:text-white bg-sup-3 hover:bg-critico hover:opacity-90 border border-linha hover:border-critico rounded-lg px-2.5 py-1 transition-colors cursor-pointer"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -256,7 +264,7 @@
   </header>
 
   <div class="flex-1 min-h-0 flex items-stretch" *ngIf="abaAtiva() === 'monitoramento'">
-    <aside class="hidden lg:flex flex-col w-80 shrink-0 border-r border-slate-200 bg-slate-50 py-4 px-4">
+    <aside class="hidden lg:flex flex-col w-80 shrink-0 border-r border-linha bg-fundo py-4 px-4">
       <app-lista-colaboradores class="flex-1 min-h-0 flex flex-col"></app-lista-colaboradores>
     </aside>
 
@@ -303,19 +311,19 @@
     (click)="colaboradoresService.fecharAlertaAfastado()"
   >
     <div
-      class="w-full max-w-lg max-h-[80vh] flex flex-col rounded-xl bg-white shadow-xl overflow-hidden border-2 border-amber-400"
+      class="w-full max-w-lg max-h-[80vh] flex flex-col rounded-xl bg-sup shadow-xl overflow-hidden border-2 border-alerta"
       (click)="$event.stopPropagation()"
     >
-      <div class="px-5 py-3.5 border-b border-amber-100 bg-amber-50 flex items-center justify-between">
+      <div class="px-5 py-3.5 border-b border-alerta/20 bg-alerta/10 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-alerta shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 9v4" />
             <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z" />
             <path d="M12 17h.01" />
           </svg>
           <div>
-            <h3 class="text-sm font-bold text-amber-900">Afastado com atividade em campo</h3>
-            <p class="text-[11px] text-amber-700">
+            <h3 class="text-sm font-bold text-tit">Afastado com atividade em campo</h3>
+            <p class="text-[11px] text-txt">
               {{ colaboradoresService.afastadosComAtividade().length }} colaborador(es) com afastamento cadastrado, mas com livro atribuído ou em execução hoje
             </p>
           </div>
@@ -323,7 +331,7 @@
         <button
           type="button"
           (click)="colaboradoresService.fecharAlertaAfastado()"
-          class="w-7 h-7 rounded-full flex items-center justify-center text-amber-500 hover:text-amber-800 hover:bg-amber-100 transition-colors cursor-pointer shrink-0"
+          class="w-7 h-7 rounded-full flex items-center justify-center text-alerta hover:text-laranja-t hover:bg-alerta/15 transition-colors cursor-pointer shrink-0"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -333,13 +341,13 @@
       </div>
 
       <div class="overflow-y-auto px-5 py-2">
-        <div class="divide-y divide-slate-100">
+        <div class="divide-y divide-linha">
           <div class="py-3" *ngFor="let c of colaboradoresService.afastadosComAtividade()">
-            <div class="text-xs font-semibold text-slate-700">{{ c.colaborador }}</div>
-            <div class="text-[11px] text-slate-400 mt-0.5">
+            <div class="text-xs font-semibold text-txt">{{ c.colaborador }}</div>
+            <div class="text-[11px] text-tenue mt-0.5">
               {{ colaboradoresService.afastamentoDe(c.colaborador)?.motivoAfastamento || 'Ausência justificada' }}
             </div>
-            <div class="text-[11px] text-amber-600 mt-0.5" *ngFor="let livro of colaboradoresService.atividadeDe(c.colaborador)?.livros">
+            <div class="text-[11px] text-laranja-t mt-0.5" *ngFor="let livro of colaboradoresService.atividadeDe(c.colaborador)?.livros">
               Livro {{ livro.livro }} - {{ livro.situacaoAtual }}
             </div>
           </div>

@@ -85,7 +85,7 @@ function iconeColaborador(svgInterno: string, viewBox: string, largura: number, 
 // 39131.svg — viewBox e transform (translate/scale) idênticos ao arquivo
 // original, só o fill do <g> trocado de #000000 pra azul.
 const ICONE_MOTO = iconeColaborador(
-  `<g transform="translate(0,1034) scale(0.1,-0.1)" fill="#2563eb" stroke="none">
+  `<g transform="translate(0,1034) scale(0.1,-0.1)" fill="#006DFF" stroke="none">
 <path d="M6120 10315 c-502 -106 -822 -361 -943 -750 -26 -85 -52 -213 -45
 -220 2 -3 188 26 412 63 224 37 409 66 412 63 8 -8 4 -571 -4 -571 -12 0 -740
 -98 -779 -105 l-33 -6 0 -359 c0 -281 3 -360 13 -360 6 0 111 14 232 30 121
@@ -166,7 +166,7 @@ const ICONE_PEDESTRE = iconeColaborador(
 // lateral, substituindo o CircleMarker colorido normal só nesse caso.
 const ICONE_PAUSA = L.divIcon({
   html: `
-    <div style="width:14px;height:14px;border-radius:9999px;background:#f59e0b;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.35);border:1px solid #fff;">
+    <div style="width:14px;height:14px;border-radius:9999px;background:#F28C28;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.35);border:1px solid #fff;">
       <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
     </div>
   `,
@@ -246,24 +246,26 @@ l-11 34 -198 -23 c-419 -48 -897 -87 -1427 -115 -302 -16 -1345 -16 -1635 0
 // tipos de mapa (mesma classe CSS leaflet-control-layers-toggle, ícone
 // diferente) pra dar pra distinguir os dois de relance.
 const ICONE_CAMADAS_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B7684" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
   '<rect x="3" y="4" width="5" height="5" rx="1"/><path d="M12 6.5h9"/>' +
   '<rect x="3" y="15" width="5" height="5" rx="1"/><path d="M12 17.5h9"/>' +
   '</svg>';
 
 // Mesma paleta das 4 cores da timeline do painel (colaborador-detalhe.html:
-// bg-emerald-400/bg-slate-300/bg-amber-500/bg-red-500), exceto "cinza" —
-// slate-300 (#cbd5e1) é claro demais sobre tile de mapa (rua ou satélite) e
+// bg-ok/bg-tenue(antigo slate-300)/bg-alerta/bg-critico), exceto "cinza" —
+// o cinza claro original era demais sobre tile de mapa (rua ou satélite) e
 // o ponto praticamente some visualmente; usuário confirmou o sintoma com
-// print. Trocado por um azul (#3b82f6) que continua reservado (não conflita
-// com as cores dos segmentos da rota, nem com os ícones de colaborador). A
-// cor da lista lateral (colaborador-detalhe.html) não muda — lá o fundo é
-// branco, slate-300 tem contraste suficiente.
+// print. Trocado por um azul que continua reservado (não conflita com as
+// cores dos segmentos da rota, nem com os ícones de colaborador). A cor da
+// lista lateral (colaborador-detalhe.html) não muda — lá o fundo é branco,
+// o cinza claro original tem contraste suficiente. Valores hex vêm dos
+// tokens de marca (--color-ok/--color-azul/--color-alerta/--color-critico,
+// ver styles.css) — restyle pro novo sistema de design, ver ADR.
 const CORES_PONTO: Record<'verde' | 'cinza' | 'laranja' | 'vermelho', string> = {
-  verde: '#34d399',
-  cinza: '#3b82f6',
-  laranja: '#f59e0b',
-  vermelho: '#ef4444',
+  verde: '#1F9D62',
+  cinza: '#006DFF',
+  laranja: '#F28C28',
+  vermelho: '#D64545',
 };
 
 // Cor de cada trecho entre dois pontos cronologicamente consecutivos da
@@ -272,9 +274,9 @@ const CORES_PONTO: Record<'verde' | 'cinza' | 'laranja' | 'vermelho', string> = 
 // lateral, ver ColaboradorDetalhe). Cores dedicadas (fúcsia/teal) pra não
 // repetir nada já usado nos pontos (verde/azul/laranja/vermelho) nem no
 // polígono "Setor planejado" (violeta) — ver ADR.
-const COR_SEGMENTO_PAUSA = '#f59e0b';
-const COR_SEGMENTO_MUDOU_LIVRO = '#c026d4';
-const COR_SEGMENTO_MUDOU_MUNICIPIO = '#0d9488';
+const COR_SEGMENTO_PAUSA = '#F28C28';
+const COR_SEGMENTO_MUDOU_LIVRO = '#6D4AC7';
+const COR_SEGMENTO_MUDOU_MUNICIPIO = '#0D9488'; /* mesmo hex do token --color-teal */
 const COR_SEGMENTO_NORMAL = '#94a3b8';
 
 function corDoSegmento(item: PontoJornada): string {
@@ -857,7 +859,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
 
     const anel = L.circleMarker([lat, lng], {
       radius: 12,
-      color: '#2563eb',
+      color: '#006DFF',
       weight: 3,
       fill: false,
       opacity: 1,
@@ -1091,7 +1093,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       if (existente) {
         existente.setLatLngs(hull);
       } else {
-        const poligono = L.polygon(hull, { color: '#8b5cf6', weight: 2, fillOpacity: 0.08 }).addTo(
+        const poligono = L.polygon(hull, { color: '#6D4AC7', weight: 2, fillOpacity: 0.08 }).addTo(
           this.grupoSetorPlanejado,
         );
         poligono.bindTooltip(`Setor planejado — Livro ${livro}`);

@@ -1,11 +1,11 @@
-<div class="flex items-center justify-between gap-2 px-1 py-2 border-b border-slate-200">
-  <h3 class="text-[11px] font-bold tracking-wide text-slate-500 uppercase">Colaboradores</h3>
-  <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700" *ngIf="!colaboradoresService.carregando()">
+<div class="flex items-center justify-between gap-2 px-1 py-2 border-b border-linha">
+  <h3 class="text-[11px] font-bold tracking-wide text-fraco uppercase">Colaboradores</h3>
+  <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-azul/10 text-azul-t" *ngIf="!colaboradoresService.carregando()">
     {{ colaboradoresService.colaboradoresOrdenados().length }}
   </span>
 </div>
 
-<div class="flex flex-wrap gap-1 px-1 py-1.5 border-b border-slate-100">
+<div class="flex flex-wrap gap-1 px-1 py-1.5 border-b border-linha">
   <button
     type="button"
     *ngFor="let opcao of opcoesCategoria"
@@ -13,24 +13,24 @@
     class="text-[10.5px] font-semibold px-2.5 py-1 rounded-full border transition-colors cursor-pointer"
     [ngClass]="
       colaboradoresService.filtroCategoria() === opcao.valor
-        ? 'bg-blue-600 text-white border-blue-600'
-        : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+        ? 'bg-azul text-white border-azul'
+        : 'bg-sup text-fraco border-linha hover:border-azul/50 hover:text-azul'
     "
   >
     {{ opcao.rotulo }}
   </button>
 </div>
 
-<div class="px-1 py-8 text-center text-slate-400 text-xs" *ngIf="colaboradoresService.carregando()">
+<div class="px-1 py-8 text-center text-tenue text-xs" *ngIf="colaboradoresService.carregando()">
   Carregando...
 </div>
 
-<div class="px-1 py-8 text-center text-red-500 text-xs" *ngIf="colaboradoresService.erro() && !colaboradoresService.carregando()">
+<div class="px-1 py-8 text-center text-critico text-xs" *ngIf="colaboradoresService.erro() && !colaboradoresService.carregando()">
   {{ colaboradoresService.erro() }}
 </div>
 
 <div
-  class="px-1 py-8 text-center text-slate-400 text-xs"
+  class="px-1 py-8 text-center text-tenue text-xs"
   *ngIf="!colaboradoresService.carregando() && !colaboradoresService.erro() && !colaboradoresService.colaboradores().length"
 >
   Nenhum colaborador encontrado.
@@ -51,8 +51,8 @@
       class="w-full flex items-start gap-2 px-2.5 py-2 text-left text-xs font-medium rounded-md border-l-2 transition-colors cursor-pointer"
       [ngClass]="
         colaboradoresService.colaboradorSelecionado() === colaborador.colaborador
-          ? 'bg-blue-50 text-blue-700 border-blue-500'
-          : 'text-slate-700 border-transparent hover:bg-slate-50 hover:text-blue-700'
+          ? 'bg-azul/10 text-azul-t border-azul'
+          : 'text-txt border-transparent hover:bg-sup-2 hover:text-azul-t'
       "
     >
       <span class="flex-1 min-w-0">
@@ -89,7 +89,7 @@
             *ngIf="!colaboradoresService.atividadeDe(colaborador.colaborador) && colaboradoresService.afastamentoDe(colaborador.colaborador) as afIndicador"
             xmlns="http://www.w3.org/2000/svg"
             class="h-3 w-3 shrink-0"
-            [ngClass]="afIndicador.afastadoInss === 'SIM' ? 'text-violet-500' : 'text-blue-400'"
+            [ngClass]="afIndicador.afastadoInss === 'SIM' ? 'text-roxo' : 'text-azul/70'"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -112,7 +112,7 @@
           <svg
             *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) && colaboradoresService.afastamentoDe(colaborador.colaborador) as afAtivo"
             xmlns="http://www.w3.org/2000/svg"
-            class="h-3 w-3 shrink-0 text-amber-500"
+            class="h-3 w-3 shrink-0 text-alerta"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -131,7 +131,7 @@
              relógio (pedido explícito do usuário). -->
         <span
           *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as atividadeSync"
-          class="block text-[9.5px] text-slate-400 tabular-nums mt-0.5"
+          class="block text-[9.5px] text-tenue tabular-nums mt-0.5"
         >
           Sem sincronizar há {{ tempoSemSincronizar(atividadeSync.minutosParado) }}
         </span>
@@ -143,23 +143,23 @@
           class="flex items-center gap-1.5 mt-1"
           [title]="(percentual(colaborador.colaborador) | number: '1.0-0') + '% executado hoje'"
         >
-          <span class="flex-1 h-1 rounded-full bg-slate-200/70 overflow-hidden">
+          <span class="flex-1 h-1 rounded-full bg-linha/70 overflow-hidden">
             <span
               class="block h-full rounded-full transition-[width]"
               [style.width.%]="percentual(colaborador.colaborador)"
               [ngClass]="{
-                'bg-emerald-500': corBarra(atividadeBarra) === 'verde',
-                'bg-amber-500': corBarra(atividadeBarra) === 'amarelo',
-                'bg-red-500': corBarra(atividadeBarra) === 'vermelho'
+                'bg-ok': corBarra(atividadeBarra) === 'verde',
+                'bg-alerta': corBarra(atividadeBarra) === 'amarelo',
+                'bg-critico': corBarra(atividadeBarra) === 'vermelho'
               }"
             ></span>
           </span>
-          <span class="text-[9.5px] tabular-nums text-slate-400 shrink-0">{{ percentual(colaborador.colaborador) | number: '1.0-0' }}%</span>
+          <span class="text-[9.5px] tabular-nums text-tenue shrink-0">{{ percentual(colaborador.colaborador) | number: '1.0-0' }}%</span>
         </span>
       </span>
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform mt-0.5"
+        class="h-3.5 w-3.5 shrink-0 text-tenue transition-transform mt-0.5"
         [ngClass]="{ 'rotate-90': colaboradoresService.colaboradorSelecionado() === colaborador.colaborador }"
         viewBox="0 0 24 24"
         fill="none"
@@ -174,17 +174,17 @@
 
     <div *ngIf="colaboradoresService.colaboradorSelecionado() === colaborador.colaborador" class="px-2.5 pt-2 pb-3">
       <div class="flex items-center gap-1.5 mb-2">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-tenue shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
           <circle cx="12" cy="10" r="3" />
         </svg>
-        <span class="text-[10.5px] font-semibold text-slate-500 truncate">{{ regionalDe(colaborador.base) }}</span>
+        <span class="text-[10.5px] font-semibold text-fraco truncate">{{ regionalDe(colaborador.base) }}</span>
         <span
           class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
           [ngClass]="{
-            'bg-blue-100 text-blue-700': colaborador.cargo === 'LEITURISTA MOTOCICLISTA',
-            'bg-orange-100 text-orange-700': colaborador.cargo === 'LEITURISTA',
-            'bg-slate-200 text-slate-600': colaborador.cargo === 'MONITOR'
+            'bg-azul/15 text-azul-t': colaborador.cargo === 'LEITURISTA MOTOCICLISTA',
+            'bg-laranja/15 text-laranja-t': colaborador.cargo === 'LEITURISTA',
+            'bg-sup-3 text-fraco': colaborador.cargo === 'MONITOR'
           }"
         >{{ rotuloCargo(colaborador.cargo) }}</span>
       </div>
@@ -201,32 +201,32 @@
              separa execução de deslocamento (adiado, sem dado histórico de
              tempo médio por UC) — ver JornadaColaborador no service. -->
         <div *ngIf="colaboradoresService.jornadaPorColaborador().get(colaborador.colaborador) as jornada" class="mb-3">
-          <div *ngIf="!jornada.semDado" class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 cursor-pointer" (click)="toggleJornada()">
-            <div class="flex items-center justify-between text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+          <div *ngIf="!jornada.semDado" class="rounded-lg border border-linha bg-sup px-2.5 py-2 cursor-pointer" (click)="toggleJornada()">
+            <div class="flex items-center justify-between text-[9px] font-semibold text-tenue uppercase tracking-wide mb-1">
               <span>Jornada</span>
-              <span class="tabular-nums normal-case font-bold text-slate-600">{{ jornada.inicio?.slice(0, 5) }} → {{ jornada.fim?.slice(0, 5) }}</span>
+              <span class="tabular-nums normal-case font-bold text-txt">{{ jornada.inicio?.slice(0, 5) }} → {{ jornada.fim?.slice(0, 5) }}</span>
             </div>
-            <div class="h-2 rounded-full overflow-hidden flex bg-slate-100">
-              <div class="bg-blue-500 h-full" [style.width.%]="((jornada.trabalhadoSegundos || 0) / (((jornada.trabalhadoSegundos || 0) + (jornada.ociosoSegundos || 0)) || 1)) * 100"></div>
-              <div class="bg-orange-400 h-full" [style.width.%]="((jornada.ociosoSegundos || 0) / (((jornada.trabalhadoSegundos || 0) + (jornada.ociosoSegundos || 0)) || 1)) * 100"></div>
+            <div class="h-2 rounded-full overflow-hidden flex bg-sup-3">
+              <div class="bg-azul h-full" [style.width.%]="((jornada.trabalhadoSegundos || 0) / (((jornada.trabalhadoSegundos || 0) + (jornada.ociosoSegundos || 0)) || 1)) * 100"></div>
+              <div class="bg-alerta h-full" [style.width.%]="((jornada.ociosoSegundos || 0) / (((jornada.trabalhadoSegundos || 0) + (jornada.ociosoSegundos || 0)) || 1)) * 100"></div>
             </div>
 
             <div *ngIf="jornadaExpandida()" class="grid grid-cols-2 gap-1.5 mt-2 text-[10px]">
-              <div class="rounded-md bg-slate-50 px-2 py-1.5">
-                <div class="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">Trabalhado</div>
-                <div class="font-bold text-slate-700 tabular-nums">{{ duracaoFormatada(jornada.trabalhadoSegundos) }}</div>
+              <div class="rounded-md bg-sup-2 px-2 py-1.5">
+                <div class="text-[8px] font-semibold text-tenue uppercase tracking-wide">Trabalhado</div>
+                <div class="font-bold text-txt tabular-nums">{{ duracaoFormatada(jornada.trabalhadoSegundos) }}</div>
               </div>
-              <div class="rounded-md bg-slate-50 px-2 py-1.5">
-                <div class="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">Ocioso</div>
-                <div class="font-bold text-orange-600 tabular-nums">{{ duracaoFormatada(jornada.ociosoSegundos) }}</div>
+              <div class="rounded-md bg-sup-2 px-2 py-1.5">
+                <div class="text-[8px] font-semibold text-tenue uppercase tracking-wide">Ocioso</div>
+                <div class="font-bold text-laranja-t tabular-nums">{{ duracaoFormatada(jornada.ociosoSegundos) }}</div>
               </div>
-              <div class="rounded-md bg-slate-50 px-2 py-1.5">
-                <div class="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">Ocupação</div>
-                <div class="font-bold text-slate-700 tabular-nums">{{ jornada.ocupacaoPercentual !== null && jornada.ocupacaoPercentual !== undefined ? jornada.ocupacaoPercentual + '%' : '—' }}</div>
+              <div class="rounded-md bg-sup-2 px-2 py-1.5">
+                <div class="text-[8px] font-semibold text-tenue uppercase tracking-wide">Ocupação</div>
+                <div class="font-bold text-txt tabular-nums">{{ jornada.ocupacaoPercentual !== null && jornada.ocupacaoPercentual !== undefined ? jornada.ocupacaoPercentual + '%' : '—' }}</div>
               </div>
-              <div class="rounded-md bg-slate-50 px-2 py-1.5">
-                <div class="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">Km percorrido</div>
-                <div class="font-bold text-slate-700 tabular-nums">{{ distanciaFormatada(jornada.distanciaMetros) }}</div>
+              <div class="rounded-md bg-sup-2 px-2 py-1.5">
+                <div class="text-[8px] font-semibold text-tenue uppercase tracking-wide">Km percorrido</div>
+                <div class="font-bold text-txt tabular-nums">{{ distanciaFormatada(jornada.distanciaMetros) }}</div>
               </div>
             </div>
           </div>
@@ -236,12 +236,12 @@
                logo abaixo mesmo assim. Texto antigo ("Sem leituras novas
                hoje") lia como se contradissesse a lista de livros embaixo —
                usuário reportou com print. -->
-          <div *ngIf="jornada.semDado" class="text-[10px] text-slate-300 text-center py-1">Nenhuma leitura realizada ainda {{ colaboradoresService.rotuloDataAtividade() }}</div>
+          <div *ngIf="jornada.semDado" class="text-[10px] text-tenue text-center py-1">Nenhuma leitura realizada ainda {{ colaboradoresService.rotuloDataAtividade() }}</div>
         </div>
 
         <!-- Lista de livros com histórico por faixa de hora -->
         <div *ngIf="a.livros.length">
-          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+          <div class="text-[10px] font-bold text-tenue uppercase tracking-wide mb-1.5">
             Livros {{ colaboradoresService.rotuloDataAtividade() }}
           </div>
           <div class="space-y-1">
@@ -250,35 +250,35 @@
                  um livro isolado; ver app-colaborador-detalhe, aberto ao
                  clicar no colaborador). -->
             <div *ngFor="let livro of a.livros">
-              <div class="w-full flex items-center justify-between gap-2 text-[11px] rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5">
+              <div class="w-full flex items-center justify-between gap-2 text-[11px] rounded-md border border-linha bg-sup-2 px-2 py-1.5">
                 <span class="flex items-center gap-1.5 min-w-0">
                   <span
                     class="w-1.5 h-1.5 rounded-full shrink-0"
-                    [ngClass]="livro.situacaoAtual === 'Em Execução' ? 'bg-emerald-500' : 'bg-slate-300'"
+                    [ngClass]="livro.situacaoAtual === 'Em Execução' ? 'bg-ok' : 'bg-linha-2'"
                   ></span>
-                  <span class="truncate font-semibold text-slate-700">Livro {{ livro.livro }} - {{ livro.etapa }}</span>
+                  <span class="truncate font-semibold text-txt">Livro {{ livro.livro }} - {{ livro.etapa }}</span>
                   <span
                     *ngIf="livro.tipoServico"
                     class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-full"
                     [ngClass]="{
-                      'bg-amber-100 text-amber-700': livro.tipoServico === 'releitura',
-                      'bg-blue-100 text-blue-700': livro.tipoServico === 'leitura',
-                      'bg-violet-100 text-violet-700': livro.tipoServico === 'massiva'
+                      'bg-alerta/15 text-laranja-t': livro.tipoServico === 'releitura',
+                      'bg-azul/15 text-azul-t': livro.tipoServico === 'leitura',
+                      'bg-roxo/15 text-roxo-t': livro.tipoServico === 'massiva'
                     }"
                   >{{ livro.tipoServico }}</span>
                   <span
                     *ngIf="livro.diasPrazoRegulatorio !== null"
                     class="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded-full"
                     [ngClass]="{
-                      'bg-emerald-100 text-emerald-700': livro.diasPrazoRegulatorio < 27,
-                      'bg-amber-100 text-amber-700': livro.diasPrazoRegulatorio === 33,
-                      'bg-red-100 text-red-700': livro.diasPrazoRegulatorio >= 34
+                      'bg-ok/15 text-ok': livro.diasPrazoRegulatorio < 27,
+                      'bg-alerta/15 text-laranja-t': livro.diasPrazoRegulatorio === 33,
+                      'bg-critico/15 text-critico': livro.diasPrazoRegulatorio >= 34
                     }"
                     title="Dias efetivos frente ao prazo regulatório (prazo_reg_livros)"
                   >{{ livro.diasPrazoRegulatorio }}d</span>
                 </span>
                 <span class="flex items-center gap-1.5 shrink-0">
-                  <span class="text-slate-400 tabular-nums">{{ livro.digitados }}/{{ livro.naoDigitados }}</span>
+                  <span class="text-tenue tabular-nums">{{ livro.digitados }}/{{ livro.naoDigitados }}</span>
                 </span>
               </div>
             </div>
@@ -288,20 +288,20 @@
 
       <ng-template #semAtividade>
         <ng-container *ngIf="colaboradoresService.afastamentoDe(colaborador.colaborador) as af; else semJustificativa">
-          <div class="rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2.5 py-2">
+          <div class="rounded-lg border border-azul/15 bg-gradient-to-br from-azul/5 to-azul/10 px-2.5 py-2">
             <div class="flex items-center gap-1.5 mb-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-azul shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 11H3v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9h-6" />
                 <path d="M9 11V7a3 3 0 0 1 6 0v4" />
                 <path d="M12 15v3" />
               </svg>
-              <span class="text-[11px] font-bold text-blue-700">Ausência justificada</span>
+              <span class="text-[11px] font-bold text-azul-t">Ausência justificada</span>
             </div>
-            <p class="text-[11px] text-blue-700 leading-snug">
+            <p class="text-[11px] text-azul-t leading-snug">
               {{ af.motivoAfastamento || (af.origem === 'licenca' ? 'Licença/afastamento' : af.origem === 'suspensao' ? 'Suspensão/falta justificada' : 'Atestado/afastamento') }}
               <span *ngIf="af.afastadoInss === 'SIM'" class="font-semibold"> (afastado pelo INSS)</span>
             </p>
-            <p class="text-[10.5px] text-blue-500 mt-0.5 tabular-nums">
+            <p class="text-[10.5px] text-azul mt-0.5 tabular-nums">
               {{ af.dataAfastamento | date: 'dd/MM/yyyy':'UTC' }}
               <ng-container *ngIf="af.dataRetorno">até {{ af.dataRetorno | date: 'dd/MM/yyyy':'UTC' }}</ng-container>
               <ng-container *ngIf="af.qtdDiasAfastado"> · {{ af.qtdDiasAfastado }} dia{{ af.qtdDiasAfastado === '1' ? '' : 's' }}</ng-container>
@@ -309,7 +309,7 @@
           </div>
         </ng-container>
         <ng-template #semJustificativa>
-          <p class="text-[11px] text-slate-400">Nenhuma atividade registrada {{ colaboradoresService.rotuloDataAtividade() }}.</p>
+          <p class="text-[11px] text-tenue">Nenhuma atividade registrada {{ colaboradoresService.rotuloDataAtividade() }}.</p>
         </ng-template>
       </ng-template>
     </div>

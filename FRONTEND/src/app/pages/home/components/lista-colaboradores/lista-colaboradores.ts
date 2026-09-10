@@ -99,9 +99,9 @@ export class ListaColaboradores {
   // Bateria do aparelho (via Scalefusion, ADR 0033) — mesmos limiares de
   // "crítico"/"atenção" usados em qualquer indicador de bateria comum.
   corBateria(percentual: number | null): string {
-    if (percentual == null) return 'text-slate-400';
-    if (percentual <= 20) return 'text-red-600';
-    if (percentual <= 50) return 'text-amber-600';
-    return 'text-emerald-600';
+    if (percentual == null) return 'text-tenue';
+    if (percentual <= 20) return 'text-critico';
+    if (percentual <= 50) return 'text-laranja-t';
+    return 'text-ok';
   }
 }

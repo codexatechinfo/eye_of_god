@@ -1,1 +1,87 @@
 @import "tailwindcss";
+
+/* Tokens de marca — vindos do protótipo de referência do usuário
+   (olho.html, 00-tokens.css). Fase 1 da migração visual: aba Trilho +
+   casca compartilhada. Ver ADR sobre a introdução deste sistema de
+   design. */
+@theme {
+  /* Marca / ação primária */
+  --color-navy: #0B2E59;
+  --color-azul: #006DFF;
+  --color-azul-t: #0057CC; /* hover/pressed do azul */
+  --color-laranja: #F28C28;
+  --color-laranja-t: #C96F16; /* hover/pressed do laranja */
+
+  /* Semântico (status) */
+  --color-ok: #1F9D62;
+  --color-alerta: #F28C28; /* mesmo valor de --laranja, de propósito */
+  --color-critico: #D64545;
+  --color-roxo: #6D4AC7;
+  --color-roxo-t: #5537A8;
+  /* Token extra — o protótipo não tem teal na paleta principal, mas é
+     exatamente o hex que já usávamos em COR_SEGMENTO_MUDOU_MUNICIPIO
+     (mapa-bases.ts). Sem esse token, "mudou de livro" (roxo/fúcsia) e
+     "mudou de município" (teal) perderiam a distinção visual que já
+     existe entre os dois badges da timeline. */
+  --color-teal: #0D9488;
+
+  /* Superfícies */
+  --color-fundo: #F2F4F7;
+  --color-sup: #FFFFFF;
+  --color-sup-2: #F7F9FC;
+  --color-sup-3: #EDF1F7;
+
+  /* Linhas / bordas */
+  --color-linha: #E4E8EE;
+  --color-linha-2: #CFD6E0;
+  --color-callout: #EAF1FB;
+
+  /* Texto */
+  --color-tit: #12161C;
+  --color-txt: #2A2E35;
+  --color-fraco: #6B7684;
+  --color-tenue: #98A2B3;
+
+  /* Tipografia — sobrescreve os tokens PADRÃO do Tailwind (--font-sans,
+     --font-mono), não cria nomes novos: `font-sans` (aplicado
+     globalmente pelo preflight em <html>) já vira a fonte nova em toda
+     a app sem tocar em nenhum template. `font-mono` fica disponível
+     como utility explícita pra IDs/matrículas/horários/contadores. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Raio — sobrescreve a escala padrão sm/md/lg/xl do Tailwind em vez
+     de criar --radius-r/-r2/-r3 (colidiria com o namespace nativo
+     rounded-r-* de "raio só do lado direito"). O app já usa
+     rounded-lg/md/full/xl em várias telas — sobrescrever os VALORES
+     propaga o raio novo pro app inteiro sem editar nenhum template.
+     rounded-full (pills/badges) fica intocado, que é o certo. */
+  --radius-sm: 5px; /* = r3 do protótipo */
+  --radius-md: 7px; /* = r2 do protótipo */
+  --radius-lg: 10px; /* = r do protótipo */
+  --radius-xl: 10px; /* normaliza rounded-xl (modais) pro mesmo r */
+
+  /* Sombra — mesmo raciocínio: sobrescreve shadow-sm/shadow-xl já
+     usados no app em vez de introduzir nomes novos. */
+  --shadow-sm: 0 1px 2px rgba(11, 46, 89, .06), 0 8px 24px rgba(11, 46, 89, .06);
+  --shadow-xl: 0 2px 6px rgba(11, 46, 89, .10), 0 18px 48px rgba(11, 46, 89, .14);
+}
+
+/* Painel de camadas do mapa (Leaflet nativo, montado via L.DomUtil.create
+   em mapa-bases.ts — fica fora da árvore do componente Angular, então
+   ViewEncapsulation não alcança; precisa de CSS global mirando as
+   classes nativas do Leaflet). Usa as custom properties do @theme acima
+   (ficam disponíveis globalmente, não só dentro de classes utilitárias). */
+.leaflet-control-layers {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-sm) !important;
+  border: 1px solid var(--color-linha) !important;
+}
+.leaflet-control-layers-toggle {
+  background-color: var(--color-sup) !important;
+}
+.leaflet-control-layers-expanded {
+  background: var(--color-sup) !important;
+  color: var(--color-txt) !important;
+  font-family: var(--font-sans) !important;
+}

@@ -8,7 +8,7 @@
        área do mapa sem cobrir header/filtros que ficam acima dela. -->
   <div
     *ngIf="variante !== 'modal'"
-    class="absolute inset-y-0 right-0 w-full max-w-xs z-[1100] bg-white border-l border-slate-200 shadow-2xl flex flex-col"
+    class="absolute inset-y-0 right-0 w-full max-w-xs z-[1100] bg-sup border-l border-linha shadow-2xl flex flex-col"
   >
     <ng-container *ngTemplateOutlet="conteudo; context: { nome: nome }"></ng-container>
   </div>
@@ -32,18 +32,18 @@
 </ng-container>
 
 <ng-template #conteudo let-nome="nome">
-  <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+  <div class="px-4 py-3 border-b border-linha flex items-center justify-between shrink-0">
     <div class="min-w-0">
-      <h3 class="text-sm font-bold text-slate-800 truncate">{{ nome }}</h3>
-      <p class="text-[11px] text-slate-400 truncate">Execução {{ colaboradoresService.rotuloDataAtividade() }}</p>
+      <h3 class="text-sm font-bold text-tit truncate">{{ nome }}</h3>
+      <p class="text-[11px] text-tenue truncate">Execução {{ colaboradoresService.rotuloDataAtividade() }}</p>
       <!-- Regional/cargo/bateria — só no modal (aba Monitoramento
            Colaborador, que não tem esse contexto por perto); usuário pediu
            explicitamente pra NÃO mudar o painel da aba Trilho, que já tinha
            esse dado no card da lista lateral ao lado. Mesmo visual dos dois
            lugares. -->
       <div class="flex items-center gap-1.5 flex-wrap mt-1" *ngIf="variante === 'modal' && colaboradorAtivo(nome) as colaborador">
-        <span class="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-500">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <span class="inline-flex items-center gap-1 text-[10.5px] font-semibold text-fraco">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-tenue shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
             <circle cx="12" cy="10" r="3" />
           </svg>
@@ -52,9 +52,9 @@
         <span
           class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
           [ngClass]="{
-            'bg-blue-100 text-blue-700': colaborador.cargo === 'LEITURISTA MOTOCICLISTA',
-            'bg-orange-100 text-orange-700': colaborador.cargo === 'LEITURISTA',
-            'bg-slate-200 text-slate-600': colaborador.cargo === 'MONITOR'
+            'bg-azul/15 text-azul-t': colaborador.cargo === 'LEITURISTA MOTOCICLISTA',
+            'bg-laranja/15 text-laranja-t': colaborador.cargo === 'LEITURISTA',
+            'bg-sup-3 text-fraco': colaborador.cargo === 'MONITOR'
           }"
         >{{ rotuloCargo(colaborador.cargo) }}</span>
         <span
@@ -80,7 +80,7 @@
       <button
         type="button"
         (click)="colaboradoresService.verNoMapa(nome)"
-        class="flex items-center gap-1 text-[10.5px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-full transition-colors cursor-pointer"
+        class="flex items-center gap-1 text-[10.5px] font-semibold text-azul hover:text-azul-t bg-azul/10 hover:bg-azul/20 px-2 py-1 rounded-full transition-colors cursor-pointer"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4Z" />
@@ -92,7 +92,7 @@
       <button
         type="button"
         (click)="fechar()"
-        class="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+        class="w-7 h-7 rounded-full flex items-center justify-center text-tenue hover:text-txt hover:bg-sup-3 transition-colors cursor-pointer shrink-0"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
@@ -108,11 +108,11 @@
            mais o tempo total visto (distorcia o ritmo real). -->
       <div
         class="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
-        [ngClass]="leiturasPorMinuto(nome) !== null ? 'border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50' : 'border border-dashed border-slate-200 bg-slate-50/60'"
+        [ngClass]="leiturasPorMinuto(nome) !== null ? 'border border-azul/20 bg-gradient-to-br from-azul/5 to-azul/10' : 'border border-dashed border-linha bg-sup-2/60'"
       >
         <div
           class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-          [ngClass]="leiturasPorMinuto(nome) !== null ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-300'"
+          [ngClass]="leiturasPorMinuto(nome) !== null ? 'bg-azul/15 text-azul' : 'bg-sup-3 text-tenue'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -121,11 +121,11 @@
         <div class="min-w-0 leading-tight">
           <div
             class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
-            [ngClass]="leiturasPorMinuto(nome) !== null ? 'text-blue-400' : 'text-slate-300'"
+            [ngClass]="leiturasPorMinuto(nome) !== null ? 'text-azul/70' : 'text-tenue'"
           >Leituras/min</div>
           <div
             class="text-xs font-bold truncate"
-            [ngClass]="leiturasPorMinuto(nome) !== null ? 'text-blue-700' : 'text-slate-300'"
+            [ngClass]="leiturasPorMinuto(nome) !== null ? 'text-azul-t' : 'text-tenue'"
           >{{ leiturasPorMinuto(nome) !== null ? (leiturasPorMinuto(nome) | number: '1.1-1') : 'Em breve' }}</div>
         </div>
       </div>
@@ -134,8 +134,8 @@
            card expandido da lista lateral (esquerda), duplicado aqui pra
            evitar ter que olhar dois lugares (usuário: "cards redundantes",
            ver ADR). -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-azul/20 bg-gradient-to-br from-azul/5 to-azul/10 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-azul/15 text-azul flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="4" width="14" height="17" rx="2" />
             <path d="M9 3.5h6a1 1 0 0 1 1 1V6H8V4.5a1 1 0 0 1 1-1z" />
@@ -143,35 +143,35 @@
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Leituras</div>
-          <div class="text-xs font-bold text-blue-700 truncate">{{ (colaboradoresService.atividadeDe(nome)?.totalRealizadas ?? 0) + (colaboradoresService.atividadeDe(nome)?.totalPendentes ?? 0) }}</div>
+          <div class="text-[8.5px] font-semibold text-azul/70 uppercase tracking-wide truncate">Leituras</div>
+          <div class="text-xs font-bold text-azul-t truncate">{{ (colaboradoresService.atividadeDe(nome)?.totalRealizadas ?? 0) + (colaboradoresService.atividadeDe(nome)?.totalPendentes ?? 0) }}</div>
         </div>
       </div>
 
       <!-- Livros em execução -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-azul/20 bg-gradient-to-br from-azul/5 to-azul/10 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-azul/15 text-azul flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 12 7 12 9 6 13 18 16 12 21 12" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Livros em execução</div>
-          <div class="text-xs font-bold text-blue-700 truncate">{{ colaboradoresService.atividadeDe(nome)?.totalEmExecucao ?? 0 }}</div>
+          <div class="text-[8.5px] font-semibold text-azul/70 uppercase tracking-wide truncate">Livros em execução</div>
+          <div class="text-xs font-bold text-azul-t truncate">{{ colaboradoresService.atividadeDe(nome)?.totalEmExecucao ?? 0 }}</div>
         </div>
       </div>
 
       <!-- Total de livros (mesmo motivo do card "Leituras" acima). -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-azul/20 bg-gradient-to-br from-azul/5 to-azul/10 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-azul/15 text-azul flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-blue-400 uppercase tracking-wide truncate">Livros</div>
-          <div class="text-xs font-bold text-blue-700 truncate">{{ colaboradoresService.atividadeDe(nome)?.totalLivros ?? 0 }}</div>
+          <div class="text-[8.5px] font-semibold text-azul/70 uppercase tracking-wide truncate">Livros</div>
+          <div class="text-xs font-bold text-azul-t truncate">{{ colaboradoresService.atividadeDe(nome)?.totalLivros ?? 0 }}</div>
         </div>
       </div>
 
@@ -182,11 +182,11 @@
            produtivo". -->
       <div
         class="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
-        [ngClass]="improdutivoSegundos(nome) !== null ? 'border border-orange-100 bg-gradient-to-br from-orange-100/20 to-orange-50' : 'border border-dashed border-slate-200 bg-slate-50/60'"
+        [ngClass]="improdutivoSegundos(nome) !== null ? 'border border-alerta/20 bg-gradient-to-br from-alerta/5 to-alerta/10' : 'border border-dashed border-linha bg-sup-2/60'"
       >
         <div
           class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-          [ngClass]="improdutivoSegundos(nome) !== null ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-300'"
+          [ngClass]="improdutivoSegundos(nome) !== null ? 'bg-alerta/15 text-alerta' : 'bg-sup-3 text-tenue'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9" />
@@ -196,11 +196,11 @@
         <div class="min-w-0 leading-tight">
           <div
             class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
-            [ngClass]="improdutivoSegundos(nome) !== null ? 'text-orange-400' : 'text-slate-300'"
+            [ngClass]="improdutivoSegundos(nome) !== null ? 'text-alerta/70' : 'text-tenue'"
           >Improdutivo</div>
           <div
             class="text-xs font-bold truncate"
-            [ngClass]="improdutivoSegundos(nome) !== null ? 'text-orange-700' : 'text-slate-300'"
+            [ngClass]="improdutivoSegundos(nome) !== null ? 'text-laranja-t' : 'text-tenue'"
           >{{ improdutivoSegundos(nome) !== null ? duracaoFormatada(improdutivoSegundos(nome)) : 'Em breve' }}</div>
         </div>
       </div>
@@ -210,11 +210,11 @@
            reta entre coordenadas) -->
       <div
         class="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
-        [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'border border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50' : 'border border-dashed border-slate-200 bg-slate-50/60'"
+        [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'border border-azul/20 bg-gradient-to-br from-azul/5 to-azul/10' : 'border border-dashed border-linha bg-sup-2/60'"
       >
         <div
           class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-          [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-300'"
+          [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'bg-azul/15 text-azul' : 'bg-sup-3 text-tenue'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 12h4l3-9 4 18 3-9h4" />
@@ -223,11 +223,11 @@
         <div class="min-w-0 leading-tight">
           <div
             class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
-            [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'text-blue-400' : 'text-slate-300'"
+            [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'text-azul/70' : 'text-tenue'"
           >Km percorrido</div>
           <div
             class="text-xs font-bold truncate"
-            [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'text-blue-700' : 'text-slate-300'"
+            [ngClass]="colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros != null ? 'text-azul-t' : 'text-tenue'"
           >{{ distanciaFormatada(colaboradoresService.jornadaPorColaborador().get(nome)?.distanciaMetros ?? null) }}</div>
         </div>
       </div>
@@ -236,11 +236,11 @@
            (mesmo limite que já decide Ativo/Sem sincronismo). -->
       <div
         class="flex items-center gap-1.5 rounded-lg border px-2 py-1.5"
-        [ngClass]="semSincronizarCritico(colaboradoresService.atividadeDe(nome)?.minutosParado) ? 'border-red-100 bg-gradient-to-br from-red-100/20 to-red-50' : 'border-blue-100 bg-gradient-to-br from-blue-100/20 to-blue-50'"
+        [ngClass]="semSincronizarCritico(colaboradoresService.atividadeDe(nome)?.minutosParado) ? 'border-critico/20 bg-gradient-to-br from-critico/5 to-critico/10' : 'border-azul/20 bg-gradient-to-br from-azul/5 to-azul/10'"
       >
         <div
           class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-          [ngClass]="semSincronizarCritico(colaboradoresService.atividadeDe(nome)?.minutosParado) ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'"
+          [ngClass]="semSincronizarCritico(colaboradoresService.atividadeDe(nome)?.minutosParado) ? 'bg-critico/15 text-critico' : 'bg-azul/15 text-azul'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9" />
@@ -250,81 +250,81 @@
         <div class="min-w-0 leading-tight">
           <div
             class="text-[8.5px] font-semibold uppercase tracking-wide truncate"
-            [ngClass]="semSincronizarCritico(colaboradoresService.atividadeDe(nome)?.minutosParado) ? 'text-red-400' : 'text-blue-400'"
+            [ngClass]="semSincronizarCritico(colaboradoresService.atividadeDe(nome)?.minutosParado) ? 'text-critico/70' : 'text-azul/70'"
           >Sem sincronizar há</div>
           <div
             class="text-xs font-bold tabular-nums truncate"
-            [ngClass]="semSincronizarCritico(colaboradoresService.atividadeDe(nome)?.minutosParado) ? 'text-red-700' : 'text-blue-700'"
+            [ngClass]="semSincronizarCritico(colaboradoresService.atividadeDe(nome)?.minutosParado) ? 'text-critico' : 'text-azul-t'"
           >{{ tempoSemSincronizar(colaboradoresService.atividadeDe(nome)?.minutosParado) }}</div>
         </div>
       </div>
 
       <!-- Realizadas -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-emerald-100 bg-gradient-to-br from-emerald-100/10 to-emerald-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-ok/20 bg-gradient-to-br from-ok/5 to-ok/10 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-ok/15 text-ok flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="4" width="14" height="17" rx="2" />
             <path d="m9 13 2 2 4-4" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-emerald-500 uppercase tracking-wide truncate">Realizadas</div>
-          <div class="text-xs font-bold text-emerald-700 tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalRealizadas ?? 0 }}</div>
+          <div class="text-[8.5px] font-semibold text-ok/70 uppercase tracking-wide truncate">Realizadas</div>
+          <div class="text-xs font-bold text-ok tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalRealizadas ?? 0 }}</div>
         </div>
       </div>
 
       <!-- A realizar -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-red-100 bg-gradient-to-br from-red-100/10 to-red-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-critico/20 bg-gradient-to-br from-critico/5 to-critico/10 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-critico/15 text-critico flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="4" width="14" height="17" rx="2" />
             <path d="M9 9h6M9 13h6" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-red-500 uppercase tracking-wide truncate">A realizar</div>
-          <div class="text-xs font-bold text-red-700 tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalPendentes ?? 0 }}</div>
+          <div class="text-[8.5px] font-semibold text-critico/70 uppercase tracking-wide truncate">A realizar</div>
+          <div class="text-xs font-bold text-critico tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalPendentes ?? 0 }}</div>
         </div>
       </div>
 
       <!-- Impedimentos: qualquer UC do dia cujo código atual não seja 000
            (leitura normal) nem 099 (sem leitura, não é problema de campo) —
            pedido explícito do usuário, ver ehCodigoDeImpedimento() no service. -->
-      <div class="flex items-center gap-1.5 rounded-lg border border-amber-100 bg-gradient-to-br from-amber-100/20 to-amber-50 px-2 py-1.5">
-        <div class="w-6 h-6 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+      <div class="flex items-center gap-1.5 rounded-lg border border-alerta/20 bg-gradient-to-br from-alerta/5 to-alerta/10 px-2 py-1.5">
+        <div class="w-6 h-6 rounded-md bg-alerta/15 text-alerta flex items-center justify-center shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 9v4M12 17h.01" />
             <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
           </svg>
         </div>
         <div class="min-w-0 leading-tight">
-          <div class="text-[8.5px] font-semibold text-amber-500 uppercase tracking-wide truncate">Impedimentos</div>
-          <div class="text-xs font-bold text-amber-700 tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalImpedimentos ?? 0 }}</div>
+          <div class="text-[8.5px] font-semibold text-alerta/70 uppercase tracking-wide truncate">Impedimentos</div>
+          <div class="text-xs font-bold text-laranja-t tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalImpedimentos ?? 0 }}</div>
         </div>
       </div>
     </div>
 
-    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+    <div class="text-[10px] font-bold text-tenue uppercase tracking-wide mb-1.5">
       Execução do dia (ordem cronológica)
     </div>
-    <div class="text-center text-slate-400 text-[11px] py-4" *ngIf="!jornadaCarregada()">
+    <div class="text-center text-tenue text-[11px] py-4" *ngIf="!jornadaCarregada()">
       Carregando timeline...
     </div>
     <div
-      class="text-center text-slate-400 text-[11px] py-4"
+      class="text-center text-tenue text-[11px] py-4"
       *ngIf="jornadaCarregada() && !pontosOrdenados().length"
     >
       Nenhuma atividade registrada {{ colaboradoresService.rotuloDataAtividade() }}.
     </div>
     <ol
-      class="relative border-l-2 border-slate-100 ml-2"
+      class="relative border-l-2 border-linha ml-2"
       *ngIf="jornadaCarregada() && pontosOrdenados().length"
     >
       <ng-container *ngFor="let item of pontosOrdenados(); let i = index">
         <!-- Separador de deslocamento entre dois pontos cronologicamente
              consecutivos — laranja/destacado quando o intervalo passou do
              limite (>5min urbana / >15min rural) e vira "pausa". -->
-        <li *ngIf="item.tipo_intervalo && i > 0" class="mb-2 ml-4 pl-1.5 text-[9px] flex items-center gap-1" [ngClass]="item.tipo_intervalo === 'pausa' ? 'text-orange-600 font-semibold' : 'text-slate-400'">
+        <li *ngIf="item.tipo_intervalo && i > 0" class="mb-2 ml-4 pl-1.5 text-[9px] flex items-center gap-1" [ngClass]="item.tipo_intervalo === 'pausa' ? 'text-laranja-t font-semibold' : 'text-tenue'">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M13 6l6 6-6 6" />
           </svg>
@@ -336,13 +336,13 @@
              um livro só). Cores dedicadas (fúcsia/teal), distintas de tudo
              que já existe na timeline/mapa (ver ADR). -->
         <li *ngIf="item.mudou_livro || item.mudou_municipio" class="mb-2 ml-4 pl-1.5 flex flex-col gap-1">
-          <div *ngIf="item.mudou_livro" class="rounded-md border border-fuchsia-200 bg-fuchsia-50 px-2 py-1 text-fuchsia-700 text-[9.5px] font-semibold flex items-center gap-1">
+          <div *ngIf="item.mudou_livro" class="rounded-md border border-roxo/30 bg-roxo/10 px-2 py-1 text-roxo-t text-[9.5px] font-semibold flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
             </svg>
             Mudou de livro — agora Livro {{ item.livro }}
           </div>
-          <div *ngIf="item.mudou_municipio" class="rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-teal-700 text-[9.5px] font-semibold flex items-center gap-1">
+          <div *ngIf="item.mudou_municipio" class="rounded-md border border-teal/30 bg-teal/10 px-2 py-1 text-teal text-[9.5px] font-semibold flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" />
             </svg>
@@ -354,7 +354,7 @@
           #linhaUc
           [attr.data-uc]="item.uc"
           class="mb-3 ml-4 rounded-r-lg -mr-1 cursor-pointer transition-colors"
-          [ngClass]="colaboradoresService.ucFocada() === item.uc ? 'bg-blue-50/70' : ''"
+          [ngClass]="colaboradoresService.ucFocada() === item.uc ? 'bg-azul/10' : ''"
           (click)="toggleExpandir(item)"
         >
           <!-- Pausa (>limite por etapa) vira ícone de pausa no marcador da
@@ -362,7 +362,7 @@
           <svg
             *ngIf="item.tipo_intervalo === 'pausa'; else bolinha"
             xmlns="http://www.w3.org/2000/svg"
-            class="absolute w-3 h-3 -left-[7px] mt-0.5 text-orange-500"
+            class="absolute w-3 h-3 -left-[7px] mt-0.5 text-alerta"
             viewBox="0 0 24 24"
             fill="currentColor"
           >
@@ -373,10 +373,10 @@
             <div
               class="absolute w-2.5 h-2.5 rounded-full -left-[5px] mt-1"
               [ngClass]="{
-                'bg-emerald-400': corDoPonto(item) === 'verde',
-                'bg-blue-500': corDoPonto(item) === 'cinza',
-                'bg-amber-500': corDoPonto(item) === 'laranja',
-                'bg-red-500': corDoPonto(item) === 'vermelho'
+                'bg-ok': corDoPonto(item) === 'verde',
+                'bg-azul': corDoPonto(item) === 'cinza',
+                'bg-alerta': corDoPonto(item) === 'laranja',
+                'bg-critico': corDoPonto(item) === 'vermelho'
               }"
             ></div>
           </ng-template>
@@ -384,27 +384,27 @@
             <span
               class="truncate flex-1 px-1.5 font-semibold"
               [ngClass]="{
-                'text-slate-600': corDoPonto(item) === 'verde',
-                'text-slate-400': corDoPonto(item) === 'cinza',
-                'text-amber-700': corDoPonto(item) === 'laranja',
-                'text-red-700': corDoPonto(item) === 'vermelho'
+                'text-txt': corDoPonto(item) === 'verde',
+                'text-tenue': corDoPonto(item) === 'cinza',
+                'text-laranja-t': corDoPonto(item) === 'laranja',
+                'text-critico': corDoPonto(item) === 'vermelho'
               }"
             >
               {{ item.endereco || item.uc }}
               <span
                 *ngIf="corDoPonto(item) === 'laranja' || corDoPonto(item) === 'vermelho'"
                 class="ml-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full align-middle"
-                [ngClass]="corDoPonto(item) === 'vermelho' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+                [ngClass]="corDoPonto(item) === 'vermelho' ? 'bg-critico/15 text-critico' : 'bg-alerta/15 text-laranja-t'"
               >
                 {{ item.mensagem || ('Código ' + item.codigo) }}
               </span>
             </span>
-            <span class="text-slate-400 shrink-0 tabular-nums" *ngIf="item.codigo">{{ item.hora_import }}</span>
-            <span class="text-slate-300 shrink-0" *ngIf="!item.codigo">A realizar</span>
+            <span class="text-tenue shrink-0 tabular-nums" *ngIf="item.codigo">{{ item.hora_import }}</span>
+            <span class="text-tenue shrink-0" *ngIf="!item.codigo">A realizar</span>
           </div>
           <!-- Abaixo do endereço: UC, depois Livro — nessa ordem (pedido
                explícito do usuário). -->
-          <div class="text-[9.5px] text-slate-400 truncate pl-1.5">
+          <div class="text-[9.5px] text-tenue truncate pl-1.5">
             UC {{ item.uc }} · Livro {{ item.livro }}
             <span *ngIf="item.nom_municipio"> · {{ item.nom_municipio }}</span>
             <span *ngIf="item.localidade"> · {{ item.localidade }}</span>
@@ -416,7 +416,7 @@
                (slate), diferente das cores de transição geográfica — é
                sobre o livro, não sobre o deslocamento. -->
           <div *ngIf="item.livro_reatribuido || item.livro_pendente" class="pl-1.5 mt-0.5">
-            <span class="inline-flex items-center gap-1 text-[9px] font-semibold text-slate-500 bg-slate-100 rounded-full px-1.5 py-0.5">
+            <span class="inline-flex items-center gap-1 text-[9px] font-semibold text-fraco bg-sup-3 rounded-full px-1.5 py-0.5">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M17 2.1l4 4-4 4" /><path d="M3 12.7V12a4 4 0 0 1 4-4h14" /><path d="M7 21.9l-4-4 4-4" /><path d="M21 11.3V12a4 4 0 0 1-4 4H3" />
               </svg>
@@ -427,63 +427,63 @@
 
           <!-- Card de detalhe expandido — só os campos que o sistema
                realmente tem (sem inventar GPS/OS/setor, ver ADR). -->
-          <div *ngIf="colaboradoresService.ucExpandida() === item.uc" class="mt-2 mr-1.5 rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 text-[10.5px]" (click)="$event.stopPropagation()">
+          <div *ngIf="colaboradoresService.ucExpandida() === item.uc" class="mt-2 mr-1.5 rounded-lg border border-linha bg-sup-2/80 p-2.5 text-[10.5px]" (click)="$event.stopPropagation()">
             <div
               *ngIf="ehImpedimento(item.codigo) && colaboradoresService.regimeSucessivoPorUc().get(item.uc) as regime"
-              class="mb-2 rounded-md bg-red-50 border border-red-100 px-2 py-1.5 text-red-700 text-[10px]"
+              class="mb-2 rounded-md bg-critico/10 border border-critico/20 px-2 py-1.5 text-critico text-[10px]"
               [class.hidden]="regime.ciclosConsecutivos < 2"
             >
               <strong>{{ regime.ciclosConsecutivos }}º mês consecutivo</strong> com Código {{ regime.codigoAtual }}.
-              <div class="mt-1 text-red-600">Meses: {{ regime.mesesConsecutivos.join(', ') }}</div>
+              <div class="mt-1 text-critico">Meses: {{ regime.mesesConsecutivos.join(', ') }}</div>
             </div>
 
             <div class="grid grid-cols-2 gap-x-2 gap-y-1.5">
               <div class="col-span-2">
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Endereço</div>
-                <div class="text-slate-600">{{ item.endereco || '—' }}<span *ngIf="item.nom_municipio">, {{ item.nom_municipio }}</span><span *ngIf="item.localidade"> ({{ item.localidade }})</span></div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Endereço</div>
+                <div class="text-txt">{{ item.endereco || '—' }}<span *ngIf="item.nom_municipio">, {{ item.nom_municipio }}</span><span *ngIf="item.localidade"> ({{ item.localidade }})</span></div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">UC / Livro</div>
-                <div class="text-slate-600 tabular-nums">{{ item.uc }} · Livro {{ item.livro }}<span *ngIf="item.sequencia"> (#{{ item.sequencia }} na rota)</span></div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">UC / Livro</div>
+                <div class="text-txt tabular-nums">{{ item.uc }} · Livro {{ item.livro }}<span *ngIf="item.sequencia"> (#{{ item.sequencia }} na rota)</span></div>
               </div>
               <div *ngIf="item.livro_reatribuido || item.livro_pendente" class="col-span-2">
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Estado atual do livro</div>
-                <div class="text-slate-600">
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Estado atual do livro</div>
+                <div class="text-txt">
                   {{ item.livro_situacao_atual || '—' }}
                   <span *ngIf="item.livro_reatribuido"> · com {{ item.livro_colaborador_atual }} agora</span>
                 </div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Equipamento</div>
-                <div class="text-slate-600">{{ item.equipamento || '—' }}</div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Equipamento</div>
+                <div class="text-txt">{{ item.equipamento || '—' }}</div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Situação</div>
-                <div class="text-slate-600">{{ item.codigo ? 'Realizada' : 'A realizar' }}</div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Situação</div>
+                <div class="text-txt">{{ item.codigo ? 'Realizada' : 'A realizar' }}</div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Apontamento</div>
-                <div class="text-slate-600">{{ item.codigo ? (item.mensagem || ('Código ' + item.codigo)) : '—' }}</div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Apontamento</div>
+                <div class="text-txt">{{ item.codigo ? (item.mensagem || ('Código ' + item.codigo)) : '—' }}</div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Horário da leitura</div>
-                <div class="text-slate-600 tabular-nums">{{ item.codigo ? (item.data_import + ' ' + item.hora_import) : '—' }}</div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Horário da leitura</div>
+                <div class="text-txt tabular-nums">{{ item.codigo ? (item.data_import + ' ' + item.hora_import) : '—' }}</div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Intervalo anterior</div>
-                <div class="text-slate-600 tabular-nums" [ngClass]="item.tipo_intervalo === 'pausa' ? 'text-orange-600 font-semibold' : ''">{{ duracaoFormatada(item.intervalo_anterior_segundos) }}</div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Intervalo anterior</div>
+                <div class="text-txt tabular-nums" [ngClass]="item.tipo_intervalo === 'pausa' ? 'text-laranja-t font-semibold' : ''">{{ duracaoFormatada(item.intervalo_anterior_segundos) }}</div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Deslocamento</div>
-                <div class="text-slate-600 tabular-nums">{{ distanciaFormatada(item.distancia_anterior_metros) }}</div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Deslocamento</div>
+                <div class="text-txt tabular-nums">{{ distanciaFormatada(item.distancia_anterior_metros) }}</div>
               </div>
               <div>
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Velocidade média</div>
-                <div class="text-slate-600 tabular-nums">{{ item.velocidade_m_por_min !== null ? item.velocidade_m_por_min.toFixed(1) + ' m/min' : '—' }}</div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Velocidade média</div>
+                <div class="text-txt tabular-nums">{{ item.velocidade_m_por_min !== null ? item.velocidade_m_por_min.toFixed(1) + ' m/min' : '—' }}</div>
               </div>
               <div class="col-span-2">
-                <div class="text-[8.5px] font-semibold text-slate-400 uppercase tracking-wide">Coordenada</div>
-                <div class="text-slate-600 tabular-nums">{{ item.latitude && item.longitude ? (item.latitude + ', ' + item.longitude) : '—' }}</div>
+                <div class="text-[8.5px] font-semibold text-tenue uppercase tracking-wide">Coordenada</div>
+                <div class="text-txt tabular-nums">{{ item.latitude && item.longitude ? (item.latitude + ', ' + item.longitude) : '—' }}</div>
               </div>
             </div>
 
@@ -493,7 +493,7 @@
                 (click)="centralizarNoMapa(item)"
                 [disabled]="!item.latitude || !item.longitude"
                 [title]="!item.latitude || !item.longitude ? 'Sem coordenada cadastrada pra essa UC' : ''"
-                class="flex-1 text-[9.5px] font-semibold px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                class="flex-1 text-[9.5px] font-semibold px-2 py-1 rounded-md bg-azul text-white hover:bg-azul-t disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Centralizar no mapa
               </button>
@@ -502,7 +502,7 @@
                 [href]="link"
                 target="_blank"
                 rel="noopener"
-                class="flex-1 text-center text-[9.5px] font-semibold px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+                class="flex-1 text-center text-[9.5px] font-semibold px-2 py-1 rounded-md border border-linha text-txt hover:bg-sup-3 transition-colors"
               >
                 Street View
               </a>

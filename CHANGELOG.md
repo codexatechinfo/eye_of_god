@@ -5,6 +5,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Alterado
+
+- Introduzido sistema de tokens de design de marca (cores, tipografia, raio, sombra — bloco
+  `@theme` em `styles.css`) a partir de um protótipo de referência do usuário, e aplicado à aba
+  Trilho + casca compartilhada (header, navegação de abas, lista de colaboradores, painel de
+  detalhe, mapa): novo "filete" de marca no topo, paleta consistente (azul/ok/alerta/crítico/roxo/
+  teal) no lugar das cores de fábrica do Tailwind. Restyle visual puro — nenhuma mudança de
+  comportamento. Fase 1 de uma migração maior (próximas abas ficam pra rodadas futuras). Ver [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Adicionado
 
 - Camada "Rastro GPS" (mapa, aba Trilho) ganhou marcadores de primeiro e último ponto — contorno

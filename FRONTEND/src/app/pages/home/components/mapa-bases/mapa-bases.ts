@@ -5,11 +5,13 @@ import {
   ColaboradoresService,
   corDaUc,
   ehCodigoDeImpedimento,
+  horaParaSegundos,
   MunicipioLimite,
   PontoGpsHistorico,
   PontoJornada,
 } from '../../../../services/colaboradores.service';
 import { ColaboradorCracha } from '../colaborador-cracha/colaborador-cracha';
+import { ReguaTempo } from '../regua-tempo/regua-tempo';
 
 // Em telas com escala fracionária (125%/150% no Windows), o posicionamento
 // dos tiles via translate3d (GPU) arredonda em sub-pixel e deixa frestas
@@ -308,7 +310,7 @@ function cascoConvexo(pontos: L.LatLngTuple[]): L.LatLngTuple[] {
 
 @Component({
   selector: 'app-mapa-bases',
-  imports: [CommonModule, ColaboradorCracha],
+  imports: [CommonModule, ColaboradorCracha, ReguaTempo],
   templateUrl: './mapa-bases.html',
   styleUrl: './mapa-bases.css',
 })
@@ -467,6 +469,10 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     effect(() => {
       const nome = this.colaboradoresService.colaboradorSelecionado();
       const pontos = nome ? this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos ?? [] : [];
+      // Lido aqui (não só dentro de atualizarRotaJornada) pra este effect
+      // reexecutar a cada mudança do instante — é o que move o marcador de
+      // "último ponto" junto com a régua de tempo.
+      this.colaboradoresService.reguaInstante();
       this.atualizarRotaJornada(nome, pontos);
     });
     // Marcador do colaborador da jornada aberta sai de grupoAgentes (toggle)
@@ -1103,16 +1109,23 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     // ícone), cria só as novas, remove as que já não aparecem mais.
     const regimeSucessivoPorUc = this.colaboradoresService.regimeSucessivoPorUc();
     const vistos = new Set<string>();
-    // Último ponto REALIZADO cronologicamente (validos preserva a ordem de
-    // `pontos`, que já vem ASC do backend) ganha o ícone de "localização
-    // real" — pedido explícito do usuário, primeiro passo pros ícones do
-    // mapa passarem a refletir onde o colaborador está agora, não só o
-    // histórico. Não pode ser simplesmente o último item do array: `pontos`
-    // agora termina com as UCs AINDA NÃO realizadas (ver
-    // obterJornadaColaborador), que viriam depois na lista mas não são "onde
-    // ele está" — sem código = pendente (ver corDaUc), busca de trás pra
-    // frente até achar o último com código.
-    const ucUltimoPonto = [...validos].reverse().find(item => item.codigo)?.uc ?? null;
+    // Último ponto REALIZADO até o INSTANTE da régua de tempo (validos
+    // preserva a ordem de `pontos`, que já vem ASC do backend) ganha o
+    // ícone de "localização real". Com a régua parada no fim do dia (padrão
+    // — ver reguaInstante no service), equivale ao último ponto de verdade;
+    // arrastar/tocar a régua move este marcador junto, ponto a ponto. Sem
+    // código = pendente (ver corDaUc) e sem hora_import = não entra na
+    // régua, então nunca vira "atual" por essa via.
+    const instanteRegua = this.colaboradoresService.reguaInstante();
+    const ucUltimoPonto =
+      [...validos]
+        .reverse()
+        .find(item => {
+          if (!item.codigo) return false;
+          if (instanteRegua === null) return true;
+          const s = horaParaSegundos(item.hora_import);
+          return s !== null && s <= instanteRegua;
+        })?.uc ?? null;
     // Primeiro ponto REALIZADO cronologicamente (busca pra frente, oposto do
     // ucUltimoPonto acima) — usuário pediu pra saber onde o dia começou, não
     // só onde está agora. Se só tem 1 ponto no dia, ucPrimeiroPonto ===

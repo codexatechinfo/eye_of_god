@@ -482,6 +482,25 @@ export function formatarTempoParado(minutos: number): string {
   return h > 0 ? `${h}h${m > 0 ? ` ${m}min` : ''}` : `${m}min`;
 }
 
+// "14:07:32" -> 50852 (segundos desde 00:00) — usado pela régua de tempo
+// (regua-tempo.ts) pra posicionar cada ponto na régua e comparar contra o
+// instante atual. Mesma conversão do protótipo (U.horaParaSeg).
+export function horaParaSegundos(hhmmss: string | null | undefined): number | null {
+  if (!hhmmss) return null;
+  const partes = hhmmss.split(':').map(Number);
+  if (partes.length < 2 || partes.some(Number.isNaN)) return null;
+  return partes[0] * 3600 + partes[1] * 60 + (partes[2] || 0);
+}
+
+// 50852 -> "14:07" — relógio da régua (sem segundos, só HH:MM, mesmo
+// formato do protótipo — U.relogio).
+export function segundosParaRelogio(segundosDoDia: number): string {
+  const s = Math.max(0, Math.round(segundosDoDia));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -594,6 +613,52 @@ export class ColaboradoresService {
   // ruído, não ajuda em nada.
   carregandoJornada = signal(false);
 
+  // Régua de tempo (playback do dia) — estado compartilhado entre o
+  // controle em si (regua-tempo.ts), o mapa (filtra pontos/segmentos até o
+  // instante) e o crachá (mostra "atual" no instante da régua em vez do
+  // último ponto). `instante` é em SEGUNDOS DO DIA (0-86400), mesma unidade
+  // do protótipo de referência. `null` = sem colaborador aberto ou sem
+  // jornada carregada ainda.
+  reguaInstante = signal<number | null>(null);
+  reguaTocando = signal(false);
+  reguaVelocidade = signal(60);
+  // Nome do colaborador pro qual reguaInstante já foi inicializado — evita
+  // resetar o cursor a cada refresh de 60s da jornada do MESMO colaborador
+  // (ver effect no construtor).
+  private reguaInicializadaPara: string | null = null;
+
+  // Início/fim da régua — do primeiro ao último ponto do dia, com 15min de
+  // folga pra cada lado (mesmo padrão do protótipo), span mínimo de 1h
+  // (evita uma régua ilegível quando só há 1-2 pontos no dia inteiro).
+  // `null` enquanto a jornada ainda não chegou (não só sem colaborador) —
+  // sem essa checagem, a régua nasceria com os padrões INICIO_PADRAO/
+  // FIM_PADRAO por uma fração de segundo, o effect de inicialização (ver
+  // construtor) marcaria "já inicializei" pra esse nome, e quando a jornada
+  // REAL chegasse (com um fim bem diferente) o cursor ficaria preso no
+  // valor antigo, sem repetir a inicialização.
+  reguaExtremos = computed<{ ini: number; fim: number } | null>(() => {
+    const nome = this.colaboradorSelecionado();
+    if (!nome) return null;
+    const jornada = this.jornadaPorColaborador().get(nome);
+    if (!jornada) return null;
+    const pontos = jornada.pontos ?? [];
+    let min: number | null = null;
+    let max: number | null = null;
+    for (const p of pontos) {
+      const s = horaParaSegundos(p.hora_import);
+      if (s === null) continue;
+      if (min === null || s < min) min = s;
+      if (max === null || s > max) max = s;
+    }
+    const INICIO_PADRAO = 5 * 3600;
+    const FIM_PADRAO = 20 * 3600;
+    const DIA_SEG = 24 * 3600;
+    let ini = min === null ? INICIO_PADRAO : Math.max(0, min - 900);
+    let fim = max === null ? FIM_PADRAO : Math.min(DIA_SEG, max + 900);
+    if (fim - ini < 3600) fim = ini + 3600;
+    return { ini, fim };
+  });
+
   // Sempre ordenada por destaque (mais grave primeiro) e, quando um toggle
   // está ativo, filtrada só para quem está naquela categoria.
   colaboradoresOrdenados = computed(() => {
@@ -694,6 +759,51 @@ export class ColaboradoresService {
     this.carregarLocalizacoes();
     this.carregarScalefusion();
     this.carregarSegsat();
+
+    // Régua de tempo: ao abrir um colaborador (ou trocar de colaborador), o
+    // cursor nasce no FIM (é o estado do dia até agora — mesmo padrão do
+    // protótipo). Só reseta quando o NOME muda, não a cada refresh de 60s
+    // da jornada do MESMO colaborador (senão o usuário perderia a posição
+    // onde estava revisando o dia toda vez que um dado novo chegasse).
+    effect(() => {
+      const nome = this.colaboradorSelecionado();
+      const extremos = this.reguaExtremos();
+      if (!nome || !extremos) {
+        this.reguaInstante.set(null);
+        this.reguaTocando.set(false);
+        this.reguaInicializadaPara = null;
+        return;
+      }
+      if (this.reguaInicializadaPara !== nome) {
+        this.reguaInstante.set(extremos.fim);
+        this.reguaTocando.set(false);
+        this.reguaInicializadaPara = nome;
+      }
+    });
+
+    // Régua de tempo: enquanto TOCANDO ou depois que o usuário arrastou o
+    // cursor (instante !== extremos.fim, a posição de repouso inicial), o
+    // ponto correspondente ao instante atual ganha foco na timeline
+    // (ucFocada, mesmo sinal que um clique no mapa já usa) — rola até ele e
+    // destaca. Não dispara na posição de repouso inicial (colaborador
+    // recém-aberto, régua nunca tocada) pra não forçar um scroll indesejado
+    // só de abrir o painel.
+    effect(() => {
+      const nome = this.colaboradorSelecionado();
+      const instante = this.reguaInstante();
+      const extremos = this.reguaExtremos();
+      if (!nome || instante === null || !extremos) return;
+      if (!this.reguaTocando() && instante === extremos.fim) return;
+      const pontos = this.jornadaPorColaborador().get(nome)?.pontos ?? [];
+      let atual: PontoJornada | null = null;
+      for (const p of pontos) {
+        const s = horaParaSegundos(p.hora_import);
+        if (s === null) continue;
+        if (s <= instante) atual = p;
+        else break;
+      }
+      if (atual) this.ucFocada.set(atual.uc);
+    });
 
     // Abre o alerta sozinho (sem precisar de clique) assim que aparece um
     // nome em afastadosComAtividade que ainda não estava em afastadosVistos

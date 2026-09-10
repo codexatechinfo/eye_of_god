@@ -1,0 +1,40 @@
+<!-- Régua de tempo (playback do dia) — tradução do .f-regua-caixa do
+     protótipo: play/pause/velocidade + uma marca por ponto do dia, arrasta
+     ou clica pra ir direto num instante. Só aparece com um colaborador
+     aberto E jornada carregada (reguaExtremos() vem null sem isso). -->
+<div *ngIf="colaboradoresService.reguaExtremos() as extremos" class="shrink-0 bg-sup border-t border-linha flex flex-col">
+  <div class="flex items-center gap-2 px-3 pt-1.5 pb-0.5">
+    <button
+      type="button"
+      (click)="irParaInicio()"
+      title="voltar ao início"
+      class="w-7 h-7 flex items-center justify-center rounded-md bg-sup-2 text-fraco hover:text-txt text-xs cursor-pointer transition-colors"
+    >⏮</button>
+    <button
+      type="button"
+      (click)="alternarPlay()"
+      title="tocar o dia"
+      class="w-8 h-7 flex items-center justify-center rounded-md bg-azul text-white hover:bg-azul-t text-xs cursor-pointer transition-colors"
+    >{{ colaboradoresService.reguaTocando() ? '❚❚' : '▶' }}</button>
+    <button
+      type="button"
+      (click)="irParaFim()"
+      title="ir para o fim"
+      class="w-7 h-7 flex items-center justify-center rounded-md bg-sup-2 text-fraco hover:text-txt text-xs cursor-pointer transition-colors"
+    >⏭</button>
+    <span class="font-mono text-[15px] font-semibold text-tit tracking-wide min-w-[50px] text-center">{{ relogio() }}</span>
+    <select
+      [value]="colaboradoresService.reguaVelocidade()"
+      (change)="mudarVelocidade($any($event.target).value)"
+      title="velocidade"
+      class="h-[26px] px-1.5 rounded-md border border-linha bg-sup-2 text-[11px] text-txt outline-none cursor-pointer"
+    >
+      <option *ngFor="let v of velocidades" [value]="v">{{ v }}×</option>
+    </select>
+    <div class="flex-1"></div>
+    <span class="font-mono text-[10px] text-tenue">{{ relogioExtremo(extremos.ini) }} — {{ relogioExtremo(extremos.fim) }}</span>
+  </div>
+  <div class="pb-1">
+    <canvas #canvas class="w-full block cursor-ew-resize touch-none" (pointerdown)="aoPonteiroBaixo($event)"></canvas>
+  </div>
+</div>

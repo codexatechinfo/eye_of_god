@@ -91,6 +91,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Régua de tempo (playback do dia, aba Trilho) — abaixo do mapa, com play/pause/velocidade/ir pro
+  início ou fim: uma marca colorida por ponto do dia, arraste ou clique pra ir direto num instante.
+  Reativa uma feature do protótipo de referência que tinha ficado fora do escopo inicial deste
+  restyle. Conforme a régua avança, a timeline do painel de detalhe acompanha (rola e destaca o
+  ponto atual), o crachá de resumo mostra a UC daquele instante, e o marcador de "último ponto" no
+  mapa acompanha junto. Ver Adendo 10 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 - Crachá de resumo do colaborador (aba Trilho) — ao clicar num colaborador, um cartão no canto
   superior esquerdo do mapa mostra avatar com iniciais (anel verde/âmbar/cinza conforme há quanto
   tempo o aparelho reportou posição), última UC lida, barra de progresso do dia e uma projeção de

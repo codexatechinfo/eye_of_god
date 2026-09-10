@@ -569,9 +569,73 @@ de referência do usuário (mesmas iniciais "AG" pro nome de exemplo, mesmo form
 
 ### Pendências (fora desta ADR, reafirmadas)
 
-- Régua de tempo / playback da timeline do dia — reativa a feature adiada desde a fase 1; quando
-  existir, a linha "às HH:MM, leu a UC..." do crachá passa a acompanhar o instante da régua em vez
-  do último ponto do dia.
+- Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Aba Risco — inalterada.
+
+## Adendo 10 — Rodada 10: régua de tempo (playback do dia)
+
+Usuário pediu, com print de referência: uma barra de execução baseada na timeline, com play, que vai
+"andando" pelos pontos do dia e move a timeline em destaque conforme passa. Isso reativa a régua de
+tempo do protótipo — explicitamente adiada desde a Decisão de escopo original desta ADR ("a régua de
+tempo... fica fora de escopo desta fase").
+
+Achado no protótipo (`olho.html:4603-4617` constantes, `5435-5580` lógica, `.f-regua-caixa`/`#t-regua`
+CSS `579-588`) — mecanismo completo: `extremos` (início/fim do dia, do primeiro ao último ponto ±15min,
+span mínimo 1h), `instante` (posição do cursor em segundos do dia, nasce no FIM — "é o estado do dia
+até agora"), um `<canvas>` desenhando eixo + marcas de hora + uma marca colorida por ponto (esmaecida
+depois do instante) + cursor, `toca()`/`quadro()` (loop de animação via `requestAnimationFrame`,
+avança `instante` por `dt × velocidade`, rebobina do fim se tocar de novo), e `aplicaInstante()`
+(função central que sincroniza mapa, timeline e crachá a cada mudança de instante).
+
+Traduzido pra um novo componente `regua-tempo` (canvas próprio, mesmo desenho — eixo, marcas de hora,
+tiques coloridos, cursor navy) montado dentro de `mapa-bases.html`, abaixo do mapa (mesma coluna da
+barra superior — não estica pra trás do painel de detalhe, que é coluna à parte). Estado
+(`reguaInstante`/`reguaTocando`/`reguaVelocidade`/`reguaExtremos`) vive em `ColaboradoresService` —
+compartilhado entre o controle, o mapa e o crachá, mesmo padrão de `ucFocada`/`colaboradorSelecionado`
+já usados ali.
+
+**Cor dos tiques**: usa `corDaUc()` (já existente, mesma regra do mapa/timeline) em vez da lógica de
+cor do protótipo — que não distinguia "a realizar" (sem `codigo`) de "normal", um gap que nosso app já
+resolve. Pontos sem `hora_import` (ainda não realizados) não entram na régua — não têm posição no eixo
+do tempo, mesmo comportamento do protótipo.
+
+**Sincronização com o resto da tela** (equivalente a `aplicaInstante()`):
+- **Timeline** (`colaborador-detalhe.html`): um novo `effect` no service seta `ucFocada` pro ponto no
+  instante atual — reaproveita o scroll+destaque que já existiam pra clique num ponto do mapa. Só
+  dispara quando a régua está TOCANDO ou já foi arrastada (`instante !== extremos.fim`) — na posição
+  de repouso inicial (colaborador recém-aberto) não força nenhum scroll indesejado.
+- **Crachá** (`colaborador-cracha.ts`): a linha "às HH:MM, leu a UC..." passou a usar `reguaInstante`
+  (ver Adendo 9 — antes usava sempre o último ponto do dia; como a régua nasce no fim, o
+  comportamento em repouso é idêntico).
+- **Mapa** (`mapa-bases.ts`): o marcador de "último ponto" (ícone de localização real,
+  `iconeUltimoPonto`) agora acompanha o instante da régua em vez de ser sempre o último ponto
+  cronológico absoluto — arrastar/tocar a régua move esse marcador ponto a ponto.
+
+**Simplificação consciente (não implementada nesta rodada):** o protótipo também ESMAECE (opacidade
+reduzida) todos os pontos/segmentos futuros diretamente no MAPA em si, não só no canvas da régua —
+nosso mapa usa marcadores Leaflet reais (não um canvas próprio como o protótipo), e replicar esse
+esmaecimento exigiria tocar toda a lógica de criação/atualização de marcador e segmento em
+`atualizarRotaJornada`. Como o pedido do usuário focou explicitamente na régua + timeline em destaque
+(não mencionou o mapa esmaecendo pontos futuros), isso ficou de fora — o mapa segue mostrando a rota
+inteira do dia, só o marcador de "último ponto" acompanha a régua. Fica como possível next step se o
+usuário quiser esse efeito também no mapa.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness reproduzindo a mesma
+matemática de desenho (dados fake com pausa/impedimento/reincidente) confirmou visualmente: eixo,
+marcas de hora, tiques nas cores certas, cursor na posição certa. Testado via `javascript_tool`
+(a Browser pane não avança `requestAnimationFrame` em aba automatizada, limitação do ambiente, não do
+código): "voltar ao início" e "play" alternam estado e ícone corretamente; simulação manual do passo
+do quadro (`dt × velocidade`) confirma avanço correto do instante; simulação de estourar o fim confirma
+que trava exatamente em `extremos.fim` e para de tocar; instante no meio do dia confirma pontos
+passados nítidos e futuros esmaecidos (alpha 0.25).
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Esmaecimento de pontos/segmentos futuros diretamente no mapa (Leaflet) — não implementado nesta
+  rodada, ver nota de simplificação acima.
 - Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Aba Risco — inalterada.

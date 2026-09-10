@@ -1,6 +1,12 @@
 import { Component, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { AtividadeColaborador, ColaboradoresService, formatarDuracao, formatarTempoParado } from '../../../../services/colaboradores.service';
+import {
+  AtividadeColaborador,
+  ColaboradoresService,
+  formatarDuracao,
+  formatarTempoParado,
+  horaParaSegundos,
+} from '../../../../services/colaboradores.service';
 
 // Mesmos limiares do protótipo de referência (ANEL_VIVO_MIN/ANEL_MORNO_MIN)
 // — decide a cor do anel ao redor do avatar (verde = visto recentemente,
@@ -76,16 +82,26 @@ export class ColaboradorCracha {
     return nome ? this.colaboradoresService.atividadeDe(nome) : null;
   });
 
-  // "Atual" — o protótipo mostra o ponto no INSTANTE da régua de tempo
-  // (feature de playback, fase futura desta rodada — ver ADR). Sem régua
-  // ainda, mostra a ÚLTIMA UC realizada do dia (mesma noção de "último
-  // ponto" já usada no mapa, ver ucUltimoPonto em mapa-bases.ts). Quando a
-  // régua existir, esta linha passa a acompanhar a posição dela.
+  // "Atual" — o ponto no INSTANTE da régua de tempo (mesma lógica de
+  // atividadeNoInstante() do protótipo): o último ponto cujo horário é
+  // menor ou igual ao instante atual. Como reguaInstante nasce em
+  // extremos.fim (o fim do dia até agora, ver effect de inicialização no
+  // service), isso equivale a "a última UC realizada" enquanto a régua não
+  // foi tocada — e passa a acompanhar o playback assim que o usuário
+  // arrasta ou dá play.
   ultimoPonto = computed(() => {
     const nome = this.nome();
-    if (!nome) return null;
+    const instante = this.colaboradoresService.reguaInstante();
+    if (!nome || instante === null) return null;
     const pontos = this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos ?? [];
-    return [...pontos].reverse().find(p => p.codigo) ?? null;
+    let atual = null as (typeof pontos)[number] | null;
+    for (const p of pontos) {
+      const s = horaParaSegundos(p.hora_import);
+      if (s === null) continue;
+      if (s <= instante) atual = p;
+      else break;
+    }
+    return atual;
   });
 
   ok = computed(() => {

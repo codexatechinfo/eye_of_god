@@ -4,17 +4,23 @@
        topleft nem overlay Angular no bottom-left. Tradução literal de
        .f-barra do protótipo (olho.html): altura fixa, fundo sup, borda
        inferior, legenda à esquerda, os dois controles à direita. -->
-  <div class="shrink-0 h-10 bg-sup border-b border-linha flex items-center gap-3 px-3 overflow-x-auto">
+  <div class="shrink-0 h-10 bg-sup border-b border-linha flex items-center gap-3 px-3">
     <!-- Legenda de cores dos pontos/segmentos da timeline — inclui TODAS as
          categorias que o app já usa (não só as 5 do protótipo): pausa e
          trocou município também têm cor própria (ver corDaUc/corDoSegmento
          em mapa-bases.ts). Cores literais (não classes Tailwind) porque são
          as MESMAS constantes hex já usadas nos marcadores/segmentos do
-         próprio mapa (CORES_PONTO/COR_SEGMENTO_*). -->
-    <div class="flex items-center gap-3 flex-wrap shrink-0">
+         próprio mapa (CORES_PONTO/COR_SEGMENTO_*). overflow-x-auto/min-w-0
+         SÓ na legenda (não na barra inteira) — o painel de detalhe empurra
+         o mapa e encolhe essa barra (ver home.html), a legenda é o único
+         trecho com itens suficientes pra precisar rolar; tipo de mapa/
+         camadas ficam sempre fixos e visíveis à direita. Overflow na barra
+         inteira cortava o dropdown de Camadas (usuário reportou "clica e
+         não abre, ou fica preso"), já que ele é absolute DENTRO dela. -->
+    <div class="flex items-center gap-3 flex-nowrap overflow-x-auto min-w-0 shrink">
       <span
         *ngFor="let item of legenda"
-        class="flex items-center gap-1.5 text-[10.5px] font-semibold text-fraco whitespace-nowrap"
+        class="flex items-center gap-1.5 text-[10.5px] font-semibold text-fraco whitespace-nowrap shrink-0"
         [title]="item.descricao"
       >
         <span class="w-2.5 h-2.5 rounded-full shrink-0" [style.background]="item.cor"></span>

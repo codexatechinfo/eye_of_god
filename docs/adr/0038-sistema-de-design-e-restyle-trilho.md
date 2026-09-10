@@ -401,3 +401,47 @@ referência solta aos métodos/classes CSS removidos (`criarControleCamadas`, `m
 
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Régua de tempo (playback do dia) e aba Risco — inalteradas.
+
+## Adendo 5 — Rodada 5: painel cobrindo a barra do mapa + dropdown de Camadas cortado
+
+Usuário testou a rodada 4 no app real (print da tela inteira com o painel de RAFAEL COUTINHO
+aberto) e reportou 2 bugs:
+
+**Painel de detalhe cobria a barra superior do mapa** — o painel (`colaborador-detalhe.html`,
+variante `'painel'`) era `absolute inset-y-0 right-0` dentro do MESMO `relative` que envolvia
+`app-mapa-bases` inteiro (`home.html`). `inset-y-0` cobre do topo ao fundo desse container — incluindo
+a barra de legenda/tipo de mapa/camadas que a rodada 4 colocou DENTRO de `app-mapa-bases`, então
+abrir o painel tampava essas informações (comentário antigo no próprio código já dizia "sem cobrir
+header/filtros que ficam acima dela" — verdade quando esse header vivia FORA da área do mapa, deixou
+de ser quando a barra passou a viver dentro).
+
+Usuário pediu explicitamente pra inverter o comportamento: "quando abre a barra lateral... deve
+empurar o mapa e a barra superior... para não cobrir". Isso reverte uma decisão tomada na rodada 2
+(manter overlay, não virar coluna fixa como o protótipo) — decisão nova e explícita do usuário desta
+vez, não um esquecimento. Implementado: painel deixou de ser `position:absolute`, virou coluna real
+num flex row (`home.html`: `<main class="... flex"><app-mapa-bases class="flex-1 min-w-0 .../><app-colaborador-detalhe/></main>`)
+— `app-mapa-bases` tem `flex-1 min-w-0` (encolhe), o painel tem `w-full max-w-xs shrink-0` (largura
+fixa, não encolhe). Abrir o painel agora empurra/encolhe o mapa E sua barra superior junto, em vez de
+cobrir qualquer um dos dois. Variante `'modal'` (Monitoramento Colaborador) não foi tocada — continua
+`fixed inset-0`, sem relação com este layout.
+
+**Dropdown de "Camadas" não abria / ficava cortado** — causa raiz: a barra superior inteira
+(`mapa-bases.html`) tinha `overflow-x-auto` (defensivo, pra caso a legenda não coubesse). Definir
+overflow-x força overflow-y a virar não-visível também (regra do CSS) — como o dropdown de Camadas é
+`position:absolute` DENTRO dessa barra e precisa crescer pra BAIXO dela (~250px de altura pros 7
+checkboxes, a barra em si só tem 40px), ele ficava cortado pela própria barra. Corrigido: o
+`overflow-x-auto`/`min-w-0` saiu da barra inteira e foi só pra dentro do wrapper da LEGENDA (o único
+trecho que pode precisar rolar horizontalmente quando o mapa encolhe com o painel aberto — ver bug
+acima); tipo de mapa e Camadas ficam fora desse overflow, sempre visíveis e sem cortar o dropdown.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness estático confirmando
+os dois casos: painel ao lado do mapa (não sobre) com a barra superior inteira visível e legível ao
+lado dele; clique no botão Camadas abre o dropdown completo (7 checkboxes) por cima do mapa, sem
+corte.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Régua de tempo (playback do dia) e aba Risco — inalteradas.

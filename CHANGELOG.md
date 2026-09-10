@@ -42,6 +42,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   Colaborador"/"Monitoramento de Livros"); scrollbar do app inteiro ficou mais fina e discreta. Ver
   Adendo 4 da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+### Corrigido
+
+- Painel de detalhe do colaborador (aba Trilho) cobria a barra de legenda/tipo de mapa/camadas
+  quando aberto — virou coluna real que empurra o mapa (encolhe via flex) em vez de sobrepor tudo
+  com `position: absolute`. Dropdown de "Camadas" também ficava cortado/não abria — `overflow-x-auto`
+  que era da barra inteira (defensivo, sobrou da rodada 4) cortava o dropdown, que precisa crescer
+  pra baixo dela; restrito só ao trecho da legenda, que é o único que pode precisar rolar. Ver
+  Adendo 5 da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Adicionado
 
 - Camada "Rastro GPS" (mapa, aba Trilho) ganhou marcadores de primeiro e último ponto — contorno

@@ -233,11 +233,14 @@
       <app-lista-colaboradores class="flex-1 min-h-0 flex flex-col"></app-lista-colaboradores>
     </aside>
 
-    <main class="flex-1 min-w-0 h-full flex flex-col">
-      <div class="relative flex-1 min-h-0">
-        <app-mapa-bases class="block h-full"></app-mapa-bases>
-        <app-colaborador-detalhe></app-colaborador-detalhe>
-      </div>
+    <!-- app-mapa-bases e app-colaborador-detalhe lado a lado (flex row) —
+         o painel de detalhe EMPURRA o mapa quando abre (flex-1 min-w-0 no
+         mapa), não cobre mais nada por cima. Antes eram sobrepostos num
+         mesmo `relative`, e o painel (absolute inset-y-0) tampava a barra
+         superior do mapa (legenda/camadas) — ver colaborador-detalhe.html. -->
+    <main class="flex-1 min-w-0 h-full flex">
+      <app-mapa-bases class="block flex-1 min-w-0 h-full"></app-mapa-bases>
+      <app-colaborador-detalhe></app-colaborador-detalhe>
     </main>
   </div>
 

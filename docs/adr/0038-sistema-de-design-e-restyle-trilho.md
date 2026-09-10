@@ -499,3 +499,40 @@ container pai.
 
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Régua de tempo (playback do dia) e aba Risco — inalteradas.
+
+## Adendo 8 — Rodada 8: identidade do cabeçalho e foco do campo de busca
+
+Usuário reportou 2 pontos rápidos (dos 5 desta rodada — os outros 3 estão em andamento/pendentes,
+ver seção seguinte):
+
+**Cabeçalho ainda sem a identidade "Olho de Deus"** — desde a rodada 4, o cabeçalho só tinha o logo
+A2L; nunca chegou a ganhar o bloco `#topo .ident` do protótipo (nome do produto + "supervisão de
+campo · coleta HH:MM"). Adicionado em `home.html`, reaproveitando `ultimoImport()` (já existia,
+mesmo dado do bloco "Última importação" mais à direita no cabeçalho) — sem chamada nova ao backend.
+
+**Campo de busca da lista mostrando uma caixa com borda preta dentro dele** — o wrapper (`div` com
+borda/fundo customizados) estiliza o foco via `focus-within:border-azul`, mas o `<input>` de dentro
+não tinha `outline-none` — o contorno de foco PADRÃO do navegador (geralmente preto) aparecia em
+volta do input, dentro do wrapper, parecendo uma "caixa dentro da caixa". Adicionado `outline-none`
+no input de busca e, por consistência, nos outros 3 campos da mesma barra (data, regional, cargo),
+que tinham o mesmo risco (só não tinha sido notado ainda por não terem wrapper próprio).
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos.
+
+### Pendências desta rodada (itens 3, 4 e parte do 5, ver conversa)
+
+- Balão de resumo do colaborador ao clicar (avatar, "vista há Xh", último ponto lido, barra de
+  progresso, "tempo pra fechar o serviço") — feature nova, pedida pelo usuário com print de
+  referência, ainda não implementada.
+- Régua de tempo / playback da timeline do dia (play/pause, velocidade, ponto em destaque
+  acompanhando) — reativa uma feature explicitamente adiada desde a fase 1 (ver Contexto desta ADR);
+  usuário confirmou querer agora. Ainda não implementada.
+- Performance: 1 de 2 consultas lentas identificadas foi corrigida (ver Adendo de performance no
+  CHANGELOG — `idx_base_dados_leitura_data_usuario_hora`). A segunda (`obterBaselineDigitadosPorLivro`,
+  parte de `/colaboradores/atividade-hoje`, ~1,3s) resistiu a duas tentativas (índice novo, reescrita
+  com `LATERAL` — pior, cancelada em produção) — precisa de mais investigação antes de tentar de
+  novo, não é um fix rápido como o primeiro.
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Aba Risco — inalterada.

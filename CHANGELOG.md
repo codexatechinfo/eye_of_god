@@ -17,7 +17,22 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   Índice aplicado direto no banco (projeto não usa framework de migrations — sem arquivo `.sql`
   correspondente no repositório).
 
+- Endpoint `/colaboradores/atividade-hoje` (~1,3s de uma das 3 consultas paralelas,
+  `obterBaselineDigitadosPorLivro`) segue lento — tentativas de índice novo e de reescrita com
+  `LATERAL` não melhoraram (a reescrita chegou a ficar pior, cancelada em produção antes de
+  terminar). Fica pendente pra uma investigação mais a fundo.
+
+### Corrigido
+
+- Campo de busca da lista de colaboradores (aba Trilho) mostrava o contorno de foco padrão do
+  navegador dentro do wrapper customizado, parecendo uma caixa dentro da caixa — adicionado
+  `outline-none` nele e nos outros campos da mesma barra (data/regional/cargo).
+
 ### Alterado
+
+- Cabeçalho (aba Trilho) ganhou o bloco de identidade "Olho de Deus · supervisão de campo · coleta
+  HH:MM" ao lado do logo A2L — fazia parte do padrão do protótipo desde a rodada 4, mas nunca tinha
+  sido adicionado.
 
 - Introduzido sistema de tokens de design de marca (cores, tipografia, raio, sombra — bloco
   `@theme` em `styles.css`) a partir de um protótipo de referência do usuário, e aplicado à aba

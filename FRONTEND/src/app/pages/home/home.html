@@ -23,6 +23,18 @@
           </svg>
         </div>
 
+        <!-- Identidade "Olho de Deus" — faltava desde a rodada 4 (só o logo
+             A2L existia); tradução literal de #topo .ident do protótipo
+             (olho.html:1105-1108). "coleta HH:MM" reaproveita ultimoImport()
+             que já existe (mesmo dado do bloco "Última importação" mais à
+             direita), sem duplicar a busca. -->
+        <div class="hidden md:flex flex-col leading-tight pl-4 border-l border-linha">
+          <strong class="text-[13.5px] font-semibold text-tit tracking-tight">Olho de Deus</strong>
+          <span class="font-mono text-[10px] text-fraco tracking-wide whitespace-nowrap">
+            supervisão de campo{{ ultimoImport() ? ' · coleta ' + ultimoImport()!.dataImport.slice(0, 5) + ' ' + ultimoImport()!.horaImport.slice(0, 5) : '' }}
+          </span>
+        </div>
+
         <button
           type="button"
           (click)="selecionarAba('monitoramento')"

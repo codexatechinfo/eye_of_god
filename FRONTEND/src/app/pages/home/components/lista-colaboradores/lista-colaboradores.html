@@ -17,7 +17,7 @@
       type="text"
       placeholder="colaborador, cargo ou regional"
       autocomplete="off"
-      class="flex-1 min-w-0 text-xs bg-transparent placeholder:text-tenue"
+      class="flex-1 min-w-0 text-xs bg-transparent placeholder:text-tenue outline-none"
       [value]="colaboradoresService.filtroColaborador()"
       (input)="aoBuscar($any($event.target).value)"
     />
@@ -27,7 +27,7 @@
     <input
       type="date"
       title="dia da operação"
-      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt focus:border-azul focus:bg-sup transition-colors"
+      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt outline-none focus:border-azul focus:bg-sup transition-colors"
       [value]="colaboradoresService.filtroData()"
       (change)="aoMudarData($any($event.target).value)"
     />
@@ -49,7 +49,7 @@
   <div class="flex items-center gap-1.5">
     <select
       title="regional"
-      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt focus:border-azul transition-colors"
+      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt outline-none focus:border-azul transition-colors"
       [value]="colaboradoresService.filtroRegional()"
       (change)="aoMudarRegional($any($event.target).value)"
     >
@@ -58,7 +58,7 @@
     </select>
     <select
       title="cargo"
-      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt focus:border-azul transition-colors"
+      class="flex-1 min-w-0 h-[29px] px-2 rounded-md border border-linha bg-sup-2 text-xs text-txt outline-none focus:border-azul transition-colors"
       [value]="colaboradoresService.filtroCargo()"
       (change)="aoMudarCargo($any($event.target).value)"
     >

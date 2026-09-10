@@ -7,6 +7,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Camada "Rastro GPS" (mapa, aba Trilho) ganhou marcadores de primeiro e último ponto — contorno
+  vazado no início, disco cheio com halo no ponto mais recente, cada um com tooltip mostrando o
+  horário exato. Ver Adendo 7 da [ADR 0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
+
 - Camada "Rastro GPS" (mapa, aba Trilho) agora cai pro Scalefusion (celular do próprio colaborador)
   quando o motoqueiro pedido não tem veículo mapeado na SEGSAT, em vez de ficar vazia — 158
   motoqueiros ativos estavam nessa situação hoje. Tooltip do rastro avisa quando é esse fallback.

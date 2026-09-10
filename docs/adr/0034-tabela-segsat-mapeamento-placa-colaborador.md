@@ -357,3 +357,21 @@ e 12 pontos Scalefusion, confirmando que o fallback teria dado resultado onde an
 | AGNALDO ANDRADE DA SILVA | Apucarana | 0 | 2 |
 
 `npx tsc --noEmit`, `npx ng build --configuration production` e `npm test` (18/18) limpos.
+
+## Adendo 7 (2026-09-10) — marcadores de primeiro e último ponto do rastro
+
+Usuário: o tracejado sozinho não deixa óbvio qual ponto é o primeiro registrado do dia e qual é o
+mais recente (principalmente quando a rota se cruza ou o veículo volta perto de onde começou).
+
+`renderizarRastroGps` (`mapa-bases.ts`) ganhou dois marcadores, nos extremos de `validos` (já
+ordenado por horário — ver Adendo 4): `ICONE_RASTRO_INICIO` (contorno vazado, branco com borda
+preta) no primeiro ponto, `ICONE_RASTRO_FIM` (disco cheio com halo, mesmo padrão visual de "você
+está aqui" de app de mapa) no último. Mesma cor do próprio rastro (`#0f172a`) — associados
+visualmente à linha, não a nenhuma outra camada. Tooltip de cada um mostra o horário exato
+(`toLocaleTimeString('pt-BR')`, mesmo padrão já usado pra "localização em tempo real" no mapa).
+
+### Verificação
+
+Réplica com Leaflet real e o rastro completo (549 pontos, mesmo colaborador dos Adendos 4-6): zoom
+no primeiro ponto e zoom no último, cada um com seu ícone distinto e tooltip mostrando o horário
+correto. `npx tsc --noEmit` e `npx ng build --configuration production` limpos.

@@ -175,6 +175,31 @@ const ICONE_PAUSA = L.divIcon({
   iconAnchor: [7, 7],
 });
 
+// Extremos do rastro GPS (não confundir com os pontos de UC lida) — usuário
+// pediu pra indicar qual é o primeiro ponto registrado do dia e qual é o
+// mais recente, já que o tracejado sozinho não deixa isso óbvio. Contorno
+// vazado = início (só marca onde o rastro começa); disco cheio com halo =
+// posição mais recente (mesmo padrão visual de "você está aqui" de app de
+// mapa) — mesma cor do próprio rastro (`#0f172a`), pra ficar claramente
+// associado a ele e não a nenhuma outra camada (pontos coletados/paradas
+// usam outra paleta de propósito, ver corDaUc/corDoSegmento).
+const ICONE_RASTRO_INICIO = L.divIcon({
+  html: `
+    <div style="width:14px;height:14px;border-radius:9999px;background:#fff;border:2.5px solid #0f172a;box-shadow:0 1px 2px rgba(0,0,0,.35);"></div>
+  `,
+  className: '',
+  iconSize: [14, 14],
+  iconAnchor: [7, 7],
+});
+const ICONE_RASTRO_FIM = L.divIcon({
+  html: `
+    <div style="width:14px;height:14px;border-radius:9999px;background:#0f172a;border:2px solid #fff;box-shadow:0 0 0 4px rgba(15,23,42,0.28),0 1px 2px rgba(0,0,0,.35);"></div>
+  `,
+  className: '',
+  iconSize: [14, 14],
+  iconAnchor: [7, 7],
+});
+
 // Último ponto de execução do colaborador aberto (1295315.svg, mesmo padrão
 // de fidelidade exata dos Adendos 7/9 de ADR 0030) — passo inicial pra os
 // ícones de colaborador no mapa passarem a representar a localização REAL
@@ -648,6 +673,20 @@ export class MapaBases implements AfterViewInit, OnDestroy {
           ? 'Rastro GPS real do dia (celular — sem veículo mapeado na SEGSAT)'
           : 'Rastro GPS real do dia',
       )
+      .addTo(this.grupoRastroGps);
+
+    // Marcadores de início/fim — usuário pediu pra indicar qual é o
+    // primeiro ponto registrado do dia e qual é o mais recente, já que o
+    // tracejado sozinho não deixa isso óbvio (principalmente quando a rota
+    // se cruza ou o veículo volta perto de onde começou). `validos` já está
+    // ordenado por horário, então é sempre o primeiro/último do array.
+    const primeiro = validos[0];
+    const ultimo = validos[validos.length - 1];
+    L.marker(latLngs[0], { pane: 'paneRastroGps', icon: ICONE_RASTRO_INICIO })
+      .bindTooltip(`Primeiro ponto do rastro — ${new Date(primeiro.data_hora_posicao).toLocaleTimeString('pt-BR')}`)
+      .addTo(this.grupoRastroGps);
+    L.marker(latLngs[latLngs.length - 1], { pane: 'paneRastroGps', icon: ICONE_RASTRO_FIM })
+      .bindTooltip(`Último ponto do rastro (mais recente) — ${new Date(ultimo.data_hora_posicao).toLocaleTimeString('pt-BR')}`)
       .addTo(this.grupoRastroGps);
   }
 

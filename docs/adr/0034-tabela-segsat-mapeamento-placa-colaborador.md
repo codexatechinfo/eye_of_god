@@ -218,3 +218,24 @@ duplicar). `obterHistoricoPosicoes` testado com três casos: colaborador com map
 retornados, formato batendo com o que o frontend espera), colaborador sem mapeamento SEGSAT
 (`[]`), colaborador inexistente (`[]`, sem exceção). `npm test` (18/18) limpo antes e depois de
 dropar os índices órfãos.
+
+### Adendo — spinner de carregamento (2026-09-10)
+
+Consequência direta da troca acima: a chamada de "Rastro executado" agora envolve login + requisição
+HTTP externa (SEGSAT) em vez de só ler uma tabela local, então pode demorar mais. Usuário pediu o
+mesmo indicativo de carregamento que já existia pra jornada (ADR 0037 Adendo 3).
+
+`ColaboradoresService` ganhou `carregandoGpsHistorico` (signal), ligado/desligado em
+`carregarGpsHistorico()` ao redor da chamada HTTP — mesmo padrão de `carregandoJornada`. A pílula
+flutuante do mapa (`mapa-bases.html`) passou a abrir também com esse signal, mostrando "Carregando
+rastro executado..." em vez de "Carregando rota do colaborador..." quando é esse o caso; se os dois
+coincidirem (colaborador aberto com a camada já ligada, jornada e rastro carregando juntos), a
+mensagem de jornada tem prioridade — é o cenário mais comum e a rota costuma demorar mais. Não criou
+uma segunda pílula (evita duas flutuando empilhadas pra um caso raro de sobreposição).
+
+### Verificação
+
+Réplica com o CSS real compilado do projeto: pílula com o texto novo cabe numa linha só em largura
+normal de mapa; testado também num contêiner de 360px (largura de painel lateral, pior caso) — quebra
+pra duas linhas sem distorcer o formato arredondado. `npx tsc --noEmit` e `npx ng build
+--configuration production` limpos.

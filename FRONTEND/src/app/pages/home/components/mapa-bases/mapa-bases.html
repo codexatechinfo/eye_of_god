@@ -1,20 +1,25 @@
 <div class="relative w-full h-full">
   <div #mapaEl class="w-full h-full"></div>
 
-  <!-- Spinner de "carregando rota" — usuário reportou que a rota demora um
-       tempo considerável pra aparecer no mapa depois de abrir um
-       colaborador (a linha só desenha quando a jornada chega do backend,
-       ver atualizarRotaJornada), sem nenhum indicativo de que algo está
-       carregando. Não bloqueia interação com o mapa de propósito
-       (pointer-events-none) — só avisa, não trava. -->
+  <!-- Spinner de carregamento — usuário reportou que a rota demora um tempo
+       considerável pra aparecer no mapa depois de abrir um colaborador (a
+       linha só desenha quando a jornada chega do backend, ver
+       atualizarRotaJornada), sem nenhum indicativo de que algo está
+       carregando. Mesmo indicativo cobre "Rastro executado" (camada
+       separada, ver camadaRastroGps): a fonte SEGSAT chama a API ao vivo
+       por trás (login + requisição externa, ADR 0034 Adendo 3) em vez de só
+       ler uma tabela local, então também pode demorar. Prioriza a mensagem
+       de jornada quando as duas coincidem (dispara primeiro na prática, ao
+       abrir um colaborador com a camada já ligada). Não bloqueia interação
+       com o mapa de propósito (pointer-events-none) — só avisa, não trava. -->
   <div
-    *ngIf="colaboradoresService.carregandoJornada()"
+    *ngIf="colaboradoresService.carregandoJornada() || colaboradoresService.carregandoGpsHistorico()"
     class="absolute top-3 left-1/2 -translate-x-1/2 z-[1200] flex items-center gap-2 bg-white/95 border border-slate-200 shadow-lg rounded-full px-3 py-1.5 text-xs font-semibold text-slate-600 pointer-events-none"
   >
     <svg class="animate-spin h-3.5 w-3.5 text-blue-600 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z"></path>
     </svg>
-    Carregando rota do colaborador...
+    {{ colaboradoresService.carregandoJornada() ? 'Carregando rota do colaborador...' : 'Carregando rastro executado...' }}
   </div>
 </div>

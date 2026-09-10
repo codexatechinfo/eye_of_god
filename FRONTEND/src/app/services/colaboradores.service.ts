@@ -535,6 +535,13 @@ export class ColaboradoresService {
   // não tem nenhum ponto (sem dado real).
   gpsHistoricoPorColaborador = signal<Map<string, PontoGpsHistorico[]>>(new Map());
 
+  // true enquanto uma busca de "Rastro executado" está em voo. Fonte SEGSAT
+  // agora chama a API ao vivo por trás (login + requisição externa, ver ADR
+  // 0034 Adendo 3) em vez de só ler uma tabela local — mais lento que
+  // antes, então ganhou o mesmo indicativo de carregamento que a jornada já
+  // tinha (carregandoJornada).
+  carregandoGpsHistorico = signal(false);
+
   // UC com o card de detalhe expandido na timeline (accordion, uma por vez)
   // — signal no service (não local ao componente) porque tanto um clique na
   // lista (colaborador-detalhe) quanto um clique num ponto do mapa
@@ -826,16 +833,19 @@ export class ColaboradoresService {
   // calendário da sidebar, igual carregarJornada).
   carregarGpsHistorico(nome: string, fonte: 'scalefusion' | 'segsat'): void {
     const params = new HttpParams().set('colaborador', nome).set('data', this.filtroData()).set('fonte', fonte);
+    this.carregandoGpsHistorico.set(true);
     this.http.get<GpsHistoricoResponse>(`${this.apiUrl}/colaboradores/gps-historico`, { params }).subscribe({
       next: resposta => {
         const mapa = new Map(this.gpsHistoricoPorColaborador());
         mapa.set(nome, resposta.pontos);
         this.gpsHistoricoPorColaborador.set(mapa);
+        this.carregandoGpsHistorico.set(false);
       },
       error: () => {
         const mapa = new Map(this.gpsHistoricoPorColaborador());
         mapa.set(nome, []);
         this.gpsHistoricoPorColaborador.set(mapa);
+        this.carregandoGpsHistorico.set(false);
       },
     });
   }

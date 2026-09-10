@@ -7,6 +7,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Spinner no mapa ("Carregando rastro executado...") enquanto a camada "Rastro executado" busca o
+  histórico de GPS — a fonte SEGSAT passou a chamar a API ao vivo (ver item "Alterado" abaixo) em vez
+  de só ler uma tabela local, então pode demorar mais. Mesmo padrão visual do spinner de jornada
+  já existente, com prioridade pra mensagem de jornada quando os dois coincidem. Ver Adendo em
+  [ADR 0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
+
 - Camada "Paradas e gaps" no mapa (aba Trilho), agora funcionando de verdade — controla a
   visibilidade dos marcadores de pausa e dos segmentos coloridos que indicam troca de
   livro/município, independente das camadas "Pontos coletados"/"Trajetória do dia" (antes, esses

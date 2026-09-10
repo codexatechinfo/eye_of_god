@@ -639,3 +639,39 @@ passados nítidos e futuros esmaecidos (alpha 0.25).
 - Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Aba Risco — inalterada.
+
+## Adendo 11 — Rodada 11: crachá mostrando "nenhuma UC" indevidamente + projeção desligada
+
+Usuário reportou, com print, o crachá de CLAUDENEI CAJUEIRO DA SILVA mostrando "Nenhuma UC realizada
+hoje" e "vista há nunca" ao mesmo tempo que a barra de progresso já mostrava 391 concluído/13 com
+impedimento/676 a realizar (dado real de atividade, vindo de `atividadeDe()`) — e uma projeção de
+"8h 47min pra fechar o serviço" calculada em cima desse mesmo dado.
+
+**Causa**: `ultimoPonto` (Adendo 10) passou a depender de `reguaInstante()`, que só existe depois que
+a JORNADA (não a atividade — são fontes diferentes, `jornadaPorColaborador()` vs `atividadeHoje()`)
+termina de carregar pra aquele colaborador. Entre abrir o colaborador e a jornada chegar (ou se ela
+demorar/falhar), `reguaInstante()` fica `null`, e o crachá mostrava "nenhuma UC" mesmo com atividade
+real — o usuário pediu: "onde mostra a UC tem que sempre mostrar a última".
+
+**Correção**: `ultimoPonto` agora tenta o ponto no instante da régua primeiro, mas SEMPRE cai pro
+último ponto realizado (busca sem depender de `reguaInstante`) se a busca por instante não achar
+nada — nunca mais regride pra "nenhuma atividade" só por causa do estado transitório da régua/jornada.
+
+**Projeção desligada por pedido explícito** ("põe dois traços por enquanto"): `projecaoSegundos()`
+agora sempre retorna `null` — o template já cai sozinho no estado `semProjecao` ("—" + "sem dado
+suficiente pra projetar"), sem precisar mexer no HTML. Conta original comentada no próprio método,
+pra reativar rápido quando o usuário pedir de volta.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Projeção "tempo pra fechar o serviço" — desligada por pedido do usuário, código preservado
+  comentado em `colaborador-cracha.ts` pra reativar quando pedido.
+- Esmaecimento de pontos/segmentos futuros diretamente no mapa (Leaflet) — não implementado, ver
+  Adendo 10.
+- Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Aba Risco — inalterada.

@@ -89,19 +89,30 @@ export class ColaboradorCracha {
   // service), isso equivale a "a última UC realizada" enquanto a régua não
   // foi tocada — e passa a acompanhar o playback assim que o usuário
   // arrasta ou dá play.
+  //
+  // SEMPRE cai pro último ponto realizado (ignorando o instante) se a busca
+  // acima não achar nada — reguaExtremos()/reguaInstante() só existem
+  // depois que a jornada carrega (ver service), então logo depois de abrir
+  // um colaborador (ou nos poucos instantes até a jornada chegar) o crachá
+  // mostrava "nenhuma UC realizada hoje" mesmo com atividade real no dia —
+  // usuário reportou com print. Isso garante que a UC mostrada nunca regride
+  // pra "nenhuma" só por causa do estado transitório da régua.
   ultimoPonto = computed(() => {
     const nome = this.nome();
-    const instante = this.colaboradoresService.reguaInstante();
-    if (!nome || instante === null) return null;
+    if (!nome) return null;
     const pontos = this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos ?? [];
-    let atual = null as (typeof pontos)[number] | null;
-    for (const p of pontos) {
-      const s = horaParaSegundos(p.hora_import);
-      if (s === null) continue;
-      if (s <= instante) atual = p;
-      else break;
+    const instante = this.colaboradoresService.reguaInstante();
+    if (instante !== null) {
+      let atual = null as (typeof pontos)[number] | null;
+      for (const p of pontos) {
+        const s = horaParaSegundos(p.hora_import);
+        if (s === null) continue;
+        if (s <= instante) atual = p;
+        else break;
+      }
+      if (atual) return atual;
     }
-    return atual;
+    return [...pontos].reverse().find(p => p.codigo) ?? null;
   });
 
   ok = computed(() => {
@@ -133,12 +144,17 @@ export class ColaboradorCracha {
   // observado hoje (tempo trabalhado ÷ realizadas), multiplicado pelo que
   // falta. Só faz sentido com pelo menos 1 realizada e 1 pendente (mesma
   // condição do protótipo).
-  projecaoSegundos = computed(() => {
-    const a = this.atividade();
-    const nome = this.nome();
-    const jornada = nome ? this.colaboradoresService.jornadaPorColaborador().get(nome) : null;
-    if (!a || !jornada?.trabalhadoSegundos || !a.totalRealizadas || !a.totalPendentes) return null;
-    return (jornada.trabalhadoSegundos / a.totalRealizadas) * a.totalPendentes;
+  //
+  // DESLIGADA por pedido explícito do usuário ("põe dois traços por
+  // enquanto") — sempre "—" (estado semProjecao no template) até segunda
+  // ordem. Conta original comentada logo abaixo pra reativar rápido depois.
+  projecaoSegundos = computed((): number | null => {
+    return null;
+    // const a = this.atividade();
+    // const nome = this.nome();
+    // const jornada = nome ? this.colaboradoresService.jornadaPorColaborador().get(nome) : null;
+    // if (!a || !jornada?.trabalhadoSegundos || !a.totalRealizadas || !a.totalPendentes) return null;
+    // return (jornada.trabalhadoSegundos / a.totalRealizadas) * a.totalPendentes;
   });
 
   contaProjecao = computed(() => {

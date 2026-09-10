@@ -28,6 +28,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   navegador dentro do wrapper customizado, parecendo uma caixa dentro da caixa — adicionado
   `outline-none` nele e nos outros campos da mesma barra (data/regional/cargo).
 
+- Crachá de resumo do colaborador (aba Trilho) mostrava "nenhuma UC realizada hoje" mesmo com
+  atividade real no dia (a UC "atual" tinha passado a depender do instante da régua de tempo, que só
+  existe depois que a jornada termina de carregar) — agora sempre cai pro último ponto realizado
+  quando a busca por instante não encontra nada. Projeção "tempo pra fechar o serviço" desligada por
+  pedido do usuário (sempre "—" por enquanto). Ver Adendo 11 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Alterado
 
 - Cabeçalho (aba Trilho) ganhou o bloco de identidade "Olho de Deus · supervisão de campo · coleta

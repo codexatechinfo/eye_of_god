@@ -51,6 +51,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   pra baixo dela; restrito só ao trecho da legenda, que é o único que pode precisar rolar. Ver
   Adendo 5 da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+- Barra do mapa (aba Trilho): tipo de mapa (Ruas/Satélite/Satélite c/ rótulos/Topográfico) virou
+  dropdown (mesmo padrão do botão "Camadas") no lugar de 4 botões sempre visíveis — a legenda estava
+  rolando horizontalmente por falta de espaço. Ver Adendo 6 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Adicionado
 
 - Camada "Rastro GPS" (mapa, aba Trilho) ganhou marcadores de primeiro e último ponto — contorno

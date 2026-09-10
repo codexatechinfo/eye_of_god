@@ -445,3 +445,28 @@ corte.
 
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Régua de tempo (playback do dia) e aba Risco — inalteradas.
+
+## Adendo 6 — Rodada 6: tipo de mapa também virou dropdown
+
+Usuário mandou print mostrando a legenda com scroll horizontal (fade visível na borda) — os 4 botões
+pill de tipo de mapa (Ruas/Satélite/Satélite c/ rótulos/Topográfico) ocupavam espaço demais na barra,
+sobrando pouco pra legenda. Pediu pra colocar o tipo de mapa no mesmo formato do botão "Camadas"
+(dropdown), não mais pills sempre visíveis.
+
+Implementado: `tiposBase` (array) continua igual, mas a UI virou um botão só (`{{ rotuloBaseAtiva }}`
++ seta) que abre uma lista ao clicar — mesmo padrão exato do dropdown de Camadas (`baseAberta` signal
+espelhando `camadasAbertas`, `toggleBase()`/`selecionarBase()` fecham o próprio dropdown e o do
+outro, `fecharDropdowns()` — renomeado de `fecharCamadas()` — fecha os dois num HostListener só).
+Isso libera a maior parte da largura da barra pra legenda, que só precisa do `overflow-x-auto`
+defensivo em telas realmente estreitas com o painel aberto.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness confirmando: as 7
+categorias da legenda cabem inteiras sem rolar numa largura realista (800px); dropdown de tipo de
+mapa abre com as 4 opções, ativa em navy, mesmo comportamento de fechar ao clicar fora do de Camadas.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Régua de tempo (playback do dia) e aba Risco — inalteradas.

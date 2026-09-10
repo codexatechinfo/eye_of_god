@@ -30,25 +30,40 @@
 
     <div class="flex-1 min-w-[8px]"></div>
 
-    <!-- Tipo de mapa — antes era o L.control.layers nativo do Leaflet
-         (painel que só expandia no hover); agora botões pill sempre
-         visíveis, padrão .base-sel do protótipo. -->
-    <div class="flex items-center gap-0.5 bg-sup-2 rounded-md p-0.5 shrink-0">
+    <!-- Tipo de mapa — os 4 botões pill sempre visíveis ocupavam espaço
+         demais, sobrando pouco pra legenda (que passava a rolar). Virou
+         dropdown igual ao de Camadas logo abaixo: um botão só, mostra a
+         opção atual, abre a lista ao clicar. -->
+    <div class="relative shrink-0" (click)="$event.stopPropagation()">
       <button
         type="button"
-        *ngFor="let tipo of tiposBase"
-        (click)="selecionarBase(tipo.chave)"
-        class="px-2.5 py-1 rounded text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer"
-        [ngClass]="baseAtiva() === tipo.chave ? 'bg-navy text-white' : 'text-fraco hover:text-azul'"
+        (click)="toggleBase()"
+        title="Tipo de mapa"
+        class="flex items-center gap-1.5 h-[29px] px-2.5 rounded-md bg-sup-2 text-[11px] font-semibold text-fraco hover:text-txt transition-colors cursor-pointer"
       >
-        {{ tipo.rotulo }}
+        {{ rotuloBaseAtiva }}
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
+      <div
+        *ngIf="baseAberta()"
+        class="absolute top-[calc(100%+4px)] right-0 bg-sup rounded-lg shadow-xl p-1.5 min-w-[160px] z-[1000] flex flex-col gap-0.5"
+      >
+        <button
+          type="button"
+          *ngFor="let tipo of tiposBase"
+          (click)="selecionarBase(tipo.chave)"
+          class="text-left px-2.5 py-1.5 rounded text-[11.5px] font-semibold whitespace-nowrap transition-colors cursor-pointer"
+          [ngClass]="baseAtiva() === tipo.chave ? 'bg-navy text-white' : 'text-txt hover:bg-sup-2'"
+        >
+          {{ tipo.rotulo }}
+        </button>
+      </div>
     </div>
 
     <!-- Camadas — botão com contador que abre/fecha o dropdown ao clicar
          (não mais hover-pra-expandir do controle nativo). $event.stopPropagation()
          no wrapper evita que o próprio clique de abrir feche na mesma hora
-         (ver fecharCamadas(), HostListener document:click no .ts). -->
+         (ver fecharDropdowns(), HostListener document:click no .ts). -->
     <div class="relative shrink-0" (click)="$event.stopPropagation()">
       <button
         type="button"

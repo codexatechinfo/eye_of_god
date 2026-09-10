@@ -342,8 +342,17 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     { chave: 'topografico', rotulo: 'Topográfico' },
   ];
   baseAtiva = signal('ruas');
+  // Botões pill sempre visíveis pros 4 tipos de mapa ocupavam espaço demais
+  // — sobrava pouco pra legenda, que passava a rolar horizontalmente
+  // (usuário reportou, print mostrando o fade de scroll). Vira dropdown
+  // igual ao de Camadas (mesmo padrão baseAberta/camadasAbertas).
+  baseAberta = signal(false);
   camadasAbertas = signal(false);
   private tilesBase: Record<string, L.Layer> = {};
+
+  get rotuloBaseAtiva(): string {
+    return this.tiposBase.find(t => t.chave === this.baseAtiva())?.rotulo ?? '';
+  }
 
   private mapa?: L.Map;
   private resizeObserver?: ResizeObserver;
@@ -707,22 +716,31 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // checkboxes de camada escrevem direto nos signals camadaX no template
   // (quem liga/desliga o grupo de verdade são os effects do construtor).
   selecionarBase(chave: string): void {
+    this.baseAberta.set(false);
     if (chave === this.baseAtiva() || !this.mapa) return;
     this.mapa.removeLayer(this.tilesBase[this.baseAtiva()]);
     this.mapa.addLayer(this.tilesBase[chave]);
     this.baseAtiva.set(chave);
   }
 
+  toggleBase(): void {
+    this.camadasAbertas.set(false);
+    this.baseAberta.set(!this.baseAberta());
+  }
+
   toggleCamadas(): void {
+    this.baseAberta.set(false);
     this.camadasAbertas.set(!this.camadasAbertas());
   }
 
-  // Fecha o dropdown de Camadas ao clicar fora dele — mesmo padrão de
-  // "clicar fora fecha" já usado em colaborador-detalhe.ts (aoClicarFora).
-  // O próprio botão/dropdown chamam $event.stopPropagation() no template,
-  // então só chega aqui um clique genuinamente de fora.
+  // Fecha os dois dropdowns (tipo de mapa/Camadas) ao clicar fora deles —
+  // mesmo padrão de "clicar fora fecha" já usado em colaborador-detalhe.ts
+  // (aoClicarFora). Os próprios botões/dropdowns chamam
+  // $event.stopPropagation() no template, então só chega aqui um clique
+  // genuinamente de fora de ambos.
   @HostListener('document:click')
-  fecharCamadas(): void {
+  fecharDropdowns(): void {
+    if (this.baseAberta()) this.baseAberta.set(false);
     if (this.camadasAbertas()) this.camadasAbertas.set(false);
   }
 

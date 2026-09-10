@@ -7,11 +7,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
-- Spinner no mapa ("Carregando rastro executado...") enquanto a camada "Rastro executado" busca o
-  histórico de GPS — a fonte SEGSAT passou a chamar a API ao vivo (ver item "Alterado" abaixo) em vez
-  de só ler uma tabela local, então pode demorar mais. Mesmo padrão visual do spinner de jornada
-  já existente, com prioridade pra mensagem de jornada quando os dois coincidem. Ver Adendo em
-  [ADR 0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
+- Spinner no mapa ("Carregando rastro GPS...") enquanto a camada busca o histórico de GPS — a fonte
+  SEGSAT passou a chamar a API ao vivo (ver item "Alterado" abaixo) em vez de só ler uma tabela
+  local, então pode demorar mais. Mesmo padrão visual do spinner de jornada já existente, com
+  prioridade pra mensagem de jornada quando os dois coincidem. Ver Adendo em [ADR
+  0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
 
 - Camada "Paradas e gaps" no mapa (aba Trilho), agora funcionando de verdade — controla a
   visibilidade dos marcadores de pausa e dos segmentos coloridos que indicam troca de
@@ -80,6 +80,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0037](docs/adr/0037-rastro-gps-real-e-limpeza-cards-duplicados.md).
 
 ### Alterado
+
+- Camada "Rastro executado" (mapa, aba Trilho) renomeada pra "Rastro GPS", e a linha voltou a ser
+  tracejada — mais discreta (peso e opacidade reduzidos) que a versão sólida do Adendo 4, mas com
+  traços mais longos que a primeira tentativa tracejada (que sumia em trechos de pontos próximos).
+  Ver Adendo 5 da [ADR 0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
 
 - Camada "Rastro executado" do motoqueiro (mapa, aba Trilho) passou a buscar o histórico de posições
   direto na API SEGSAT (`searchUnitPositionHistory`, achado ao investigar a API — endpoint nunca

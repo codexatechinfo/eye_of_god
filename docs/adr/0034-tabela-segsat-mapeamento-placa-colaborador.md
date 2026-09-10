@@ -300,3 +300,25 @@ Reproduzido com Leaflet real e dado real do banco (colaborador com 40 UCs lidas 
 SEGSAT no mesmo dia, mesma pessoa): versão antiga (cinza, sem pane) e nova (preta, pane dedicado)
 lado a lado — a nova fica visivelmente mais destacada contra o mesmo fundo de mapa e a mesma grade de
 pontos coletados. `npx tsc --noEmit` e `npx ng build --configuration production` limpos.
+
+## Adendo 5 (2026-09-10) — confirmado visível, ajustado pra tracejado mais discreto + renomeado
+
+Usuário confirmou (com print real, rastro aparecendo nitidamente de Vila Curvado até Entre Rios do
+Oeste) que o Adendo 4 resolveu — pediu dois ajustes de acabamento: linha tracejada em vez de sólida,
+menos forte (mais discreta) que a atual, e renomear o checkbox de "Rastro executado" pra "Rastro
+GPS".
+
+`renderizarRastroGps` (`mapa-bases.ts`): `weight` 3.5 → 2.5, `opacity` 0.85 → 0.65, `dashArray: '8
+6'` adicionado. Traços de 8px (não os `'2 6'` curtos testados e descartados no Adendo 4 da ADR 0037,
+que somem em segmentos curtos entre pontos GPS próximos) — testado de propósito no trecho MAIS denso
+do rastro real de hoje (script acha a janela de 30 pontos consecutivos com menor dispersão
+geográfica, pior caso pro tracejado sumir) e continua legível. Checkbox renomeado no painel de
+camadas (`montarDomControleCamadas`) e no texto do spinner (`mapa-bases.html`, "Carregando rastro
+GPS...").
+
+### Verificação
+
+Réplica com Leaflet real e o rastro completo (549 pontos) do mesmo colaborador do Adendo 4: visão
+geral do trecho espaçado E zoom no trecho mais denso identificado por script — tracejado legível nos
+dois casos, sem os buracos que o padrão antigo tinha. `npx tsc --noEmit` e `npx ng build
+--configuration production` limpos.

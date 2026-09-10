@@ -624,17 +624,18 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     const latLngs: L.LatLngTuple[] = validos.map(p => [Number(p.latitude), Number(p.longitude)]);
     // Preto/quase-preto — cor deliberadamente FORA da paleta já usada por
     // qualquer outra camada (verde/azul dos pontos, âmbar/magenta/teal dos
-    // segmentos de pausa/transição, roxo do setor planejado): o rastro é o
-    // dado "verdade absoluta" (GPS real, não inferido), precisa se destacar
-    // de tudo o mais, não se misturar com uma cor já usada por outro
-    // significado. Peso maior e mais opaco que a versão anterior (cinza
-    // claro, quase invisível) — usuário reportou não conseguir ver mesmo
-    // com dado real confirmado no banco.
+    // segmentos de pausa/transição, roxo do setor planejado). O pane
+    // dedicado (garante desenhar por cima) já resolveu o "não aparece";
+    // usuário confirmou visível e pediu tracejado e mais discreto — peso e
+    // opacidade reduzidos, `dashArray` com traços longos (não os '2 6'
+    // curtos testados antes, que somem em segmentos curtos entre pontos
+    // próximos — ver Adendo 4 da ADR 0034).
     this.polilinhaRastroGps = L.polyline(latLngs, {
       pane: 'paneRastroGps',
       color: '#0f172a',
-      weight: 3.5,
-      opacity: 0.85,
+      weight: 2.5,
+      opacity: 0.65,
+      dashArray: '8 6',
     })
       .bindTooltip('Rastro GPS real do dia')
       .addTo(this.grupoRastroGps);
@@ -687,7 +688,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       label.appendChild(document.createTextNode(' ' + texto));
     };
 
-    itemAtivo('Rastro executado', this.camadaRastroGps);
+    itemAtivo('Rastro GPS', this.camadaRastroGps);
     itemAtivo('Pontos coletados', this.camadaPontos);
     itemAtivo('Paradas e gaps', this.camadaParadasGaps);
     itemAtivo('Setor planejado', this.camadaSetorPlanejado);

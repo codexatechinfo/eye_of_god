@@ -1,0 +1,83 @@
+<!-- Crachá do colaborador — resumo rápido ao clicar num colaborador,
+     tradução do "cartão de pessoa" do protótipo (pintaCracha/#f-cracha):
+     avatar com anel de "visto recentemente", barra de progresso do dia e
+     projeção de quanto falta pra terminar. Fica no canto superior esquerdo
+     do MAPA (não da tela inteira) — mesmo canto livre desde que os
+     controles de tipo de mapa/camadas viraram uma barra em fluxo normal
+     acima do mapa (ver mapa-bases.html). -->
+<div
+  *ngIf="colaborador() as c"
+  class="absolute left-3.5 top-3.5 z-[1000] w-[268px] bg-sup/95 backdrop-blur-md border border-linha rounded-2xl shadow-xl px-3.5 py-3"
+>
+  <div class="flex items-center gap-2.5">
+    <div
+      class="relative w-[42px] h-[42px] rounded-full shrink-0 flex items-center justify-center text-white font-semibold text-[15px] tracking-wide"
+      style="background: linear-gradient(160deg, #3F6CA8, #0B2E59);"
+    >
+      {{ iniciais(c.colaborador) }}
+      <!-- o anel diz o estado AGORA, sem precisar ler texto -->
+      <span
+        class="absolute -inset-[3px] rounded-full border-[2.5px]"
+        [ngClass]="{
+          'border-ok': anel() === 'vivo',
+          'border-alerta': anel() === 'morno',
+          'border-linha-2': anel() === 'frio'
+        }"
+      ></span>
+    </div>
+    <div class="min-w-0 flex-1">
+      <strong class="block text-sm font-semibold text-tit truncate tracking-tight">{{ c.colaborador }}</strong>
+      <span
+        class="block text-[11.5px] mt-0.5"
+        [ngClass]="anel() === 'vivo' ? 'text-ok font-semibold' : anel() === 'frio' ? 'text-critico font-semibold' : 'text-fraco'"
+      >
+        vista há {{ vistaHa() }}
+      </span>
+    </div>
+  </div>
+
+  <div class="text-[11.5px] text-txt leading-snug mt-2.5 px-2.5 py-1.5 bg-sup-2 rounded-lg">
+    <ng-container *ngIf="ultimoPonto() as p; else semAtividade">
+      às <strong class="text-tit">{{ p.hora_import }}</strong>, <strong class="text-tit">leu a UC {{ p.uc }}</strong> · livro {{ p.livro }}
+    </ng-container>
+    <ng-template #semAtividade>Nenhuma UC realizada {{ colaboradoresService.rotuloDataAtividade() }}.</ng-template>
+  </div>
+
+  <!-- a barra de serviço: completo · incompleto · a realizar -->
+  <ng-container *ngIf="atividade() as a">
+    <div class="mt-2.5">
+      <div class="flex h-2 rounded-full overflow-hidden bg-sup-3 gap-px">
+        <span class="block h-full bg-ok" [style.width.%]="larguraOk()"></span>
+        <span class="block h-full bg-alerta" [style.width.%]="larguraImped()"></span>
+        <span class="block h-full bg-linha-2" [style.width.%]="larguraFalta()"></span>
+      </div>
+      <div class="flex flex-wrap gap-2.5 mt-1.5 text-[10.5px] text-fraco">
+        <span class="flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-sm bg-ok shrink-0"></span>
+          <b class="font-mono text-tit text-[11px]">{{ ok() }}</b> concluído
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-sm bg-alerta shrink-0"></span>
+          <b class="font-mono text-tit text-[11px]">{{ a.totalImpedimentos }}</b> com impedimento
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-sm bg-linha-2 shrink-0"></span>
+          <b class="font-mono text-tit text-[11px]">{{ a.totalPendentes }}</b> a realizar
+        </span>
+      </div>
+    </div>
+
+    <!-- a projeção com a conta escrita ao lado do resultado -->
+    <div class="mt-2.5 pt-2 border-t border-linha text-[11.5px] text-fraco leading-snug">
+      <ng-container *ngIf="projecaoSegundos() !== null; else semProjecao">
+        <strong class="block font-mono text-base text-tit font-semibold tracking-tight">{{ formatarDuracao(projecaoSegundos()) }}</strong>
+        para fechar o serviço do dia
+        <div class="mt-1 text-[10.5px] text-tenue leading-snug">{{ contaProjecao() }}</div>
+      </ng-container>
+      <ng-template #semProjecao>
+        <strong class="block font-mono text-[13px] text-tenue font-semibold">—</strong>
+        sem dado suficiente pra projetar
+      </ng-template>
+    </div>
+  </ng-container>
+</div>

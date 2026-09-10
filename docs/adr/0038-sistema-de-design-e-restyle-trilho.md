@@ -523,9 +523,6 @@ que tinham o mesmo risco (só não tinha sido notado ainda por não terem wrappe
 
 ### Pendências desta rodada (itens 3, 4 e parte do 5, ver conversa)
 
-- Balão de resumo do colaborador ao clicar (avatar, "vista há Xh", último ponto lido, barra de
-  progresso, "tempo pra fechar o serviço") — feature nova, pedida pelo usuário com print de
-  referência, ainda não implementada.
 - Régua de tempo / playback da timeline do dia (play/pause, velocidade, ponto em destaque
   acompanhando) — reativa uma feature explicitamente adiada desde a fase 1 (ver Contexto desta ADR);
   usuário confirmou querer agora. Ainda não implementada.
@@ -534,5 +531,47 @@ que tinham o mesmo risco (só não tinha sido notado ainda por não terem wrappe
   parte de `/colaboradores/atividade-hoje`, ~1,3s) resistiu a duas tentativas (índice novo, reescrita
   com `LATERAL` — pior, cancelada em produção) — precisa de mais investigação antes de tentar de
   novo, não é um fix rápido como o primeiro.
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Aba Risco — inalterada.
+
+## Adendo 9 — Rodada 9: crachá de resumo do colaborador
+
+Usuário pediu, com print de referência: ao clicar num colaborador, além da timeline já existente,
+mostrar um cartão resumo — avatar com iniciais, "vista há Xh", última UC lida, barra de progresso do
+dia, e uma projeção de quanto tempo falta pra terminar o serviço.
+
+Achado no protótipo (`pintaCracha()`/`#f-cracha`, `olho.html:5016-5110` + CSS `olho.html:666-723`) —
+o "cartão de pessoa" (crachá): mesma lógica, mesmos limiares (`ANEL_VIVO_MIN=15`,
+`ANEL_MORNO_MIN=60` minutos desde a última posição reportada, decidindo o anel verde/âmbar/cinza ao
+redor do avatar) e a mesma fórmula de projeção (`tempoTrabalhado ÷ realizadas × pendentes`).
+Traduzido literalmente pro novo componente `colaborador-cracha` (`.ts`/`.html`/`.css`), montado dentro
+de `mapa-bases.html` no canto superior esquerdo do mapa — canto livre desde que os controles de tipo
+de mapa/camadas viraram uma barra em fluxo normal acima do mapa (rodada 5/6).
+
+Reaproveitado o que já existia, sem nenhuma chamada nova ao backend: `formatarDuracao`/
+`formatarTempoParado` (idênticas às funções `duracao()`/`desde()` do protótipo), `scalefusionDe()`/
+`segsatDe()` (mesma regra `ehMoto` de `mapa-bases.ts` decide qual das duas fontes de posição usar),
+`atividadeDe()` e `jornadaPorColaborador()`.
+
+**Adaptação consciente (única divergência do protótipo):** lá, a linha "às HH:MM, leu a UC..." mostra
+o ponto no INSTANTE da régua de tempo (`atividadeNoInstante()`) — sem régua tocada, o protótipo
+mostra "arraste a régua pra andar pelo dia". Como a régua (item pendente desta mesma rodada, ver
+seção anterior) ainda não existe aqui, o crachá mostra a ÚLTIMA UC realizada do dia (mesmo conceito
+de "último ponto" já usado no mapa, `ucUltimoPonto` em `mapa-bases.ts`) — quando a régua for
+construída, essa linha passa a acompanhar a posição dela.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness cobrindo os 2 estados
+visuais: "vivo" (anel verde, com atividade e projeção calculada) e "frio" (anel cinza, sem atividade
+hoje, texto "vista há" em vermelho, projeção mostrando "sem dado suficiente") — batendo com o anexo
+de referência do usuário (mesmas iniciais "AG" pro nome de exemplo, mesmo formato de fórmula).
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Régua de tempo / playback da timeline do dia — reativa a feature adiada desde a fase 1; quando
+  existir, a linha "às HH:MM, leu a UC..." do crachá passa a acompanhar o instante da régua em vez
+  do último ponto do dia.
+- Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Aba Risco — inalterada.

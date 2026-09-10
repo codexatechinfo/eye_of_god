@@ -91,6 +91,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Crachá de resumo do colaborador (aba Trilho) — ao clicar num colaborador, um cartão no canto
+  superior esquerdo do mapa mostra avatar com iniciais (anel verde/âmbar/cinza conforme há quanto
+  tempo o aparelho reportou posição), última UC lida, barra de progresso do dia e uma projeção de
+  quanto tempo falta pra fechar o serviço (regra de 3 sobre o ritmo já observado). Tradução literal
+  do "cartão de pessoa" do protótipo de referência. Ver Adendo 9 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 - Camada "Rastro GPS" (mapa, aba Trilho) ganhou marcadores de primeiro e último ponto — contorno
   vazado no início, disco cheio com halo no ponto mais recente, cada um com tooltip mostrando o
   horário exato. Ver Adendo 7 da [ADR 0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).

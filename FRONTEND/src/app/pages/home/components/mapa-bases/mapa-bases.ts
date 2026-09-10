@@ -9,6 +9,7 @@ import {
   PontoGpsHistorico,
   PontoJornada,
 } from '../../../../services/colaboradores.service';
+import { ColaboradorCracha } from '../colaborador-cracha/colaborador-cracha';
 
 // Em telas com escala fracionária (125%/150% no Windows), o posicionamento
 // dos tiles via translate3d (GPU) arredonda em sub-pixel e deixa frestas
@@ -307,7 +308,7 @@ function cascoConvexo(pontos: L.LatLngTuple[]): L.LatLngTuple[] {
 
 @Component({
   selector: 'app-mapa-bases',
-  imports: [CommonModule],
+  imports: [CommonModule, ColaboradorCracha],
   templateUrl: './mapa-bases.html',
   styleUrl: './mapa-bases.css',
 })

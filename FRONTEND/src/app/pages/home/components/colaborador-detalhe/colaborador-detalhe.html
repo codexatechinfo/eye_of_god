@@ -85,10 +85,13 @@
     <div class="flex items-center gap-1.5 shrink-0">
       <!-- "Ver no mapa" (pedido explícito do usuário nas abas de
            Monitoramento) — troca pra aba Trilho e centraliza na posição
-           real do colaborador (colaboradoresService.verNoMapa). Funciona
-           de qualquer aba que abra este painel, inclusive a própria Trilho
-           (aí só re-centraliza, sem trocar de aba). -->
+           real do colaborador (colaboradoresService.verNoMapa). Só faz
+           sentido na variante 'modal' (Monitoramento Colaborador), onde não
+           há mapa nenhum visível — na variante 'painel' (aba Trilho) o
+           colaborador já está com o mapa aberto ao lado, usuário reportou
+           que o botão ali era redundante. -->
       <button
+        *ngIf="variante === 'modal'"
         type="button"
         (click)="colaboradoresService.verNoMapa(nome)"
         class="flex items-center gap-1 text-[10.5px] font-semibold text-azul hover:text-azul-t bg-azul/10 hover:bg-azul/20 px-2 py-1 rounded-full transition-colors cursor-pointer"

@@ -675,3 +675,34 @@ pra reativar rápido quando o usuário pedir de volta.
 - Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Aba Risco — inalterada.
+
+## Adendo 12 — Rodada 12: "Ver no mapa" redundante no painel + esclarecimento do crachá
+
+Usuário reportou 2 pontos, um pedindo mudança e outro só perguntando o que significa um dado:
+
+**Botão "Ver no mapa" redundante no painel da aba Trilho** — esse botão trocava pra aba Trilho e
+centralizava no colaborador; fazia sentido nas abas de Monitoramento (sem mapa visível ali), mas na
+própria aba Trilho o colaborador já está com o mapa aberto ao lado — o botão não tinha função real
+além de recentralizar, e o usuário achou redundante. Corrigido: `*ngIf="variante === 'modal'"` no
+botão — só aparece na variante usada pelas abas de Monitoramento, sumiu do painel da Trilho.
+
+**"Vista há 1min" no crachá** — não era um bug, o usuário perguntou o que o dado significa.
+Esclarecido em conversa: é há quanto tempo o APARELHO (celular via Scalefusion pro pedestre, veículo
+via SEGSAT pro motoqueiro) reportou a última posição de GPS — não tem relação com UC lida, é
+puramente sobre o sinal do dispositivo. O anel ao redor do avatar (verde/âmbar/cinza) é a mesma
+informação em cor: verde ≤15min, âmbar até 60min, cinza depois disso ou nunca. Nenhuma mudança de
+código — registrado aqui só pra não perder o contexto da explicação caso a dúvida volte.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Projeção "tempo pra fechar o serviço" — desligada por pedido do usuário, código preservado
+  comentado em `colaborador-cracha.ts` pra reativar quando pedido.
+- Esmaecimento de pontos/segmentos futuros diretamente no mapa (Leaflet) — não implementado, ver
+  Adendo 10.
+- Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Aba Risco — inalterada.

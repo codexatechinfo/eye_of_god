@@ -35,6 +35,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   pedido do usuário (sempre "—" por enquanto). Ver Adendo 11 da [ADR
   0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+- Botão "Ver no mapa" no painel de detalhe (aba Trilho) era redundante — o colaborador já é aberto
+  com o mapa visível ao lado nessa aba. Agora só aparece na variante modal (abas de Monitoramento),
+  onde não há mapa visível. Ver Adendo 12 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Alterado
 
 - Cabeçalho (aba Trilho) ganhou o bloco de identidade "Olho de Deus · supervisão de campo · coleta

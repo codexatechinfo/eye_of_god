@@ -215,6 +215,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- "Rastro executado" continuava difícil/impossível de enxergar mesmo com dado real disponível no
+  banco (546/171/15 pontos confirmados pra motoqueiros reais do dia) — a linha (cinza claro, fina)
+  dividia a mesma camada visual de "Pontos coletados"/"Paradas e gaps"/"Setor planejado" sem um
+  z-order garantido, então um dia com muitas UCs numa área pequena (grade densa de pontos) podia
+  cobri-la quase inteira. Ganhou um pane Leaflet dedicado (sempre desenha por cima das outras
+  camadas do mapa), cor preta/quase-preta bem mais contrastante, e ordenação defensiva por horário
+  antes de desenhar. Ver Adendo 4 da [ADR
+  0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
+
 - Importação de planilha (`.xlsx`): qualquer coluna de data cuja célula viesse formatada como data
   nativa do Excel (não texto) gravava sempre um dia ANTES do real — bug de fuso horário no parser
   (`exceljs` lê célula de data como meia-noite UTC; o código extraía o dia usando componentes

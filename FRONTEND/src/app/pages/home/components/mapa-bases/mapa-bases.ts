@@ -611,13 +611,30 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   private renderizarRastroGps(pontos: PontoGpsHistorico[]): void {
     this.grupoRastroGps.clearLayers();
     this.polilinhaRastroGps = null;
-    const validos = pontos.filter(p => p.latitude && p.longitude);
+    // Ordena por horário antes de desenhar — a API SEGSAT não documenta
+    // garantia de ordem cronológica na resposta (achado ao investigar
+    // searchUnitPositionHistory, ver ADR 0034 Adendo 3), e sem essa garantia
+    // um ponto fora de ordem vira um segmento absurdo cruzando o mapa
+    // inteiro em vez de seguir o trajeto real.
+    const validos = pontos
+      .filter(p => p.latitude && p.longitude)
+      .slice()
+      .sort((a, b) => new Date(a.data_hora_posicao).getTime() - new Date(b.data_hora_posicao).getTime());
     if (validos.length < 2) return;
     const latLngs: L.LatLngTuple[] = validos.map(p => [Number(p.latitude), Number(p.longitude)]);
+    // Preto/quase-preto — cor deliberadamente FORA da paleta já usada por
+    // qualquer outra camada (verde/azul dos pontos, âmbar/magenta/teal dos
+    // segmentos de pausa/transição, roxo do setor planejado): o rastro é o
+    // dado "verdade absoluta" (GPS real, não inferido), precisa se destacar
+    // de tudo o mais, não se misturar com uma cor já usada por outro
+    // significado. Peso maior e mais opaco que a versão anterior (cinza
+    // claro, quase invisível) — usuário reportou não conseguir ver mesmo
+    // com dado real confirmado no banco.
     this.polilinhaRastroGps = L.polyline(latLngs, {
-      color: '#475569',
-      weight: 2.5,
-      opacity: 0.75,
+      pane: 'paneRastroGps',
+      color: '#0f172a',
+      weight: 3.5,
+      opacity: 0.85,
     })
       .bindTooltip('Rastro GPS real do dia')
       .addTo(this.grupoRastroGps);
@@ -688,6 +705,17 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       scrollWheelZoom: true,
       fadeAnimation: false,
     });
+
+    // Pane dedicado, acima do overlayPane padrão (zIndex 400) onde vivem
+    // "Pontos coletados"/"Paradas e gaps"/"Setor planejado"/"Trajetória do
+    // dia" — sem isso, o rastro fica sujeito à ordem em que cada grupo foi
+    // ligado (não a ordem visual desejada) e um dia com muitas UCs numa
+    // área pequena (grade densa de pontos) cobre a linha por completo.
+    // Usuário reportou "continua sem exibir" mesmo com dado real confirmado
+    // no banco — o pane garante que o rastro sempre desenha por cima,
+    // independente da ordem das outras camadas.
+    this.mapa.createPane('paneRastroGps');
+    this.mapa.getPane('paneRastroGps')!.style.zIndex = '450';
 
     const ruas = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',

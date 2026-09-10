@@ -239,3 +239,64 @@ Réplica com o CSS real compilado do projeto: pílula com o texto novo cabe numa
 normal de mapa; testado também num contêiner de 360px (largura de painel lateral, pior caso) — quebra
 pra duas linhas sem distorcer o formato arredondado. `npx tsc --noEmit` e `npx ng build
 --configuration production` limpos.
+
+## Adendo 4 (2026-09-10) — "Rastro executado" ainda não aparecia depois da troca pra API
+
+Usuário, com 2 prints (motoqueiro e pedestre, os dois com "Rastro executado" marcado): mesmo depois
+da troca pra API SEGSAT (Adendo 3), a camada continuava sem mostrar nada — nem o rastro do
+motoqueiro, nem o do pedestre.
+
+### Investigação
+
+Backend testado de novo, com colaboradores reais de hoje (não os mesmos dos prints, que não dava
+pra identificar só pela imagem): `obterHistoricoPosicoes` continua devolvendo dado real e denso —
+546, 171 e 15 pontos pra três motoqueiros diferentes, todos com span geográfico != 0 (rota real, não
+ponto parado). Achado relevante sobre o Scalefusion (pedestre): os 5 leituristas com MAIS UCs lidas
+hoje (239 a 301 UCs cada, dia cheio) tinham só **8 ou 9 posições Scalefusion no dia inteiro** — a API
+do celular (MDM) atualiza a localização com muito menos frequência que um rastreador veicular
+dedicado (SEGSAT); não é bug de coleta, é a granularidade que a própria API do aparelho oferece,
+exatamente o limite que o usuário já tinha identificado ("scalefusion é baseado no histórico criado
+já que a api não disponibiliza isso").
+
+Com o dado do backend confirmado correto, a suspeita virou a RENDERIZAÇÃO. Reproduzido com Leaflet
+real: sem uma `center`/`zoom` inicial explícita na criação do mapa (harness de teste inicial cometeu
+esse erro — o app real não, `mapa-bases.ts` sempre passa `center`/`zoom` em `L.map(...)`), camadas
+adicionadas logo em seguida saem com path SVG degenerado (`M0 0`, invisível) até o primeiro
+`fitBounds()`. Não é o bug relatado (o app real nunca cria o mapa sem view inicial), mas expôs uma
+fragilidade real e distinta: com a camada "Pontos coletados" ligada junto (como nos dois prints) e um
+dia com muitas UCs numa área pequena (grade densa), os círculos coloridos desenhados por cima podem
+cobrir quase toda a linha fina cinza claro (`#475569`, weight 2.5) que "Rastro executado" usava —
+sobra pouco espaço "vazio" pra linha aparecer entre os pontos.
+
+### Decisão
+
+Duas mudanças em `renderizarRastroGps` (`mapa-bases.ts`), independentes da causa exata (visibilidade
+é sempre desejável, não custa nada mesmo se o motivo real acabar sendo outro):
+
+- **Pane Leaflet dedicado** (`paneRastroGps`, `zIndex: 450`, criado em `ngAfterViewInit`) — o
+  overlayPane padrão (zIndex 400) é compartilhado por "Pontos coletados"/"Paradas e gaps"/"Setor
+  planejado"/"Trajetória do dia"; sem um pane próprio, a ordem visual dependia de qual camada foi
+  ligada por último, não de qual deveria ficar por cima. Com o pane, "Rastro executado" SEMPRE
+  desenha acima dessas camadas, garantido pelo z-index do pane, não pela ordem de chamadas.
+- **Cor e espessura**: trocado de cinza claro (`#475569`, weight 2.5, opacity 0.75) pra preto/quase-
+  preto (`#0f172a`, weight 3.5, opacity 0.85) — cor deliberadamente fora da paleta já usada por
+  qualquer camada (verde/azul dos pontos, âmbar/magenta/teal dos segmentos, roxo do setor
+  planejado), pra nunca se misturar visualmente com um significado já existente.
+- **Ordenação defensiva por horário** antes de desenhar — a API SEGSAT (`searchUnitPositionHistory`)
+  não documenta garantia de ordem cronológica na resposta; sem ordenar, um ponto fora de ordem vira
+  um segmento absurdo cruzando o mapa inteiro em vez de seguir o trajeto real.
+
+**Causas identificadas mas NÃO resolvidas nesta rodada** (dependem de dado que este sistema não
+controla, mesma classe dos achados anteriores em Adendo 3/Contexto): gap de cadastro SEGSAT (só
+58/288 motoqueiros ativos têm veículo mapeado — pra quem não tem, a camada segue corretamente vazia,
+não é bug) e a baixa frequência intrínseca de localização do Scalefusion (8-9 pontos/dia é o que a
+própria API do aparelho oferece). Se o motoqueiro/pedestre específico dos prints do usuário estiver
+num desses dois casos, a camada segue vazia mesmo com a renderização corrigida — pedido explicitamente
+verificado com o usuário como próximo passo, não assumido aqui.
+
+### Verificação
+
+Reproduzido com Leaflet real e dado real do banco (colaborador com 40 UCs lidas hoje + 547 posições
+SEGSAT no mesmo dia, mesma pessoa): versão antiga (cinza, sem pane) e nova (preta, pane dedicado)
+lado a lado — a nova fica visivelmente mais destacada contra o mesmo fundo de mapa e a mesma grade de
+pontos coletados. `npx tsc --noEmit` e `npx ng build --configuration production` limpos.

@@ -148,3 +148,73 @@ Scalefusion (ADR 0033 Adendo 1/2), agora pro motoqueiro com SEGSAT:
 Simulação da lógica completa contra o banco real: **85 marcadores** no total agora (45 pedestres via
 Scalefusion + 40 motoqueiros via SEGSAT, 0 precisando do fallback por leitura neste momento).
 `tsc --noEmit` e `ng build --configuration production` sem erro. `npm test` (18/18) sem regressão.
+
+## Adendo 3 (2026-09-10) — "Rastro executado" do motoqueiro passa a vir direto da API SEGSAT
+
+Usuário pediu conferência das correspondências atuais (Scalefusion/SEGSAT) e — achado central desta
+rodada — apontou que suspeitava que a API SEGSAT oferecesse histórico de movimentação de verdade,
+pedindo investigação.
+
+### Investigação
+
+A API SEGSAT expõe seu contrato OpenAPI publicamente em `https://ws-frota.segsat.com/v3/api-docs`
+(sem autenticação) — nunca conferido antes. Achado: **99 endpoints documentados**, dos quais só
+`login` e `getAllUnits` eram usados pelo sistema. Dois relevantes nunca aproveitados:
+
+- **`POST /api/segsatFrota/v1/searchUnitPositionHistory`** — "Busca o histórico de posições do
+  último mês de uma unidade". Corpo `{ date: "YYYY-MM-DD", unitName: "<placa>" }`, resposta
+  `{ unitId, positions: [{ timeStamp, latitude, longitude, speed, mileage, ignition }] }`.
+- `POST /api/segsatFrota/v1/loadUnitHistory` — variante por `unitId` (não usado, `searchUnitPositionHistory`
+  já resolve o caso de uso e usa `unitName`/placa, que já temos mapeada).
+
+Testado ao vivo (placa RAA1G03, motoqueiro real): **81 posições no dia corrente**, granularidade de
+~1min quando em movimento; testado também 7 dias atrás (152 posições) — dentro da janela de "último
+mês" documentada. Muito mais denso que o que o job de polling (a cada 5min) conseguia acumular, e
+funciona pra qualquer dia recente mesmo sem o job ter rodado continuamente (ex.: colaborador recém-
+mapeado na planilha `segsat` já enxerga rastro de dias anteriores).
+
+### Decisão
+
+`obterHistoricoPosicoes` em `segsatFrotaService.js` (usada pela camada "Rastro executado" do mapa,
+ver ADR 0037) trocou de consulta em `segsat_posicoes` pra chamada direta à API
+(`searchUnitPositionHistory`), sob demanda — só quando o usuário abre a camada pra um
+colaborador+dia específico, nunca em lote. Falha (sem mapeamento de placa, API fora do ar, data fora
+da janela de um mês) devolve array vazio em vez de derrubar a rota — é camada de conferência
+opcional, não dado crítico.
+
+**Consequência em cascata — limpeza do que ficou sem uso** (pedido explícito do usuário: "apaga o
+que ficar sem utilização tanto no código como no banco"): com o histórico vindo da API, a única
+consulta que ainda lia `segsat_posicoes` (`obterUltimasPosicoes`, pra posição atual no mapa) só
+precisa de **1 linha por colaborador** — nunca mais que isso. A tabela era um log append-only (uma
+linha por ciclo de 5min desde 17/08, 6.923 linhas acumuladas pra 83 colaboradores) cujas linhas
+antigas não tinham mais NENHUM consumidor no código depois desta troca. Restruturada de log pra
+"posição atual":
+
+- `coletarPosicoes` trocou o `INSERT` por `INSERT ... ON CONFLICT (empresa_id, colaborador) DO
+  UPDATE` — cada ciclo de 5min agora ATUALIZA a linha do colaborador em vez de acrescentar uma nova.
+- `obterUltimasPosicoes`/`obterUltimaPosicaoPorColaborador` simplificadas — sem `DISTINCT ON`
+  (garantidamente 1 linha por colaborador agora).
+- Migração de dados (aplicada direto via `docker exec supabase-db psql`, mesmo caminho de sempre
+  neste projeto — `app_user` não é dono das tabelas, só `postgres`): deduplicado o que já existia
+  (mantida só a linha de maior `coletado_em` por colaborador, 6.840 linhas antigas removidas, 83
+  ficaram) e adicionada `UNIQUE (empresa_id, colaborador)` — a constraint que o novo `ON CONFLICT`
+  exige e que também IMPEDE a tabela de voltar a crescer sem limite.
+- Dois índices ficaram órfãos com a mudança (nenhuma query filtra/ordena mais por
+  `data_hora_posicao`/`coletado_em` nessa tabela — o padrão de acesso que restou é só RLS por
+  `empresa_id` + upsert por `(empresa_id, colaborador)`, já cobertos por `idx_segsat_posicoes_empresa_id`
+  e pelo índice automático da nova constraint): `idx_segsat_posicoes_colaborador` `(empresa_id,
+  colaborador, data_hora_posicao)` e `idx_segsat_posicoes_coletado_em` `(empresa_id, coletado_em)` —
+  ambos removidos.
+
+`segsat_posicoes` **não foi removida** — continua alimentando a posição real do motoqueiro no mapa
+(Adendo 2 acima), só parou de acumular histórico que nada mais lia. O job `segsatFrotaJob.js` (cron
+de 5min) também não muda — só o que `coletarPosicoes` faz com cada posição nova.
+
+### Verificação
+
+Testado direto contra a API e o banco reais, nessa ordem: `coletarPosicoes` rodado manualmente após
+a migração — 17 posições atualizadas, total da tabela continuou em 83 (upsert funcionando, sem
+duplicar). `obterHistoricoPosicoes` testado com três casos: colaborador com mapeamento (81 pontos
+retornados, formato batendo com o que o frontend espera), colaborador sem mapeamento SEGSAT
+(`[]`), colaborador inexistente (`[]`, sem exceção). `npm test` (18/18) limpo antes e depois de
+dropar os índices órfãos.

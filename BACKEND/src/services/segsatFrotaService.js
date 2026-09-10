@@ -1,4 +1,4 @@
-const { log } = require('../utils/logTempo');
+const { log, logWarn } = require('../utils/logTempo');
 
 // API de frota SEGSAT (veículos) — diferente da Scalefusion, exige login
 // (header "frota-token") pra obter um "sid" de sessão a cada chamada. sid
@@ -47,12 +47,11 @@ async function obterRosterColaboradores(db) {
   return mapa;
 }
 
+// `segsat_posicoes` guarda UMA linha por colaborador (upsert por
+// `(empresa_id, colaborador)`, ver coletarPosicoes) — não é mais log
+// histórico, então não precisa de DISTINCT ON pra achar "a mais recente".
 async function obterUltimaPosicaoPorColaborador(db) {
-  const { rows } = await db.query(
-    `SELECT DISTINCT ON (colaborador) colaborador, data_hora_posicao
-     FROM segsat_posicoes
-     ORDER BY colaborador, coletado_em DESC`,
-  );
+  const { rows } = await db.query(`SELECT colaborador, data_hora_posicao FROM segsat_posicoes`);
   return new Map(rows.map(r => [r.colaborador, r.data_hora_posicao ? new Date(r.data_hora_posicao).getTime() : null]));
 }
 
@@ -120,8 +119,16 @@ async function coletarPosicoes(db, empresaId) {
       valoresSql.push(`(${colunas.map((_, j) => `$${base + j + 1}`).join(', ')})`);
       parametros.push(...colunas.map(c => linha[c]));
     });
+    // Upsert por (empresa_id, colaborador), não mais INSERT puro — a tabela
+    // virou "posição atual" (1 linha por colaborador), não log histórico.
+    // Ver Adendo em ADR 0034: histórico do dia agora vem sob demanda da API
+    // (searchUnitPositionHistory), então acumular linha por linha aqui só
+    // inflava a tabela com dado que nada mais lia.
+    const colunasAtualizar = colunas.filter(c => c !== 'colaborador' && c !== 'empresa_id');
     await db.query(
-      `INSERT INTO segsat_posicoes (${colunas.join(', ')}) VALUES ${valoresSql.join(', ')}`,
+      `INSERT INTO segsat_posicoes (${colunas.join(', ')}) VALUES ${valoresSql.join(', ')}
+       ON CONFLICT (empresa_id, colaborador) DO UPDATE SET
+       ${colunasAtualizar.map(c => `"${c}" = EXCLUDED."${c}"`).join(', ')}, coletado_em = now()`,
       parametros,
     );
   }
@@ -140,27 +147,67 @@ async function coletarPosicoes(db, empresaId) {
 // a posição real do motoqueiro no mapa (ver ADR 0033/0034).
 async function obterUltimasPosicoes(db) {
   const { rows } = await db.query(
-    `SELECT DISTINCT ON (colaborador)
-       colaborador, cargo, placa, latitude, longitude, velocidade, ignicao, data_hora_posicao
-     FROM segsat_posicoes
-     ORDER BY colaborador, coletado_em DESC`,
+    `SELECT colaborador, cargo, placa, latitude, longitude, velocidade, ignicao, data_hora_posicao
+     FROM segsat_posicoes`,
   );
   return rows;
 }
 
-// Histórico do dia inteiro — mesmo raciocínio de obterHistoricoPosicoes em
-// scalefusionService.js (camada "Rastro executado" do mapa, trajeto GPS
-// real da moto, diferente da "Trajetória do dia" inferida das UCs lidas).
+async function obterPlacaPorColaborador(db, colaborador) {
+  const { rows } = await db.query('SELECT placa FROM segsat WHERE colaborador = $1 LIMIT 1', [colaborador]);
+  return rows[0]?.placa ?? null;
+}
+
+// Histórico do dia inteiro pra camada "Rastro executado" do mapa (trajeto
+// GPS real da moto, diferente da "Trajetória do dia" inferida das UCs
+// lidas) — direto na API SEGSAT (`searchUnitPositionHistory`), não mais na
+// tabela `segsat_posicoes` (que virou "posição atual", 1 linha por
+// colaborador, ver coletarPosicoes). Achado ao vivo (2026-09-10): esse
+// endpoint devolve o histórico de posições do ÚLTIMO MÊS de uma unidade,
+// com granularidade de minuto quando em movimento — muito mais denso que os
+// pontos de 5 em 5 minutos que o job de polling conseguia acumular, e
+// funciona pra qualquer dia recente mesmo que o job nunca tenha rodado
+// naquele intervalo (ex.: veículo mapeado na planilha `segsat` só hoje
+// ainda consegue ver o rastro de dias anteriores).
+//
+// Sob demanda (só quando o usuário abre a camada pra um colaborador+dia
+// específico, mesmo padrão opt-in de limitesMunicipais/gpsHistorico) —
+// nunca em lote, então o custo de fazer login a cada chamada é aceitável
+// (mesmo raciocínio de coletarPosicoes: sid expira em 3min, não vale a pena
+// cachear entre chamadas espaçadas).
+//
+// Qualquer falha (sem mapeamento de placa, API fora do ar, data fora da
+// janela de um mês) devolve array vazio em vez de derrubar a rota inteira —
+// é uma camada de conferência opcional do mapa, não dado crítico.
 async function obterHistoricoPosicoes(db, colaborador, dataIso) {
-  const { rows } = await db.query(
-    `SELECT latitude, longitude, data_hora_posicao
-     FROM segsat_posicoes
-     WHERE colaborador = $1 AND data_hora_posicao::date = $2::date
-       AND latitude IS NOT NULL AND longitude IS NOT NULL
-     ORDER BY data_hora_posicao ASC`,
-    [colaborador, dataIso],
-  );
-  return rows;
+  if (!API_TOKEN) return [];
+
+  const placa = await obterPlacaPorColaborador(db, colaborador);
+  if (!placa) return [];
+
+  try {
+    const sid = await login();
+    const resposta = await fetch(`${API_BASE}/searchUnitPositionHistory`, {
+      method: 'POST',
+      headers: { sid, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: dataIso, unitName: placa }),
+    });
+    if (!resposta.ok) {
+      logWarn(`[SEGSAT] searchUnitPositionHistory respondeu ${resposta.status} — colaborador=${colaborador} placa=${placa} data=${dataIso}`);
+      return [];
+    }
+    const { positions } = await resposta.json();
+    return (positions || [])
+      .filter(p => p.latitude != null && p.longitude != null)
+      .map(p => ({
+        latitude: String(p.latitude),
+        longitude: String(p.longitude),
+        data_hora_posicao: p.timeStamp,
+      }));
+  } catch (erro) {
+    logWarn(`[SEGSAT] Erro ao buscar histórico — colaborador=${colaborador} placa=${placa} data=${dataIso}: ${erro.message}`);
+    return [];
+  }
 }
 
 module.exports = { coletarPosicoes, obterUltimasPosicoes, obterHistoricoPosicoes };

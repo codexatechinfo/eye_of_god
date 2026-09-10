@@ -75,6 +75,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
+- Camada "Rastro executado" do motoqueiro (mapa, aba Trilho) passou a buscar o histórico de posições
+  direto na API SEGSAT (`searchUnitPositionHistory`, achado ao investigar a API — endpoint nunca
+  usado antes) em vez da tabela local `segsat_posicoes`. Muito mais denso (granularidade de ~1min
+  em movimento, contra os pontos de 5 em 5min do polling) e funciona pra dias anteriores mesmo sem o
+  job ter rodado continuamente. Como consequência, `segsat_posicoes` deixou de acumular histórico
+  (virou "posição atual", 1 linha por colaborador, upsert a cada ciclo) — 6.840 linhas antigas sem
+  mais nenhum consumidor foram removidas e 2 índices órfãos foram dropados. Ver Adendo 3 da [ADR
+  0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
+
 - Cabeçalho da timeline do colaborador ganhou regional, cargo e % de bateria ao lado do nome — só
   no modal da aba Monitoramento Colaborador (o painel da aba Trilho já mostra isso no card da lista
   lateral ao lado, não precisa duplicar — usuário pediu pra reverter lá depois de ver que tinha

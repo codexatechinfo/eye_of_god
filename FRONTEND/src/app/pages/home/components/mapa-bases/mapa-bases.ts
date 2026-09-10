@@ -526,7 +526,8 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       if (!nome) return;
       const pontos = this.colaboradoresService.gpsHistoricoPorColaborador().get(nome);
       if (pontos === undefined) return;
-      this.renderizarRastroGps(pontos);
+      const fonte = this.colaboradoresService.gpsHistoricoFontePorColaborador().get(nome) ?? null;
+      this.renderizarRastroGps(pontos, fonte);
     });
   }
 
@@ -608,7 +609,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // Trocado pra sólida, mais escura e mais grossa — ainda mais discreta que
   // "Trajetória do dia" (weight 3, cores vivas por tipo de transição, ver
   // atualizarRotaJornada), mas agora realmente visível.
-  private renderizarRastroGps(pontos: PontoGpsHistorico[]): void {
+  private renderizarRastroGps(pontos: PontoGpsHistorico[], fonte: 'segsat' | 'scalefusion' | null): void {
     this.grupoRastroGps.clearLayers();
     this.polilinhaRastroGps = null;
     // Ordena por horário antes de desenhar — a API SEGSAT não documenta
@@ -637,7 +638,16 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       opacity: 0.65,
       dashArray: '8 6',
     })
-      .bindTooltip('Rastro GPS real do dia')
+      // Backend pode devolver Scalefusion mesmo pra quem pediu SEGSAT
+      // (fallback pra motoqueiro sem veículo mapeado, ver gpsHistorico em
+      // colaboradoresController.js) — tooltip indica a fonte real, pra não
+      // sugerir precisão de rastreador veicular num trajeto que na verdade
+      // veio do celular do colaborador.
+      .bindTooltip(
+        fonte === 'scalefusion'
+          ? 'Rastro GPS real do dia (celular — sem veículo mapeado na SEGSAT)'
+          : 'Rastro GPS real do dia',
+      )
       .addTo(this.grupoRastroGps);
   }
 

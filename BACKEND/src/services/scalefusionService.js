@@ -19,6 +19,22 @@ const API_TOKEN = process.env.SCALEFUSION_API_TOKEN;
 // obterNomeEPrefixo sobre esses ficarem de fora até correção no cadastro.
 const REGEX_NOME_DISPOSITIVO = /^(\S+)\s*-\s*(.+?)\s*-\s*(?:IMEI\s*)?(\d{14,16})\s*$/;
 
+// Bounding box generoso do Brasil — a especificação da API
+// (Especificacao_API_Scalefusion_COPEL.docx, seção 5.4) já registrou ao
+// vivo um aparelho reportando posição no Uzbequistão (lat 39.6, lng 66.9) e
+// avisa que "uma única coordenada dessas joga o enquadramento automático de
+// qualquer mapa pra escala mundial" — confirmado ainda ativo na coleta
+// (2026-09-10, mesmo colaborador do exemplo da especificação, dezenas de
+// linhas repetidas). Não é erro de parsing nosso, é o que o aparelho/
+// provedor de localização da Scalefusion está reportando; tratamos como
+// "sem posição válida" (mesma coisa que location ausente) em vez de gravar
+// e deixar corromper qualquer fitBounds() que inclua esse colaborador.
+const BRASIL_LAT = [-34, 6];
+const BRASIL_LNG = [-75, -28];
+function coordenadaPlausivel(lat, lng) {
+  return lat >= BRASIL_LAT[0] && lat <= BRASIL_LAT[1] && lng >= BRASIL_LNG[0] && lng <= BRASIL_LNG[1];
+}
+
 function obterNomeEPrefixo(nomeDispositivo) {
   const m = REGEX_NOME_DISPOSITIVO.exec(nomeDispositivo || '');
   if (!m) return null;
@@ -95,6 +111,13 @@ async function coletarPosicoes(db, empresaId) {
     // antes — não grava de novo, sem informação nova.
     if (dataHoraMs === null || dataHoraMs === ultimaMs) continue;
 
+    const latBruta = device.location?.lat != null ? Number(device.location.lat) : null;
+    const lngBruta = device.location?.lng != null ? Number(device.location.lng) : null;
+    const plausivel = latBruta != null && lngBruta != null && coordenadaPlausivel(latBruta, lngBruta);
+    if (latBruta != null && lngBruta != null && !plausivel) {
+      logWarn(`[Scalefusion] Coordenada implausível descartada — colaborador=${info.colaborador} lat=${latBruta} lng=${lngBruta}`);
+    }
+
     linhasParaGravar.push({
       device_id: device.id ?? null,
       nome_dispositivo: device.name ?? null,
@@ -102,8 +125,8 @@ async function coletarPosicoes(db, empresaId) {
       cargo: info.cargo,
       bateria_percentual: device.battery_status ?? null,
       bateria_carregando: device.battery_charging ?? null,
-      latitude: device.location?.lat != null ? String(device.location.lat) : null,
-      longitude: device.location?.lng != null ? String(device.location.lng) : null,
+      latitude: plausivel ? String(latBruta) : null,
+      longitude: plausivel ? String(lngBruta) : null,
       endereco: device.location?.address ?? null,
       data_hora_posicao: new Date(dataHoraMs).toISOString(),
       empresa_id: empresaId,

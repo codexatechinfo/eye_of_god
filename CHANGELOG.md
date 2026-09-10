@@ -7,6 +7,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Camada "Rastro GPS" (mapa, aba Trilho) agora cai pro Scalefusion (celular do próprio colaborador)
+  quando o motoqueiro pedido não tem veículo mapeado na SEGSAT, em vez de ficar vazia — 158
+  motoqueiros ativos estavam nessa situação hoje. Tooltip do rastro avisa quando é esse fallback.
+  Ver Adendo 6 da [ADR 0034](docs/adr/0034-tabela-segsat-mapeamento-placa-colaborador.md).
+
 - Spinner no mapa ("Carregando rastro GPS...") enquanto a camada busca o histórico de GPS — a fonte
   SEGSAT passou a chamar a API ao vivo (ver item "Alterado" abaixo) em vez de só ler uma tabela
   local, então pode demorar mais. Mesmo padrão visual do spinner de jornada já existente, com
@@ -219,6 +224,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0035](docs/adr/0035-painel-monitoramento-filtros-embutidos-e-massiva-desatualizada.md).
 
 ### Corrigido
+
+- Coleta de posição Scalefusion gravava sem filtro uma coordenada implausível já documentada na
+  especificação oficial da API (aparelho reportando localização no Uzbequistão) — confirmada ainda
+  ativa hoje, recoletada a cada ciclo (201 linhas na base). Corrigido: coordenada fora de um
+  bounding box generoso do Brasil agora é tratada como "sem posição válida" e não é mais gravada;
+  as 201 linhas existentes foram corrigidas (lat/lng zeradas, resto do registro preservado). Ver
+  Adendo 3 da [ADR 0033](docs/adr/0033-integracao-scalefusion-posicao-bateria.md).
 
 - "Rastro executado" continuava difícil/impossível de enxergar mesmo com dado real disponível no
   banco (546/171/15 pontos confirmados pra motoqueiros reais do dia) — a linha (cinza claro, fina)

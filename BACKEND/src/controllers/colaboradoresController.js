@@ -90,11 +90,21 @@ async function segsatPosicoes(req, res) {
   }
 }
 
-// Camada "Rastro executado" do mapa (ADR) — trajeto GPS real do dia
-// (Scalefusion pro pedestre, SEGSAT pro motoqueiro), diferente de
-// "Trajetória do dia" (que conecta os pontos de UC lida, não GPS
-// contínuo). `fonte` vem do FRONTEND (já sabe o cargo do colaborador,
-// mesma regra ehMoto de mapa-bases.ts) — evita reconsultar cargo aqui.
+// Camada "Rastro GPS" do mapa (ADR) — trajeto GPS real do dia (Scalefusion
+// pro pedestre, SEGSAT pro motoqueiro), diferente de "Trajetória do dia"
+// (que conecta só os pontos de UC lida, não GPS contínuo). `fonte` vem do
+// FRONTEND (já sabe o cargo do colaborador, mesma regra ehMoto de
+// mapa-bases.ts) — evita reconsultar cargo aqui.
+//
+// Motoqueiro sem veículo mapeado na planilha SEGSAT (~230 de 288 hoje, ver
+// ADR 0034 Contexto/Adendo 3) sempre voltava vazio, mesmo o colaborador
+// tendo celular Scalefusion rastreável normalmente — usuário pediu esse
+// fallback: se `fonte=segsat` não devolver nenhum ponto, tenta Scalefusion
+// (o dispositivo pessoal do colaborador) antes de desistir. `fonte` no
+// corpo da resposta reflete qual fonte REALMENTE respondeu, não a pedida —
+// só a moto tem fallback (SEGSAT é a fonte "melhor", cai pra Scalefusion
+// quando falta cadastro; o inverso não faz sentido, pedestre não tem
+// veículo mapeado).
 async function gpsHistorico(req, res) {
   try {
     const { colaborador, data, fonte } = req.query;
@@ -104,11 +114,20 @@ async function gpsHistorico(req, res) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '')) {
       return res.status(400).json({ sucesso: false, erro: 'Parâmetro "data" inválido, use YYYY-MM-DD.' });
     }
-    const pontos =
-      fonte === 'segsat'
-        ? await obterHistoricoPosicoesSegsat(req.db, colaborador, data)
-        : await obterHistoricoPosicoes(req.db, colaborador, data);
-    res.json({ sucesso: true, colaborador, data, pontos });
+    let pontos;
+    let fonteUsada;
+    if (fonte === 'segsat') {
+      pontos = await obterHistoricoPosicoesSegsat(req.db, colaborador, data);
+      fonteUsada = 'segsat';
+      if (!pontos.length) {
+        pontos = await obterHistoricoPosicoes(req.db, colaborador, data);
+        fonteUsada = 'scalefusion';
+      }
+    } else {
+      pontos = await obterHistoricoPosicoes(req.db, colaborador, data);
+      fonteUsada = 'scalefusion';
+    }
+    res.json({ sucesso: true, colaborador, data, fonte: fonteUsada, pontos });
   } catch (erro) {
     console.error('❌ Erro ao obter histórico de GPS do colaborador:', erro);
     res.status(500).json({ sucesso: false, erro: erro.message });

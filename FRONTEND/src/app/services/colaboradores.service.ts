@@ -341,6 +341,10 @@ interface GpsHistoricoResponse {
   sucesso: boolean;
   colaborador: string;
   data: string;
+  // Fonte que REALMENTE respondeu — pode divergir da pedida: motoqueiro sem
+  // veículo mapeado na SEGSAT cai pro Scalefusion (celular dele) em vez de
+  // devolver vazio, ver gpsHistorico em colaboradoresController.js.
+  fonte: 'segsat' | 'scalefusion';
   pontos: PontoGpsHistorico[];
 }
 
@@ -528,12 +532,19 @@ export class ColaboradoresService {
   // a camada está ligada (ver mapa-bases.ts). null até a primeira busca.
   limitesMunicipais = signal<MunicipioLimite[] | null>(null);
 
-  // Rastro GPS real do dia por colaborador (camada "Rastro executado" do
-  // mapa) — igual a limitesMunicipais, busca opt-in (só quando a camada
-  // está ligada, ver mapa-bases.ts) e por colaborador+dia. `undefined` =
-  // ainda não buscado pra esse colaborador nesta sessão; `[]` = buscado e
-  // não tem nenhum ponto (sem dado real).
+  // Rastro GPS real do dia por colaborador (camada "Rastro GPS" do mapa) —
+  // igual a limitesMunicipais, busca opt-in (só quando a camada está
+  // ligada, ver mapa-bases.ts) e por colaborador+dia. `undefined` = ainda
+  // não buscado pra esse colaborador nesta sessão; `[]` = buscado e não tem
+  // nenhum ponto (sem dado real).
   gpsHistoricoPorColaborador = signal<Map<string, PontoGpsHistorico[]>>(new Map());
+
+  // Fonte que respondeu por último pra cada colaborador — motoqueiro sem
+  // veículo mapeado na SEGSAT cai pro Scalefusion (fallback no backend, ver
+  // gpsHistorico em colaboradoresController.js), então nem sempre é a fonte
+  // "esperada" pelo cargo. Usado só pro tooltip do mapa indicar qual fonte
+  // está mostrando de fato.
+  gpsHistoricoFontePorColaborador = signal<Map<string, 'segsat' | 'scalefusion'>>(new Map());
 
   // true enquanto uma busca de "Rastro executado" está em voo. Fonte SEGSAT
   // agora chama a API ao vivo por trás (login + requisição externa, ver ADR
@@ -829,8 +840,11 @@ export class ColaboradoresService {
 
   // fonte: 'scalefusion' (pedestre/celular) ou 'segsat' (moto) — quem chama
   // decide com a mesma regra ehMoto de mapa-bases.ts, evita reconsultar
-  // cargo no BACKEND. Segue filtroData (mesma data selecionada no
-  // calendário da sidebar, igual carregarJornada).
+  // cargo no BACKEND. Pedir 'segsat' pode voltar com `resposta.fonte ===
+  // 'scalefusion'` (fallback do backend pra motoqueiro sem veículo
+  // mapeado) — guardado à parte só pro tooltip indicar a fonte real. Segue
+  // filtroData (mesma data selecionada no calendário da sidebar, igual
+  // carregarJornada).
   carregarGpsHistorico(nome: string, fonte: 'scalefusion' | 'segsat'): void {
     const params = new HttpParams().set('colaborador', nome).set('data', this.filtroData()).set('fonte', fonte);
     this.carregandoGpsHistorico.set(true);
@@ -839,6 +853,9 @@ export class ColaboradoresService {
         const mapa = new Map(this.gpsHistoricoPorColaborador());
         mapa.set(nome, resposta.pontos);
         this.gpsHistoricoPorColaborador.set(mapa);
+        const mapaFonte = new Map(this.gpsHistoricoFontePorColaborador());
+        mapaFonte.set(nome, resposta.fonte);
+        this.gpsHistoricoFontePorColaborador.set(mapaFonte);
         this.carregandoGpsHistorico.set(false);
       },
       error: () => {

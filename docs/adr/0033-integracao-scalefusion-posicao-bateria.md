@@ -180,3 +180,52 @@ suficiente por si só de que o colaborador está em campo, não precisa de leitu
 Simulação da lógica completa (roster + atividade + localizações + Scalefusion) direto contra o
 banco real: **18 → 56** colaboradores que passariam a aparecer no mapa (mais de 3×) com a correção.
 `tsc --noEmit` e `ng build --configuration production` sem erro.
+
+## Adendo 3 (2026-09-10) — checagem contra a especificação oficial da API + coordenada implausível
+
+Usuário pediu pra checar se o "histórico de GPS" que construímos pros PDAs (Scalefusion) está
+funcionando como deveria.
+
+### A API não tem endpoint de histórico — confirmado pela especificação oficial
+
+Lida a especificação técnica da A2L (`Especificacao_API_Scalefusion_COPEL.docx`, verificação de
+05/09/2026 06:26, feita sobre os 424 equipamentos): a API expõe só **dois** endpoints funcionais,
+`GET /devices` (retrato inteiro do parque, sem filtro, sem paginação, sem recorte de data) e `POST
+/alert`. A tabela "Limitações da interface" do documento é explícita: **"Sem histórico — A API
+entrega apenas o retrato atual. Reconstruir trajeto só é possível gravando os retratos de cinco em
+cinco minutos em base própria."** — e a recomendação #10 da própria especificação é literalmente
+"Implantar coleta a cada 5 min pra formar histórico próprio". É exatamente o que `coletarPosicoes`
+já faz. Confirmado: **a arquitetura atual (polling + tabela própria) não é um contorno improvisado,
+é a única forma possível e a recomendação oficial** — diferente do que aconteceu com a SEGSAT (ADR
+0034 Adendo 3), aqui não existe endpoint escondido pra descobrir.
+
+A baixa densidade de pontos por dia (média 10,9, confirmada ao vivo contra o banco de hoje — 266
+colaboradores com dado, de 1 a 37 pontos) também bate com o que a especificação documenta: 83,5% do
+parque reporta posição com menos de 1h de idade (contra 82% medido ao vivo aqui, 253/307) — ou seja,
+o aparelho atualiza a localização em torno de uma vez por hora, não a cada 5min; o cache de 5min da
+API é sobre quando ELA busca de novo no Scalefusion, não sobre a frequência real do GPS do aparelho.
+Não é bug de coleta.
+
+### Achado real: coordenada implausível ainda ativa
+
+A seção 5.4 da especificação já registrava, na coleta de 05/09, um aparelho reportando posição no
+Uzbequistão (colaborador "EDICARLOS FRANCISCO DO NASCIMENTO", lat 39.6, lng 66.9) e alertava:
+"uma única coordenada dessas joga o enquadramento automático de qualquer mapa pra escala mundial".
+Conferido ao vivo hoje (10/09): **a mesma coordenada, do mesmo colaborador, continua sendo
+recoletada a cada ciclo** — 201 linhas na tabela `scalefusion` com essa coordenada implausível,
+incluindo entradas de hoje mesmo. Não é erro do nosso parsing — é o que a API está de fato
+entregando — mas nada no código filtrava isso antes de gravar.
+
+### Decisão
+
+`coletarPosicoes` (`scalefusionService.js`) ganhou um filtro de plausibilidade: coordenada fora de
+um bounding box generoso do Brasil (lat -34 a 6, lng -75 a -28) é tratada como "sem posição válida"
+(mesma coisa que `location` ausente) em vez de gravada — não derruba o registro inteiro, só zera
+lat/lng, preservando bateria/dispositivo. Log de aviso quando descarta, pra rastrear se aparecer
+outro aparelho nessa situação. Migração de dados: as 201 linhas existentes com coordenada implausível
+tiveram `latitude`/`longitude` zeradas (não deletadas — mantém o histórico de bateria/dispositivo).
+
+### Verificação
+
+`SELECT` direto no banco confirma 201 linhas corrigidas, 0 restantes fora do bounding box depois da
+migração. `npm test` (18/18) limpo.

@@ -322,3 +322,38 @@ Réplica com Leaflet real e o rastro completo (549 pontos) do mesmo colaborador 
 geral do trecho espaçado E zoom no trecho mais denso identificado por script — tracejado legível nos
 dois casos, sem os buracos que o padrão antigo tinha. `npx tsc --noEmit` e `npx ng build
 --configuration production` limpos.
+
+## Adendo 6 (2026-09-10) — fallback pro Scalefusion quando o motoqueiro não tem veículo mapeado
+
+Usuário pediu: motoqueiro sem registro SEGSAT deve cair pro Scalefusion (o celular do próprio
+colaborador) em vez de mostrar a camada vazia — e 5 colaboradores nessa situação pra ele conferir na
+mão.
+
+### Decisão
+
+`gpsHistorico` (`colaboradoresController.js`): quando `fonte=segsat` devolve array vazio, tenta
+Scalefusion antes de responder — só nesse sentido (SEGSAT vazio → tenta Scalefusion), nunca o
+inverso, porque pedestre não tem veículo mapeado, não faz sentido cair pra SEGSAT. Resposta ganhou
+o campo `fonte`, refletindo qual fonte REALMENTE respondeu (pode divergir da pedida). Frontend
+(`ColaboradoresService.gpsHistoricoFontePorColaborador`, novo signal) guarda essa informação e o
+tooltip do rastro no mapa avisa quando é fallback ("Rastro GPS real do dia (celular — sem veículo
+mapeado na SEGSAT)") — pra não sugerir precisão de rastreador veicular num trajeto que na verdade
+veio do celular.
+
+### Verificação
+
+Consultado o banco: **158 motoqueiros ativos** estão nessa situação hoje (sem mapeamento SEGSAT, com
+dado Scalefusion do dia) — bem mais que o gap de cadastro por si só sugeria, porque cobre tanto quem
+nunca teve veículo mapeado quanto qualquer motoqueiro momentaneamente sem posição SEGSAT do dia.
+Simulado o fallback direto contra os dois serviços pra 5 deles — todos com 0 pontos SEGSAT e entre 2
+e 12 pontos Scalefusion, confirmando que o fallback teria dado resultado onde antes dava vazio:
+
+| Colaborador | Base | SEGSAT | Scalefusion (fallback) |
+|---|---|---|---|
+| ADAILSON PETRANSKI | Cascavel | 0 | 12 |
+| ADELMO RENATO COPETTI JUNIOR | Toledo | 0 | 12 |
+| ADEMIR LAMEU BURES | Toledo | 0 | 11 |
+| ADRIANO RENAN DE AQUINO OLIVEIRA | Paranavaí | 0 | 10 |
+| AGNALDO ANDRADE DA SILVA | Apucarana | 0 | 2 |
+
+`npx tsc --noEmit`, `npx ng build --configuration production` e `npm test` (18/18) limpos.

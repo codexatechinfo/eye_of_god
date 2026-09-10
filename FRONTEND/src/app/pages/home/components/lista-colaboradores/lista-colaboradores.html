@@ -40,6 +40,14 @@
   class="flex-1 min-h-0 space-y-0.5 overflow-y-auto pr-0.5"
   *ngIf="!colaboradoresService.carregando() && !colaboradoresService.erro() && colaboradoresService.colaboradores().length"
 >
+  <!-- Item de lista no padrão "ag-campo" do protótipo de referência: linha
+       única compacta, sem expandir ao clicar — clicar só seleciona (abre o
+       painel de detalhe, app-colaborador-detalhe, que já reage a
+       colaboradorSelecionado). Jornada (barra trabalhado/ocioso + km/
+       ocupação) e a lista de livros do dia, que antes expandiam AQUI,
+       migraram pro painel de detalhe (ver colaborador-detalhe.html) — só a
+       barra fina de % de execução do dia (mesma barra-dia do protótipo)
+       fica na lista, junto com um resumo em uma linha. -->
   <li
     *ngFor="let colaborador of colaboradoresService.colaboradoresOrdenados()"
     #linhaColaborador
@@ -48,270 +56,91 @@
     <button
       type="button"
       (click)="selecionar(colaborador.colaborador)"
-      class="w-full flex items-start gap-2 px-2.5 py-2 text-left text-xs font-medium rounded-md border-l-2 transition-colors cursor-pointer"
+      class="relative w-full text-left px-2.5 py-2 border-b border-linha border-l-[3px] transition-colors cursor-pointer"
       [ngClass]="
         colaboradoresService.colaboradorSelecionado() === colaborador.colaborador
-          ? 'bg-azul/10 text-azul-t border-azul'
-          : 'text-txt border-transparent hover:bg-sup-2 hover:text-azul-t'
+          ? 'bg-callout border-l-azul'
+          : 'border-l-transparent hover:bg-sup-2'
       "
     >
-      <span class="flex-1 min-w-0">
-        <span class="flex items-center gap-1">
-          <span
-            class="truncate"
-            [title]="
-              !colaboradoresService.atividadeDe(colaborador.colaborador)
-                ? colaborador.colaborador + ' — sem serviço hoje'
-                : colaborador.colaborador
-            "
-          >
-            {{ colaborador.colaborador }}
-          </span>
-          <!-- Bateria do aparelho (Scalefusion, ADR 0033) — motoqueiro e
-               pedestre, só aparece quando existe dado coletado pra ele. -->
-          <span
-            *ngIf="colaboradoresService.scalefusionDe(colaborador.colaborador) as posicao"
-            class="inline-flex items-center gap-0.5 text-[9px] font-bold tabular-nums shrink-0"
-            [ngClass]="corBateria(posicao.bateria_percentual)"
-            [title]="'Bateria do aparelho: ' + posicao.bateria_percentual + '%' + (posicao.bateria_carregando ? ' (carregando)' : '')"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="7" width="18" height="10" rx="2" />
-              <line x1="22" y1="10" x2="22" y2="14" />
-            </svg>
-            {{ posicao.bateria_percentual }}%
-          </span>
-          <!-- Só pra "sem serviço" — indica de cara (sem precisar expandir)
-               que a ausência tem justificativa (atestado ou licença de
-               ativos_inativos). Roxo + negrito quando é afastamento pelo
-               INSS, azul nos demais casos. -->
-          <svg
-            *ngIf="!colaboradoresService.atividadeDe(colaborador.colaborador) && colaboradoresService.afastamentoDe(colaborador.colaborador) as afIndicador"
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-3 w-3 shrink-0"
-            [ngClass]="afIndicador.afastadoInss === 'SIM' ? 'text-roxo' : 'text-azul/70'"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            [title]="
-              (afIndicador.motivoAfastamento || 'Ausência justificada') +
-              (afIndicador.afastadoInss === 'SIM' ? ' (INSS)' : '')
-            "
-          >
-            <path d="M9 11H3v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9h-6" />
-            <path d="M9 11V7a3 3 0 0 1 6 0v4" />
-            <path d="M12 15v3" />
-          </svg>
-          <!-- Oposto do ícone acima: afastamento cadastrado, mas COM
-               atividade real hoje — divergência entre cadastro e campo,
-               âmbar de alerta (ver afastadosComAtividade/pontuacaoDestaque
-               em colaboradores.service.ts). -->
-          <svg
-            *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) && colaboradoresService.afastamentoDe(colaborador.colaborador) as afAtivo"
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-3 w-3 shrink-0 text-alerta"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            [title]="'Afastado com atividade em campo — ' + (afAtivo.motivoAfastamento || 'ausência justificada')"
-          >
-            <path d="M12 9v4" />
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z" />
-            <path d="M12 17h.01" />
-          </svg>
-        </span>
-        <!-- Sempre visível abaixo do nome (não só no card expandido) — há
-             quanto tempo o colaborador não sincroniza, não a hora do
-             relógio (pedido explícito do usuário). -->
+      <!-- l1: nome (mono) + contador de realizadas, cor por faixa de
+           execução (mesmos limiares de corBarra — ≥70% ok, 30-69% alerta,
+           <30% crítico, sem atividade neutro). -->
+      <div class="flex items-center gap-1.5">
+        <span class="font-mono text-xs font-semibold text-tit truncate min-w-0 flex-1">{{ colaborador.colaborador }}</span>
         <span
-          *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as atividadeSync"
-          class="block text-[9.5px] text-tenue tabular-nums mt-0.5"
-        >
-          Sem sincronizar há {{ tempoSemSincronizar(atividadeSync.minutosParado) }}
-        </span>
-        <!-- Barra de % de execução do dia — mesma métrica que agora ordena
-             a lista (mais críticos = menor % primeiro). Só aparece quando
-             há atividade registrada hoje (sem serviço não tem o que medir). -->
-        <span
-          *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as atividadeBarra"
-          class="flex items-center gap-1.5 mt-1"
-          [title]="(percentual(colaborador.colaborador) | number: '1.0-0') + '% executado hoje'"
-        >
-          <span class="flex-1 h-1 rounded-full bg-linha/70 overflow-hidden">
-            <span
-              class="block h-full rounded-full transition-[width]"
-              [style.width.%]="percentual(colaborador.colaborador)"
-              [ngClass]="{
-                'bg-ok': corBarra(atividadeBarra) === 'verde',
-                'bg-alerta': corBarra(atividadeBarra) === 'amarelo',
-                'bg-critico': corBarra(atividadeBarra) === 'vermelho'
-              }"
-            ></span>
-          </span>
-          <span class="text-[9.5px] tabular-nums text-tenue shrink-0">{{ percentual(colaborador.colaborador) | number: '1.0-0' }}%</span>
-        </span>
-      </span>
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-3.5 w-3.5 shrink-0 text-tenue transition-transform mt-0.5"
-        [ngClass]="{ 'rotate-90': colaboradoresService.colaboradorSelecionado() === colaborador.colaborador }"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-    </button>
-
-    <div *ngIf="colaboradoresService.colaboradorSelecionado() === colaborador.colaborador" class="px-2.5 pt-2 pb-3">
-      <div class="flex items-center gap-1.5 mb-2">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-tenue shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-          <circle cx="12" cy="10" r="3" />
-        </svg>
-        <span class="text-[10.5px] font-semibold text-fraco truncate">{{ regionalDe(colaborador.base) }}</span>
-        <span
-          class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+          class="shrink-0 font-mono text-[11px] font-semibold text-white rounded-full px-1.5 min-w-[20px] text-center"
           [ngClass]="{
-            'bg-azul/15 text-azul-t': colaborador.cargo === 'LEITURISTA MOTOCICLISTA',
-            'bg-laranja/15 text-laranja-t': colaborador.cargo === 'LEITURISTA',
-            'bg-sup-3 text-fraco': colaborador.cargo === 'MONITOR'
+            'bg-ok': colaboradoresService.atividadeDe(colaborador.colaborador) && corBarra(colaboradoresService.atividadeDe(colaborador.colaborador)) === 'verde',
+            'bg-alerta': colaboradoresService.atividadeDe(colaborador.colaborador) && corBarra(colaboradoresService.atividadeDe(colaborador.colaborador)) === 'amarelo',
+            'bg-critico': colaboradoresService.atividadeDe(colaborador.colaborador) && corBarra(colaboradoresService.atividadeDe(colaborador.colaborador)) === 'vermelho',
+            'bg-linha-2': !colaboradoresService.atividadeDe(colaborador.colaborador)
           }"
-        >{{ rotuloCargo(colaborador.cargo) }}</span>
+          [title]="
+            colaboradoresService.atividadeDe(colaborador.colaborador)
+              ? colaboradoresService.atividadeDe(colaborador.colaborador)!.totalRealizadas + ' realizadas · ' + colaboradoresService.atividadeDe(colaborador.colaborador)!.totalPendentes + ' a realizar'
+              : 'Nenhuma atividade registrada ' + colaboradoresService.rotuloDataAtividade()
+          "
+        >{{ colaboradoresService.atividadeDe(colaborador.colaborador)?.totalRealizadas ?? '—' }}</span>
       </div>
-      <ng-container *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as a; else semAtividade">
-        <!-- Grid de indicadores removido daqui — era quase todo redundante
-             com os cards do painel de detalhe (app-colaborador-detalhe, que
-             abre JUNTO com este card expandido, mesmo colaboradorSelecionado)
-             — usuário reportou "informações redundantes nos cards". Os dois
-             valores que só existiam aqui (Leituras total e Livros total)
-             migraram pra lá; o resto já estava duplicado. -->
 
-        <!-- Jornada do dia (todos os livros juntos) — barra trabalhado/
-             ocioso, clique expande os cards de detalhe. "Trabalhado" não
-             separa execução de deslocamento (adiado, sem dado histórico de
-             tempo médio por UC) — ver JornadaColaborador no service. -->
-        <div *ngIf="colaboradoresService.jornadaPorColaborador().get(colaborador.colaborador) as jornada" class="mb-3">
-          <div *ngIf="!jornada.semDado" class="rounded-lg border border-linha bg-sup px-2.5 py-2 cursor-pointer" (click)="toggleJornada()">
-            <div class="flex items-center justify-between text-[9px] font-semibold text-tenue uppercase tracking-wide mb-1">
-              <span>Jornada</span>
-              <span class="tabular-nums normal-case font-bold text-txt">{{ jornada.inicio?.slice(0, 5) }} → {{ jornada.fim?.slice(0, 5) }}</span>
-            </div>
-            <div class="h-2 rounded-full overflow-hidden flex bg-sup-3">
-              <div class="bg-azul h-full" [style.width.%]="((jornada.trabalhadoSegundos || 0) / (((jornada.trabalhadoSegundos || 0) + (jornada.ociosoSegundos || 0)) || 1)) * 100"></div>
-              <div class="bg-alerta h-full" [style.width.%]="((jornada.ociosoSegundos || 0) / (((jornada.trabalhadoSegundos || 0) + (jornada.ociosoSegundos || 0)) || 1)) * 100"></div>
-            </div>
+      <!-- Ausência cadastrada — selo mono/pill (mesmo padrão do "selo" do
+           protótipo), roxo pra ausência simples, crítico quando diverge do
+           campo (afastado mas com atividade real hoje). -->
+      <div class="flex items-center gap-1 mt-1" *ngIf="colaboradoresService.afastamentoDe(colaborador.colaborador) as af">
+        <span
+          class="font-mono text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-roxo/15 text-roxo-t"
+          [title]="(af.motivoAfastamento || 'Ausência justificada') + (af.afastadoInss === 'SIM' ? ' (INSS)' : '')"
+        >ausência cadastrada</span>
+        <span
+          *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador)"
+          class="font-mono text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-alerta/15 text-laranja-t"
+          title="Afastado com atividade em campo — o cadastro e o campo divergem"
+        >com atividade</span>
+      </div>
 
-            <div *ngIf="jornadaExpandida()" class="grid grid-cols-2 gap-1.5 mt-2 text-[10px]">
-              <div class="rounded-md bg-sup-2 px-2 py-1.5">
-                <div class="text-[8px] font-semibold text-tenue uppercase tracking-wide">Trabalhado</div>
-                <div class="font-bold text-txt tabular-nums">{{ duracaoFormatada(jornada.trabalhadoSegundos) }}</div>
-              </div>
-              <div class="rounded-md bg-sup-2 px-2 py-1.5">
-                <div class="text-[8px] font-semibold text-tenue uppercase tracking-wide">Ocioso</div>
-                <div class="font-bold text-laranja-t tabular-nums">{{ duracaoFormatada(jornada.ociosoSegundos) }}</div>
-              </div>
-              <div class="rounded-md bg-sup-2 px-2 py-1.5">
-                <div class="text-[8px] font-semibold text-tenue uppercase tracking-wide">Ocupação</div>
-                <div class="font-bold text-txt tabular-nums">{{ jornada.ocupacaoPercentual !== null && jornada.ocupacaoPercentual !== undefined ? jornada.ocupacaoPercentual + '%' : '—' }}</div>
-              </div>
-              <div class="rounded-md bg-sup-2 px-2 py-1.5">
-                <div class="text-[8px] font-semibold text-tenue uppercase tracking-wide">Km percorrido</div>
-                <div class="font-bold text-txt tabular-nums">{{ distanciaFormatada(jornada.distanciaMetros) }}</div>
-              </div>
-            </div>
-          </div>
-          <!-- "Sem dado" aqui é sobre a JORNADA (nenhuma leitura REALIZADA
-               ainda hoje, base_dados_leitura vazia pra ele) — não quer dizer
-               que ele não tem nada atribuído; os livros dele hoje aparecem
-               logo abaixo mesmo assim. Texto antigo ("Sem leituras novas
-               hoje") lia como se contradissesse a lista de livros embaixo —
-               usuário reportou com print. -->
-          <div *ngIf="jornada.semDado" class="text-[10px] text-tenue text-center py-1">Nenhuma leitura realizada ainda {{ colaboradoresService.rotuloDataAtividade() }}</div>
-        </div>
+      <!-- barra-dia: % de execução do dia (mesma métrica que ordena a
+           lista — mais críticos primeiro). Só aparece com atividade
+           registrada hoje. -->
+      <div
+        *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as atividadeBarra"
+        class="h-[5px] rounded-full overflow-hidden bg-linha mt-1.5"
+        [title]="(percentual(colaborador.colaborador) | number: '1.0-0') + '% executado hoje'"
+      >
+        <div
+          class="h-full rounded-full transition-[width]"
+          [style.width.%]="percentual(colaborador.colaborador)"
+          [ngClass]="{
+            'bg-ok': corBarra(atividadeBarra) === 'verde',
+            'bg-alerta': corBarra(atividadeBarra) === 'amarelo',
+            'bg-critico': corBarra(atividadeBarra) === 'vermelho'
+          }"
+        ></div>
+      </div>
 
-        <!-- Lista de livros com histórico por faixa de hora -->
-        <div *ngIf="a.livros.length">
-          <div class="text-[10px] font-bold text-tenue uppercase tracking-wide mb-1.5">
-            Livros {{ colaboradoresService.rotuloDataAtividade() }}
-          </div>
-          <div class="space-y-1">
-            <!-- Só informativo — livro não abre mais nada ao clicar (a
-                 timeline de execução agora é do DIA do colaborador, não de
-                 um livro isolado; ver app-colaborador-detalhe, aberto ao
-                 clicar no colaborador). -->
-            <div *ngFor="let livro of a.livros">
-              <div class="w-full flex items-center justify-between gap-2 text-[11px] rounded-md border border-linha bg-sup-2 px-2 py-1.5">
-                <span class="flex items-center gap-1.5 min-w-0">
-                  <span
-                    class="w-1.5 h-1.5 rounded-full shrink-0"
-                    [ngClass]="livro.situacaoAtual === 'Em Execução' ? 'bg-ok' : 'bg-linha-2'"
-                  ></span>
-                  <span class="truncate font-semibold text-txt">Livro {{ livro.livro }} - {{ livro.etapa }}</span>
-                  <span
-                    *ngIf="livro.tipoServico"
-                    class="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-full"
-                    [ngClass]="{
-                      'bg-alerta/15 text-laranja-t': livro.tipoServico === 'releitura',
-                      'bg-azul/15 text-azul-t': livro.tipoServico === 'leitura',
-                      'bg-roxo/15 text-roxo-t': livro.tipoServico === 'massiva'
-                    }"
-                  >{{ livro.tipoServico }}</span>
-                  <span
-                    *ngIf="livro.diasPrazoRegulatorio !== null"
-                    class="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded-full"
-                    [ngClass]="{
-                      'bg-ok/15 text-ok': livro.diasPrazoRegulatorio < 27,
-                      'bg-alerta/15 text-laranja-t': livro.diasPrazoRegulatorio === 33,
-                      'bg-critico/15 text-critico': livro.diasPrazoRegulatorio >= 34
-                    }"
-                    title="Dias efetivos frente ao prazo regulatório (prazo_reg_livros)"
-                  >{{ livro.diasPrazoRegulatorio }}d</span>
-                </span>
-                <span class="flex items-center gap-1.5 shrink-0">
-                  <span class="text-tenue tabular-nums">{{ livro.digitados }}/{{ livro.naoDigitados }}</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </ng-container>
+      <!-- l2: cargo curto · regional -->
+      <div class="text-[11.5px] text-txt truncate mt-1">{{ rotuloCargo(colaborador.cargo) }} · {{ regionalDe(colaborador.base) }}</div>
 
-      <ng-template #semAtividade>
-        <ng-container *ngIf="colaboradoresService.afastamentoDe(colaborador.colaborador) as af; else semJustificativa">
-          <div class="rounded-lg border border-azul/15 bg-gradient-to-br from-azul/5 to-azul/10 px-2.5 py-2">
-            <div class="flex items-center gap-1.5 mb-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-azul shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 11H3v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9h-6" />
-                <path d="M9 11V7a3 3 0 0 1 6 0v4" />
-                <path d="M12 15v3" />
-              </svg>
-              <span class="text-[11px] font-bold text-azul-t">Ausência justificada</span>
-            </div>
-            <p class="text-[11px] text-azul-t leading-snug">
-              {{ af.motivoAfastamento || (af.origem === 'licenca' ? 'Licença/afastamento' : af.origem === 'suspensao' ? 'Suspensão/falta justificada' : 'Atestado/afastamento') }}
-              <span *ngIf="af.afastadoInss === 'SIM'" class="font-semibold"> (afastado pelo INSS)</span>
-            </p>
-            <p class="text-[10.5px] text-azul mt-0.5 tabular-nums">
-              {{ af.dataAfastamento | date: 'dd/MM/yyyy':'UTC' }}
-              <ng-container *ngIf="af.dataRetorno">até {{ af.dataRetorno | date: 'dd/MM/yyyy':'UTC' }}</ng-container>
-              <ng-container *ngIf="af.qtdDiasAfastado"> · {{ af.qtdDiasAfastado }} dia{{ af.qtdDiasAfastado === '1' ? '' : 's' }}</ng-container>
-            </p>
-          </div>
+      <!-- l3: bateria (mono, cor por faixa) · sem transmitir há (crítico
+           acima do limite) · contagem de livros (sem lista — a lista
+           completa está no painel de detalhe). -->
+      <div class="flex items-center gap-2 font-mono text-[9.5px] text-tenue flex-wrap mt-1">
+        <span
+          *ngIf="colaboradoresService.scalefusionDe(colaborador.colaborador) as posicao"
+          class="inline-flex items-center gap-0.5 font-bold"
+          [ngClass]="corBateria(posicao.bateria_percentual)"
+          [title]="'Bateria do aparelho: ' + posicao.bateria_percentual + '%' + (posicao.bateria_carregando ? ' (carregando)' : '')"
+        >▮ {{ posicao.bateria_percentual }}%</span>
+        <ng-container *ngIf="colaboradoresService.atividadeDe(colaborador.colaborador) as atividadeSync; else semAtividadeL3">
+          <span [ngClass]="atividadeSync.minutosParado >= 30 ? 'text-critico font-semibold' : ''">
+            {{ tempoSemSincronizar(atividadeSync.minutosParado) }} sem transmitir
+          </span>
+          <span>{{ atividadeSync.totalLivros }} livro{{ atividadeSync.totalLivros === 1 ? '' : 's' }}</span>
         </ng-container>
-        <ng-template #semJustificativa>
-          <p class="text-[11px] text-tenue">Nenhuma atividade registrada {{ colaboradoresService.rotuloDataAtividade() }}.</p>
+        <ng-template #semAtividadeL3>
+          <span *ngIf="!colaboradoresService.afastamentoDe(colaborador.colaborador)">sem serviço {{ colaboradoresService.rotuloDataAtividade() }}</span>
         </ng-template>
-      </ng-template>
-    </div>
+      </div>
+    </button>
   </li>
 </ul>

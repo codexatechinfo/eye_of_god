@@ -15,6 +15,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   comportamento. Fase 1 de uma migração maior (próximas abas ficam pra rodadas futuras). Ver [ADR
   0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+- Restyle da aba Trilho, rodada 2 — agora estrutural, não só cor (a rodada 1 tinha trocado só nomes
+  de classe, mantendo o layout antigo): lista de colaboradores virou linha única compacta (sem
+  expandir ao clicar); grid de indicador do painel de detalhe virou 3 colunas neutras (cor só nos
+  casos com significado, em vez de 9 cards coloridos com gradiente); timeline virou cartão com barra
+  lateral + bolinha coloridas (em vez de linha vertical com marcador); nova seção "Livros do dia" no
+  painel de detalhe (migrada da lista); aba ativa no header virou preenchimento sólido navy; ícones
+  de colaborador no mapa viraram formas geométricas simples (losango azul/gota vermelha) no lugar do
+  traçado SVG detalhado. Ver Adendo 2 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Adicionado
 
 - Camada "Rastro GPS" (mapa, aba Trilho) ganhou marcadores de primeiro e último ponto — contorno

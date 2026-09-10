@@ -1,12 +1,10 @@
-import { Component, ElementRef, QueryList, ViewChildren, effect, signal } from '@angular/core';
+import { Component, ElementRef, QueryList, ViewChildren, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   AtividadeColaborador,
   CategoriaAtividade,
   ColaboradoresService,
-  formatarDistancia,
-  formatarDuracao,
   formatarTempoParado,
   normalizarRegional,
   OPCOES_CATEGORIA,
@@ -24,10 +22,6 @@ type CorBarra = 'verde' | 'amarelo' | 'vermelho';
 export class ListaColaboradores {
   opcoesCategoria = OPCOES_CATEGORIA;
 
-  // Barra de jornada expandida (cards de ocupação/trabalhado/ocioso/km) —
-  // um só de cada vez, sempre fechada de novo ao trocar de colaborador.
-  jornadaExpandida = signal(false);
-
   // Marcadas com #linhaColaborador no template (uma por colaborador) —
   // usadas pra rolar até o colaborador focado (clique no ícone dele no
   // mapa, ver mapa-bases.ts). Mesmo padrão de #linhaUc em livro-detalhe.ts.
@@ -43,20 +37,7 @@ export class ListaColaboradores {
   }
 
   selecionar(nome: string): void {
-    this.jornadaExpandida.set(false);
     this.colaboradoresService.selecionarColaborador(nome);
-  }
-
-  toggleJornada(): void {
-    this.jornadaExpandida.set(!this.jornadaExpandida());
-  }
-
-  distanciaFormatada(metros: number | null | undefined): string {
-    return formatarDistancia(metros ?? null);
-  }
-
-  duracaoFormatada(segundos: number | null | undefined): string {
-    return formatarDuracao(segundos ?? null);
   }
 
   // Cards "Último sincronismo" mostram há QUANTO TEMPO o colaborador não

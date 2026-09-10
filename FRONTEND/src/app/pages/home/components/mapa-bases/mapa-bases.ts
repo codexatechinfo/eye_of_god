@@ -60,15 +60,53 @@ function normalizarParaComparacao(texto: string): string {
     .trim();
 }
 
-// Icones do colaborador no mapa — SVGs exatos enviados pelo usuário
-// (39131.svg pra moto, 304880.svg pro pedestre — traçados via potrace a
-// partir das imagens de referência que ele mandou), usados aqui com o MESMO
-// path data dos arquivos originais, só trocando fill="#000000" pela cor de
-// cada tipo (moto azul, pedestre laranja). Nenhuma forma desenhada à mão
-// aqui — as 3 rodadas anteriores (badge, pino, silhueta aproximada por
-// primitivas) nunca bateram com a referência real do usuário; isto substitui
-// todas elas com fidelidade exata. Ancorado no CENTRO (não tem "ponta" como
-// um pino).
+// Icones do colaborador no mapa — silhueta simples no padrão do protótipo
+// de referência (olho.html, função desenhaAgente): losango pra quem anda de
+// moto, gota (círculo + "cauda" triangular) pra quem anda a pé. Não é
+// ilustração — é a diferença que precisa ficar clara de relance, a cor já
+// diz o resto. Substitui a versão anterior (traçado SVG exato via potrace
+// de fotos reais) por pedido explícito do usuário, mesmo sabendo que é o
+// mesmo tipo de simplificação já rejeitada em rodadas anteriores — ver ADR
+// 0038 Adendo 2. Geometria (pontos do losango, raio/offset da gota) copiada
+// 1:1 das coordenadas do canvas do protótipo, só redesenhada em SVG.
+function iconeMoto(): L.DivIcon {
+  return L.divIcon({
+    html: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="-10 -11 20 22" style="filter:drop-shadow(0 1px 2px rgba(11,46,89,.35))">
+        <path d="M0,-9 L8,0 L0,9 L-8,0 Z" fill="#006DFF" stroke="#fff" stroke-width="1.6"/>
+      </svg>
+    `,
+    className: '',
+    iconSize: [20, 22],
+    iconAnchor: [10, 11],
+  });
+}
+
+// Cor do pedestre segue #dc2626 (não o token --critico) — decisão já
+// tomada e documentada na ADR 0038: usuário comparou lado a lado e achou
+// mais saturado/puro que o token, pediu explicitamente pra manter. Vale
+// pra qualquer formato do ícone, não só o traçado anterior.
+function iconePedestre(): L.DivIcon {
+  return L.divIcon({
+    html: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="22" viewBox="-8 -10 16 22" style="filter:drop-shadow(0 1px 2px rgba(11,46,89,.35))">
+        <circle cx="0" cy="-2.5" r="6.4" fill="#dc2626" stroke="#fff" stroke-width="1.6"/>
+        <path d="M0,3.4 L4.2,10.5 L-4.2,10.5 Z" fill="#dc2626" stroke="#fff" stroke-width="1.6"/>
+      </svg>
+    `,
+    className: '',
+    iconSize: [16, 22],
+    iconAnchor: [8, 10],
+  });
+}
+
+const ICONE_MOTO = iconeMoto();
+const ICONE_PEDESTRE = iconePedestre();
+
+// Helper genérico usado só pelo ícone de "último ponto de execução"
+// (iconeUltimoPonto, abaixo) — traçado SVG exato via potrace, ancorado no
+// CENTRO. Não é mais usado pelos ícones moto/pedestre (ver iconeMoto/
+// iconePedestre acima), mas continua igual aqui.
 function iconeColaborador(svgInterno: string, viewBox: string, largura: number, altura: number): L.DivIcon {
   return L.divIcon({
     html: `
@@ -81,85 +119,6 @@ function iconeColaborador(svgInterno: string, viewBox: string, largura: number, 
     iconAnchor: [largura / 2, altura / 2],
   });
 }
-
-// 39131.svg — viewBox e transform (translate/scale) idênticos ao arquivo
-// original, só o fill do <g> trocado de #000000 pra azul.
-const ICONE_MOTO = iconeColaborador(
-  `<g transform="translate(0,1034) scale(0.1,-0.1)" fill="#006DFF" stroke="none">
-<path d="M6120 10315 c-502 -106 -822 -361 -943 -750 -26 -85 -52 -213 -45
--220 2 -3 188 26 412 63 224 37 409 66 412 63 8 -8 4 -571 -4 -571 -12 0 -740
--98 -779 -105 l-33 -6 0 -359 c0 -281 3 -360 13 -360 6 0 111 14 232 30 121
-16 223 30 226 30 3 0 54 40 113 89 244 203 471 324 708 377 99 23 327 23 428
-1 123 -27 209 -56 323 -110 l109 -51 19 24 c34 44 116 213 143 293 43 127 59
-253 53 407 -6 153 -22 238 -67 360 -187 509 -466 744 -945 799 -202 23 -253
-22 -375 -4z"/>
-<path d="M6450 8440 c-92 -19 -187 -53 -265 -93 -28 -14 -583 -428 -1235 -921
--861 -651 -1186 -891 -1188 -878 -1 9 -8 90 -16 180 -7 89 -15 164 -18 167 -3
-3 -54 -13 -114 -36 -60 -22 -221 -81 -359 -131 -383 -138 -638 -241 -822 -333
--456 -226 -697 -468 -799 -800 -26 -85 -28 -101 -28 -280 0 -174 2 -200 28
--310 33 -140 91 -302 167 -467 54 -117 54 -117 89 -118 78 -1 322 -21 424 -35
-1182 -164 1889 -910 2182 -2302 l17 -83 93 -90 c288 -279 740 -437 1439 -505
-325 -31 469 -36 1350 -45 495 -5 940 -12 989 -16 l89 -6 -7 68 c-3 38 -13 123
--21 189 -34 275 -30 697 10 972 140 958 741 1562 1762 1772 289 59 521 81 945
-88 l347 6 42 56 c142 190 168 423 68 612 -17 31 -46 73 -64 93 l-33 36 -1026
-0 -1026 0 0 23 c0 36 -36 133 -76 206 -52 95 -117 188 -299 431 -88 118 -185
-250 -214 293 -30 43 -58 80 -62 83 -4 2 -311 -232 -681 -522 l-673 -526 -1000
-3 c-1071 2 -1041 4 -1153 -48 -108 -51 -196 -173 -240 -338 -13 -49 -23 -69
--33 -67 -86 20 -371 160 -506 248 -223 145 -422 350 -523 538 -31 58 -33 67
--20 80 8 8 471 363 1029 790 1012 774 1014 775 1031 753 11 -15 1278 -1776
-1304 -1814 2 -2 1349 1006 1363 1020 9 9 -20 54 -129 197 -77 102 -273 365
--436 585 -585 788 -813 1060 -962 1143 -238 133 -509 182 -740 132z"/>
-<path d="M1935 4190 c-523 -44 -999 -271 -1357 -649 -420 -442 -628 -1044
--568 -1642 52 -508 268 -953 636 -1309 820 -793 2128 -780 2935 29 432 434
-652 1019 609 1623 -49 687 -420 1294 -1010 1654 -360 219 -825 329 -1245 294z
-m465 -754 c557 -129 970 -576 1055 -1141 40 -268 -2 -538 -124 -790 -75 -154
--159 -270 -279 -387 -195 -189 -418 -306 -692 -365 -120 -26 -411 -25 -530 1
--374 81 -684 293 -885 604 -256 397 -287 914 -81 1337 202 414 598 702 1051
-764 121 17 365 5 485 -23z"/>
-<path d="M10414 4174 c-838 -114 -1531 -733 -1743 -1557 -48 -183 -63 -311
--63 -517 0 -345 61 -615 207 -915 444 -916 1473 -1378 2459 -1105 606 168
-1116 620 1361 1205 534 1273 -293 2713 -1658 2890 -145 18 -423 18 -563 -1z
-m556 -734 c138 -28 204 -51 345 -120 374 -184 641 -532 732 -953 28 -126 25
--440 -5 -563 -115 -485 -452 -855 -914 -1008 -141 -47 -265 -66 -428 -66 -221
-0 -404 41 -595 134 -496 242 -798 750 -771 1296 17 351 153 658 401 905 222
-222 495 355 811 395 104 13 308 4 424 -20z"/>
-</g>`,
-  '0 0 1280 1034',
-  34,
-  27,
-);
-
-// 310286.svg — viewBox e transform idênticos ao arquivo original, só o fill
-// do <g> trocado de #000000 pra vermelho. Primeira tentativa (#ef4444,
-// CORES_TRECHO.vermelho) usuário achou "ainda alaranjado" comparando com um
-// pino de referência (círculo vermelho com "+") — trocado pra #dc2626, mais
-// saturado/puro, sem a mistura quente do red-500.
-const ICONE_PEDESTRE = iconeColaborador(
-  `<g transform="translate(0,1280) scale(0.1,-0.1)" fill="#dc2626" stroke="none">
-<path d="M3955 12793 c-151 -19 -271 -55 -407 -125 -389 -198 -628 -589 -629
--1028 0 -146 14 -238 57 -368 183 -559 756 -893 1334 -776 540 110 930 587
-930 1139 0 371 -171 710 -470 934 -149 111 -334 188 -517 216 -90 14 -225 17
--298 8z"/>
-<path d="M920 10933 c0 -4 -743 -2966 -859 -3423 -33 -129 -57 -238 -53 -241
-10 -10 1733 -441 1739 -436 7 7 924 3659 920 3663 -6 6 -1747 442 -1747 437z"/>
-<path d="M3718 10319 c-529 -56 -969 -456 -1063 -969 -20 -109 -204 -852 -650
--2630 -174 -690 -464 -1847 -646 -2570 -182 -723 -430 -1709 -552 -2190 l-221
--875 -1 -155 c0 -172 8 -217 62 -350 91 -223 273 -404 493 -493 135 -54 180
--62 345 -62 125 0 163 4 230 23 341 97 586 362 656 710 21 102 874 3514 887
-3544 4 11 184 -683 467 -1805 253 -1002 471 -1851 486 -1887 64 -159 129 -259
-231 -356 111 -106 248 -183 405 -226 113 -31 324 -31 443 0 306 80 551 318
-646 627 26 83 28 103 28 255 l0 165 -42 125 c-23 69 -97 341 -163 605 -66 264
--140 557 -164 650 -24 94 -125 494 -225 890 -100 396 -223 887 -275 1090 -52
-204 -155 613 -230 910 -75 297 -193 762 -261 1034 -69 271 -124 495 -122 496
-2 2 174 -39 383 -91 1618 -401 1537 -383 1675 -364 160 22 267 75 382 191 198
-199 243 483 117 739 -33 67 -60 102 -123 165 -113 112 -236 172 -391 189 -33
-4 -308 68 -611 143 l-551 136 -151 576 c-108 410 -154 605 -162 677 -45 418
--297 779 -675 967 -134 66 -262 102 -420 117 -121 11 -126 11 -237 -1z"/>
-</g>`,
-  '0 0 711 1280',
-  18,
-  32,
-);
 
 // Ponto de pausa (>limite por etapa desde o ponto anterior) — mesmo ícone
 // de pausa (duas barras) usado no separador de deslocamento da timeline

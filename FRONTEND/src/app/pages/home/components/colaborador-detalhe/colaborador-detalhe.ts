@@ -148,6 +148,20 @@ export class ColaboradorDetalhe {
     return corDaUc(item, this.colaboradoresService.regimeSucessivoPorUc());
   }
 
+  // Cor do cartão "f-seg" da timeline (protótipo) — reaproveita corDaUc
+  // (mesma fonte de verdade do mapa) mas acrescenta um caso que só existe
+  // aqui: pausa (>limite por etapa) vira crítico, mesmo numa leitura
+  // normal, pra destacar o tempo parado — pedido explícito da rodada 2 do
+  // restyle (ver ADR 0038 Adendo 2).
+  corSegmento(item: PontoJornada): 'neutro' | 'ok' | 'alerta' | 'critico' {
+    const cor = this.corDoPonto(item);
+    if (cor === 'cinza') return 'neutro';
+    if (item.tipo_intervalo === 'pausa') return 'critico';
+    if (cor === 'vermelho') return 'critico';
+    if (cor === 'laranja') return 'alerta';
+    return 'ok';
+  }
+
   distanciaFormatada(metros: number | null): string {
     return formatarDistancia(metros);
   }

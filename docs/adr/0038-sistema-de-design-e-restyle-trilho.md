@@ -164,5 +164,101 @@ corretamente pelo Tailwind v4.
 - Decidir sobre a régua de tempo (playback do dia) — mecanismo novo, não construído nesta rodada.
 - Aba Risco — feature nova completa, precisa de decisões de negócio (critérios, ações) e trabalho
   de backend antes de qualquer tela.
-- Decisão pendente do usuário: uniformizar o ícone do pedestre pro token `--critico` ou manter
-  `#dc2626` como exceção permanente.
+
+## Adendo 2 — Rodada 2: restyle estrutural (não só cor)
+
+Usuário testou a rodada 1 no app real e reportou que não bateu com o protótipo: só cor mudou, a
+ESTRUTURA (lista de colaboradores, grid de indicador, timeline) continuou a antiga — pediu pra
+reanalisar o protótipo por completo e perguntar cada detalhe antes de mexer de novo.
+
+Reli `08-campo.css` (linhas 517-666) e o JS de renderização (`linhaAgente`, `pintaResumoEm`,
+`cartaoPonto`, `desenhaAgente`, olho.html linhas 3959-5300) — a diferença é estrutural: o protótipo
+usa lista compacta de linha única (sem expandir), cards de indicador neutros (cor só quando tem
+significado), timeline em formato de cartão, e ícones de colaborador como formas geométricas
+simples (losango/gota) em vez de silhueta. Achado-chave: os nomes de campo no JS do protótipo
+(`p.codigo`, `p.tipo_intervalo`, `p.mudou_livro`, `p.hora_import` etc.) batem exatamente com o
+nosso contrato de backend — tradução literal, não um formato genérico.
+
+Perguntado o usuário sobre os pontos de maior divergência — respostas: painel de detalhe continua
+overlay (não vira 3ª coluna fixa); cards de indicador adotam o padrão neutro; timeline adota o
+formato de cartão; lista de colaboradores adota a linha compacta sem expandir.
+
+### Lista de colaboradores (`lista-colaboradores.html`/`.ts`)
+
+Item reescrito pro padrão `.ag-campo`: linha única, nome (mono) + badge contador de realizadas
+(cor por limiar de execução — `corBarra()`, já existente), selo de ausência cadastrada, barra fina
+de % de execução do dia, cargo · regional, bateria · sem transmitir · contagem de livros (sem
+lista). Clique só seleciona (abre o painel de detalhe) — não expande mais nada dentro do próprio
+item. Removido: o card expansível inteiro (jornada + lista de livros), `jornadaExpandida` (signal),
+`toggleJornada()`, `distanciaFormatada()`/`duracaoFormatada()` (sem uso depois da remoção).
+
+**Achado que exigiu decisão própria (não coberto pelas perguntas):** o card expansível removido era
+o único lugar que mostrava jornada do dia (trabalhado/ocioso/ocupação/km) e a lista de livros do
+dia com badges de tipo/prazo regulatório — nenhum dos dois tem equivalente direto no `.ag-campo`
+compacto do protótipo. Decisão conservadora (sem perder funcionalidade, reportada ao usuário em vez
+de pré-aprovada): a barra de % de execução migrou pro item compacto (mesma métrica do `.barra-dia`
+do protótipo); "km percorrido" e "ocupação" viraram KPIs no grid do painel de detalhe (o protótipo
+já tem os dois ali); a lista de livros do dia migrou pro painel de detalhe, como seção nova.
+
+### Painel de detalhe (`colaborador-detalhe.html`/`.ts`, só variante `'painel'`)
+
+Grid de indicador: de 2 colunas/9 cards coloridos com gradiente pra 3 colunas/9 KPIs neutros
+(fundo `sup-2`, borda `linha`, sem gradiente/ícone — cor só no valor, só nos 3 casos com
+significado: impedimentos crítico se >0, sem transmitir crítico se ≥ limite, leituras/min sempre
+azul, realizadas sempre ok). Cards "Leituras" (total) e "Livros" (separado de "em execução") do
+grid antigo removidos — redundantes com "realizadas"+"a realizar" e com o novo "livros em
+execução/total" combinado; nenhum dos dois existe no protótipo. "Ocupação" entrou como KPI novo
+(não existia em nenhum card do painel antes).
+
+Nova seção "Livros do dia" logo abaixo do grid — badges de tipo/prazo regulatório migrados do card
+removido da lista lateral, mesmo comportamento (só informativo, não abre nada ao clicar).
+
+Timeline: cada item virou cartão `.f-seg` (borda + fundo `sup-2` + barra lateral colorida + bolinha
+na mesma cor, no lugar da linha vertical com marcador), mantendo a lógica de expandir ao clicar
+(`ucExpandida`/`toggleExpandir`) sem nenhuma mudança. Cor do cartão por `corSegmento()` (método
+novo) — reaproveita `corDaUc()` (mesma fonte do mapa) e acrescenta um caso que só existe aqui:
+pausa (`tipo_intervalo === 'pausa'`) vira crítico mesmo numa leitura normal, pra destacar o tempo
+parado (achado do protótipo, `cartaoPonto()`, que nosso `corDoPonto()` não cobria). Impedimento
+reincidente (`ciclosConsecutivos > 1`) também crítico; impedimento simples fica `alerta`/âmbar —
+**decisão consciente de manter nosso padrão já estabelecido**, não o azul claro (`#9EC3FF`) que o
+protótipo reaproveita de uma classe genérica "deslocamento" pra esse caso (reduziria a clareza
+semântica que já temos hoje pro impedimento).
+
+### Casca (`home.html`) — aba ativa
+
+Trocado o destaque da aba ativa do padrão "tinta clara" (`bg-azul/10` + texto `tit`) pro padrão
+sólido do protótipo (`background:var(--navy);color:#fff`) nos 5 botões de aba.
+
+### Ícones do colaborador no mapa (`mapa-bases.ts`)
+
+Substituídos o traçado SVG exato (potrace de fotos reais, documentado acima em "Não mexidos, de
+propósito") pelas formas geométricas simples do protótipo (`desenhaAgente`, olho.html linhas
+3962-3999): losango azul (moto) e gota — círculo + cauda triangular (pedestre), coordenadas
+copiadas 1:1 da geometria do canvas do protótipo. **Confirmado explicitamente pelo usuário mesmo
+sabendo que é o mesmo tipo de simplificação já rejeitada 3 vezes antes** (badge, pino, silhueta
+aproximada por primitivas) — pedido novo, não uma omissão. Cor do pedestre continua `#dc2626` (não
+o token `--critico`), mesma decisão já tomada e documentada acima — só o formato mudou, não a cor.
+Com isso, a "decisão pendente do usuário" listada nos próximos passos originais (uniformizar pro
+token `--critico` ou manter `#dc2626`) segue igualmente pendente — não foi tocada nesta rodada, só
+a forma do ícone. O ícone do "último
+ponto de execução do colaborador aberto" (`iconeUltimoPonto`, cor dinâmica por `corDaUc`) não foi
+tocado — é um traçado exato separado, fora do escopo desta pergunta, mantém `iconeColaborador()`
+como helper.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos (só os avisos pré-existentes
+de orçamento de bundle e leaflet CJS) depois de cada arquivo alterado. Harness estático com o CSS
+real compilado, cobrindo: item da lista em verde/amarelo/vermelho/neutro + selecionado + ausência
+cadastrada com/sem divergência; grid de KPI neutro com os 3 casos coloridos (realizadas/critico
+condicional/azul); timeline com card ok/alerta(impedimento)/crítico(pausa, ícone de pausa no
+marcador)/crítico(reincidente)/neutro(a realizar), separadores de mudança de livro/município
+preservados; aba ativa em navy sólido; ícones losango/gota — tudo visualmente coeso.
+
+`grep` confirmou nenhuma referência solta a `jornadaExpandida`/`toggleJornada`/`distanciaFormatada`/
+`duracaoFormatada` (lista) nem a `iconeColaborador` sem uso (mapa — ainda usado por
+`iconeUltimoPonto`) depois das remoções.
+
+### Pendências (fora desta ADR)
+
+- Decidir sobre a régua de tempo (playback do dia) e a aba Risco — inalteradas, ver seção anterior.

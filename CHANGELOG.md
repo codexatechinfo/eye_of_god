@@ -51,6 +51,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   pra baixo dela; restrito só ao trecho da legenda, que é o único que pode precisar rolar. Ver
   Adendo 5 da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+- Scroll interno da timeline do painel de detalhe (aba Trilho) tinha sumido — regressão da correção
+  acima: a div do painel perdeu a altura explícita ao deixar de ser `position: absolute`, então o
+  trecho `flex-1 overflow-y-auto` da timeline não tinha mais teto de altura pra rolar dentro, e o
+  painel inteiro crescia pra caber todos os itens do dia. Corrigido com `h-full` explícito na div do
+  painel. Ver Adendo 7 da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 - Barra do mapa (aba Trilho): tipo de mapa (Ruas/Satélite/Satélite c/ rótulos/Topográfico) virou
   dropdown (mesmo padrão do botão "Camadas") no lugar de 4 botões sempre visíveis — a legenda estava
   rolando horizontalmente por falta de espaço. Ver Adendo 6 da [ADR

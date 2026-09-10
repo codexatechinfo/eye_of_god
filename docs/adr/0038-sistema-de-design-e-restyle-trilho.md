@@ -470,3 +470,32 @@ mapa abre com as 4 opções, ativa em navy, mesmo comportamento de fechar ao cli
 
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Régua de tempo (playback do dia) e aba Risco — inalteradas.
+
+## Adendo 7 — Rodada 7: scroll da timeline sumiu (regressão do Adendo 5)
+
+Usuário reportou "sumiu o scroll lateral da timeline" logo depois da rodada 5. Causa raiz: ao trocar
+o painel de `position: absolute inset-y-0` (Adendo 5, pra empurrar o mapa em vez de cobri-lo) pra um
+`div` de fluxo normal, a div perdeu a altura EXPLÍCITA que `inset-y-0` garantia (top:0+bottom:0 =
+100% do container). Sem `absolute`, uma div só cresce pelo conteúdo — como o painel é `flex flex-col`
+com um trecho `flex-1 overflow-y-auto` (a timeline), esse `flex-1` não tinha mais um teto de altura
+pra respeitar, então o painel inteiro crescia pra caber TODOS os itens do dia, sem scroll interno
+nenhum (a rolagem, se sobrasse algo, virava rolagem da PÁGINA, não da timeline).
+
+`<app-colaborador-detalhe>` (o host, `home.html`) já é esticado corretamente pelo `flex` do `<main>`
+(align-items: stretch, padrão) — mas isso só dá altura definida ao HOST; a div de dentro (filha
+comum, não item de flex de mais ninguém) não herda `height:100%` sozinha, precisa do `h-full`
+explícito pra repassar essa altura. Corrigido acrescentando `h-full` na div do painel
+(`colaborador-detalhe.html`) e, por robustez/clareza, `class="block h-full"` no próprio host
+`<app-colaborador-detalhe>` (mesmo padrão já usado em `<app-mapa-bases>` ao lado).
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness com 15 itens de
+timeline (~900px de conteúdo) dentro de um painel de 400px de altura — confirmado que só ~5 itens
+aparecem por vez, com scrollbar fina visível na área da timeline, painel não estoura mais o
+container pai.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Régua de tempo (playback do dia) e aba Risco — inalteradas.

@@ -160,3 +160,56 @@ Não testado ao vivo contra o portal Copel real nesta sessão (login/scraping em
 próxima execução do usuário confirmar: (1) o modo profundo dispara sozinho no primeiro ciclo do dia
 sem roster ainda; (2) completa dentro do teto de 90min com uma taxa de sucesso por livro aceitável,
 rodando serial; (3) os ciclos seguintes do mesmo dia voltam a cair no modo rápido.
+
+## Adendo 1 — testado ao vivo: serial ficou lento demais; paralelismo (5 abas) real mas ainda
+## insuficiente; usuário pediu uma medição sem teto
+
+Sessão seguinte, testado contra o portal Copel real (backend rodando, ~1760 livros no dia).
+
+### Rodada 1 — serial (1 aba), teto padrão 90min
+
+Resultado: **136/2270 livros (~6%) em ~99min** — o teto (que só é checado ENTRE livros) deixou o
+ciclo passar um pouco do previsto por causa de retentativas de sessão perdida em andamento. Cobertura
+baixa demais pro que o usuário queria ("saber quais UCs foram enviadas a leitura" precisa do roster
+quase completo, não uma amostra de 6%).
+
+### Rodada 2 — usuário pediu paralelismo de volta (5 abas), mesmo teto de 90min
+
+Usuário decidiu reverter a escolha original desta ADR (serial, pra evitar o risco de sessão perdida
+documentado na ADR 0020) — pediu explicitamente 5 abas em paralelo, mesmo padrão de antes da ADR
+0028, pra tentar voltar à faixa de 35-40min.
+
+Implementado: `PARALELISMO_PROFUNDO` (novo, env `COPEL_PARALELISMO_ACOMP`, default 5) +
+`worker()`/fila compartilhada (`filaLivros.shift()`) trazidos de volta do histórico pré-ADR-0028,
+simplificados (sem adaptive slowMo/contador de tentativas por etapa — só o necessário pro grão
+atual, que já é por livro). `estadoDiagnostico` voltou a ser por worker (1 screenshot de cada
+categoria por aba, não 1 pro run inteiro).
+
+Resultado real: **267/1760 livros (~15%) em ~90min** — melhor que serial (267 vs 136), mas ainda
+bem abaixo do histórico documentado (94,4% em 45min pra 425 livros, ADR 0020) e longe de "todos os
+livros". Muitos diagnósticos de "sessão/busca perdida" e "OS falhou" salvos ao longo da rodada
+(`BACKEND/diagnosticos/acomp_profundo_*`) — o portal se mostrou bem mais instável nesta sessão do
+que no melhor caso histórico. `contr_execucao_leitura` confirmada com os 1760 livros de sempre
+(situação não afetada); `roster_ucs_extracao_diaria` com 4593 UCs/196 livros.
+
+### Rodada 3 — usuário pediu: limpar e medir o tempo real, serial, sem teto
+
+Objetivo mudou de "cobrir tudo dentro de um teto" pra "medir quanto tempo uma extração completa
+leva de verdade" — precisa rodar até a fila esgotar sozinha, sem cortar no meio.
+
+`copelScraperService.js`: `TIMEOUT_PROFUNDO_MIN_RAW` (renomeado) — `COPEL_TIMEOUT_PROFUNDO_MIN=0`
+(ou negativo) agora desliga o teto por completo (`TIMEOUT_PROFUNDO_MS = null`): o modo profundo
+`await`s os workers direto, sem `Promise.race` contra relógio nenhum. Log final agora sempre mede a
+duração real (`duracaoProfundoMin`), tanto no caminho de timeout (só existe quando o teto está
+ligado) quanto no caminho "terminou de verdade (fila esgotada)".
+
+`roster_ucs_extracao_diaria` de hoje apagada (`DELETE ... WHERE data_extracao = CURRENT_DATE`,
+4593 linhas) e o backend reiniciado com `COPEL_PARALELISMO_ACOMP=1` + `COPEL_TIMEOUT_PROFUNDO_MIN=0`
+— roda serial, sem teto, até esgotar os 1760 livros de hoje. Resultado (tempo total e cobertura
+final) fica pra registrar quando terminar — ver CHANGELOG/próxima atualização desta ADR.
+
+### Verificação
+
+`node --check` e `npm test` (20/20) depois de cada mudança. Comportamento do teto desligado
+verificado por leitura de código (sem teste automatizado dedicado — o cenário só se comprova rodando
+de verdade contra o portal, o que já está em andamento nesta sessão).

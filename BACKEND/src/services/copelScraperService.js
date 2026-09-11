@@ -16,14 +16,29 @@ const URL_ACOMPANHAMENTO = 'https://www.copel.com/lis/acompanhamentoAction.do#';
 // roster_ucs_extracao_diaria (ver rosterUcsAcompanhamentoService.js), um
 // timeout que não coletou nada faz o PRÓXIMO ciclo tentar o modo profundo de
 // novo do zero.
-const TIMEOUT_PROFUNDO_MIN = Math.max(5, parseInt(process.env.COPEL_TIMEOUT_PROFUNDO_MIN || '90', 10));
-const TIMEOUT_PROFUNDO_MS = TIMEOUT_PROFUNDO_MIN * 60 * 1000;
+//
+// COPEL_TIMEOUT_PROFUNDO_MIN=0 (ou negativo) DESLIGA o teto por completo —
+// pedido explícito do usuário pra medir quanto tempo uma extração completa
+// leva de verdade, sem cortar a fila no meio. Qualquer valor positivo
+// continua com o piso de 5min de sempre (protege contra um valor baixo
+// demais por engano).
+const TIMEOUT_PROFUNDO_MIN_RAW = parseInt(process.env.COPEL_TIMEOUT_PROFUNDO_MIN ?? '90', 10);
+const TIMEOUT_PROFUNDO_MS =
+  TIMEOUT_PROFUNDO_MIN_RAW > 0 ? Math.max(5, TIMEOUT_PROFUNDO_MIN_RAW) * 60 * 1000 : null;
 
 // Quantas vezes tenta abrir a OS de UM livro (incluindo recuperar sessão
 // perdida) antes de desistir dele — nesse caso o livro simplesmente não
 // entra no roster de hoje (a linha de SITUAÇÃO dele em contr_execucao_leitura,
 // vinda do modo rápido de sempre, não é afetada).
 const MAX_TENTATIVAS_ABRIR_OS = 3;
+
+// Quantas abas em paralelo o MODO PROFUNDO abre pra dar vazão à abertura de
+// OS livro a livro — pedido explícito do usuário pra manter a duração na
+// faixa de 35-40min (rodada serial real ficou em ~99min pra só 136 de ~2270
+// livros, cobertura baixa demais). 5 é o valor que a ADR 0020 (histórico
+// deste arquivo antes da ADR 0028) tinha encontrado como o melhor equilíbrio
+// real (8 abas sobrecarregava mais; 5 deu 401/425 livros, 94,4%, em 45min).
+const PARALELISMO_PROFUNDO = Math.max(1, parseInt(process.env.COPEL_PARALELISMO_ACOMP || '5', 10));
 
 async function salvarDiagnostico(page, motivo) {
   try {
@@ -176,13 +191,18 @@ async function aplicarFiltroEBuscar(page) {
   await aguardarTodasEtapasCarregadas(page);
 }
 
-// --- MODO PROFUNDO: abrir a OS de cada livro, 1 por vez, só na primeira
-// extração bem-sucedida do dia (ver coletarDadosAcompanhamento e
-// rosterUcsAcompanhamentoService.js). Esta seção reaproveita a lógica de
-// abertura de OS que existiu neste arquivo antes da ADR 0028 (removida
-// porque abrir OS o CICLO INTEIRO, o dia todo, deixava o site instável) —
-// trazida de volta AQUI, restrita a rodar só 1x por dia, sem paralelismo
-// (nenhuma das 5-8 abas simultâneas que causavam a instabilidade histórica).
+// --- MODO PROFUNDO: abrir a OS de cada livro, com várias abas em paralelo
+// (ver PARALELISMO_PROFUNDO), só na primeira extração bem-sucedida do dia
+// (ver coletarDadosAcompanhamento e rosterUcsAcompanhamentoService.js).
+// Esta seção reaproveita a lógica de abertura de OS que existiu neste
+// arquivo antes da ADR 0028 (removida porque abrir OS o CICLO INTEIRO, o
+// dia todo, deixava o site instável) — trazida de volta AQUI, restrita a
+// rodar só 1x por dia. Uma primeira versão rodou totalmente serial (1 aba)
+// pra evitar de vez o padrão de várias abas que historicamente piorava a
+// taxa de "sessão perdida" (ADR 0020) — mas isso deixou a duração real
+// (~99min pra só 6% dos livros) longe do aceitável, e o usuário pediu
+// explicitamente pra voltar a usar várias abas (como antes da ADR 0028)
+// pra ficar na faixa de 35-40min, aceitando o risco de sessão perdida.
 
 // Extrai a tabela #tabFixedHeader da aba/tela de detalhe (aberta ao chamar
 // update(), ver abrirEExtrairOs) — uma linha por UC/medidor do livro.
@@ -265,23 +285,23 @@ async function paginaUtilizavel(page) {
 // Acompanhamento e refaz filtro + busca. Até 3 tentativas com folga entre
 // elas (transitório: sobrecarga momentânea do lado do servidor Copel, já
 // documentado no histórico desta ADR). Diagnóstico salvo só uma vez por
-// execução do modo profundo (via estadoDiagnostico compartilhado).
+// ABA (via estadoDiagnostico — 1 por worker, ver worker() mais abaixo).
 const MAX_TENTATIVAS_RECUPERAR_BUSCA = 3;
 
-async function recuperarBusca(page, estadoDiagnostico) {
+async function recuperarBusca(page, estadoDiagnostico, rotulo = '') {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_RECUPERAR_BUSCA; tentativa++) {
     await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(erro => {
-      logErro(`[Coleta Acomp] ⚠️ Falha ao renavegar (tentativa ${tentativa}/${MAX_TENTATIVAS_RECUPERAR_BUSCA}): ${erro.message}`);
+      logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao renavegar (tentativa ${tentativa}/${MAX_TENTATIVAS_RECUPERAR_BUSCA}): ${erro.message}`);
     });
     try {
       await aplicarFiltroEBuscar(page);
       return true;
     } catch (erro) {
-      logErro(`[Coleta Acomp] ⚠️ Falha ao refazer a busca (tentativa ${tentativa}/${MAX_TENTATIVAS_RECUPERAR_BUSCA}): ${erro.message}`);
+      logErro(`[Coleta Acomp]${rotulo} ⚠️ Falha ao refazer a busca (tentativa ${tentativa}/${MAX_TENTATIVAS_RECUPERAR_BUSCA}): ${erro.message}`);
       if (tentativa >= MAX_TENTATIVAS_RECUPERAR_BUSCA) {
         if (!estadoDiagnostico.recuperacaoSalvo) {
           estadoDiagnostico.recuperacaoSalvo = true;
-          await salvarDiagnostico(page, 'profundo_recuperacao_falhou');
+          await salvarDiagnostico(page, `profundo${rotulo.replace(/[^\w-]/g, '_')}_recuperacao_falhou`);
         }
         return false;
       }
@@ -296,7 +316,7 @@ async function recuperarBusca(page, estadoDiagnostico) {
 // faz). Não depende de a linha estar visível — não precisa localizar nem
 // expandir a etapa do livro. Lança erro se a OS não abrir a tempo (o
 // chamador, coletarUcsDoLivro, decide se tenta de novo).
-async function abrirEExtrairOs(page, alvo) {
+async function abrirEExtrairOs(page, alvo, rotulo = '') {
   let popup = null;
   let usouMesmaPagina = false;
   try {
@@ -351,7 +371,7 @@ async function abrirEExtrairOs(page, alvo) {
     } else if (usouMesmaPagina) {
       await fecharTelaDetalheMesmaPagina(page).catch(async erroFechar => {
         logWarn(
-          `[Coleta Acomp] ⚠️ Falha ao fechar tela de detalhe do livro '${alvo.livro}': ${erroFechar.message} — renavegando pra lista.`,
+          `[Coleta Acomp]${rotulo} ⚠️ Falha ao fechar tela de detalhe do livro '${alvo.livro}': ${erroFechar.message} — renavegando pra lista.`,
         );
         await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(() => {});
         await aplicarFiltroEBuscar(page).catch(() => {});
@@ -364,30 +384,68 @@ async function abrirEExtrairOs(page, alvo) {
 // (recupera se não estiver) e delega a abrirEExtrairOs, com retry. Retorna
 // sempre um array (vazio se desistir) — um livro sem UC coletada não perde a
 // linha de SITUAÇÃO em contr_execucao_leitura (essa vem do modo rápido,
-// sempre executado antes, ver coletarDadosAcompanhamento).
-async function coletarUcsDoLivro(page, alvo, estadoDiagnostico) {
+// sempre executado antes, ver coletarDadosAcompanhamento). `rotulo` (ex.:
+// " [Aba 2/5]") só identifica de qual aba veio cada log, quando o modo
+// profundo roda com várias abas em paralelo (ver worker()).
+async function coletarUcsDoLivro(page, alvo, estadoDiagnostico, rotulo = '') {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ABRIR_OS; tentativa++) {
     if (!(await paginaUtilizavel(page))) {
-      logWarn(`[Coleta Acomp] 🔁 Sessão/busca perdida (livro '${alvo.livro}') — recuperando.`);
-      const recuperou = await recuperarBusca(page, estadoDiagnostico);
+      logWarn(`[Coleta Acomp]${rotulo} 🔁 Sessão/busca perdida (livro '${alvo.livro}') — recuperando.`);
+      const recuperou = await recuperarBusca(page, estadoDiagnostico, rotulo);
       if (!recuperou) continue;
     }
     try {
-      return await abrirEExtrairOs(page, alvo);
+      return await abrirEExtrairOs(page, alvo, rotulo);
     } catch (erro) {
       logWarn(
-        `[Coleta Acomp] ⚠️ Tentativa ${tentativa}/${MAX_TENTATIVAS_ABRIR_OS} falhou pro livro '${alvo.livro}': ${erro.message}`,
+        `[Coleta Acomp]${rotulo} ⚠️ Tentativa ${tentativa}/${MAX_TENTATIVAS_ABRIR_OS} falhou pro livro '${alvo.livro}': ${erro.message}`,
       );
     }
   }
   logErro(
-    `[Coleta Acomp] ❌ Livro '${alvo.livro}' desistido após ${MAX_TENTATIVAS_ABRIR_OS} tentativas — sem UC no roster de hoje pra ele.`,
+    `[Coleta Acomp]${rotulo} ❌ Livro '${alvo.livro}' desistido após ${MAX_TENTATIVAS_ABRIR_OS} tentativas — sem UC no roster de hoje pra ele.`,
   );
   if (!estadoDiagnostico.osSalvo) {
     estadoDiagnostico.osSalvo = true;
-    await salvarDiagnostico(page, `profundo_os_${alvo.livro}_falhou`);
+    await salvarDiagnostico(page, `profundo${rotulo.replace(/[^\w-]/g, '_')}_livro_${alvo.livro}_falhou`);
   }
   return [];
+}
+
+// Cada worker (1 por aba) consome LIVROS da fila COMPARTILHADA
+// (`filaLivros.shift()` — síncrono, sem race condition real mesmo com várias
+// abas "concorrentes", já que JS processa um passo de cada vez) até ela
+// esvaziar. `roster` e `estatisticas` também são compartilhados entre todos
+// os workers — `Array.push`/incremento numérico são síncronos, sem risco de
+// corrupção mesmo intercalados. `estadoDiagnostico` é criado UMA vez por
+// worker (não compartilhado entre abas) — cada aba salva no máximo 1
+// diagnóstico de cada categoria, sem uma aba escondida atrás do screenshot
+// que outra já salvou.
+async function worker(page, rotulo, filaLivros, roster, estatisticas) {
+  const estadoDiagnostico = { recuperacaoSalvo: false, osSalvo: false };
+  let processadosNestaAba = 0;
+
+  while (filaLivros.length > 0) {
+    const alvo = filaLivros.shift();
+    if (!alvo) break;
+
+    const linhasUc = await coletarUcsDoLivro(page, alvo, estadoDiagnostico, rotulo);
+    const etapaNormalizada = alvo.etapa ? String(alvo.etapa).padStart(2, '0') : null;
+    for (const uc of linhasUc) {
+      if (uc.uc) roster.push({ livro: alvo.livro, etapa: etapaNormalizada, unidadeConsumidora: uc.uc });
+    }
+
+    estatisticas.processados++;
+    if (linhasUc.length > 0) estatisticas.livrosComUc++;
+    processadosNestaAba++;
+    if (estatisticas.processados % 25 === 0) {
+      log(
+        `[Coleta Acomp] 🔬 Progresso modo profundo: ${estatisticas.processados}/${estatisticas.total} livro(s) ` +
+          `(${estatisticas.livrosComUc} com UC até agora, ${roster.length} UC(s) no roster).`,
+      );
+    }
+  }
+  log(`[Coleta Acomp]${rotulo} 🏁 Fila de livros esgotada — ${processadosNestaAba} livro(s) processado(s) nesta aba — encerrada.`);
 }
 
 // Coleta de Acompanhamento: login + 1 busca + leitura da lista de livros já
@@ -399,13 +457,15 @@ async function coletarUcsDoLivro(page, alvo, estadoDiagnostico) {
 //
 // MODO PROFUNDO (`modoProfundo=true`, ver rosterUcsAcompanhamentoService.js
 // pra quando isso é decidido): além da lista acima, abre a OS de cada livro
-// UMA vez, serialmente (nunca em paralelo — foi o paralelismo, não a
-// abertura de OS em si, que historicamente detonava a taxa de "sessão
-// perdida", ver Adendos da ADR 0020). Só roda na primeira extração
-// bem-sucedida do dia — depois disso, `coordenadas_ucs_mineradas` pode ficar
-// desatualizada pro livro que foi reatribuído durante o dia (ADR 0028,
-// Consequências), mas o roster de HOJE já foi capturado direto da fonte,
-// então não depende mais dela pra saber quais UCs cada livro realmente tem.
+// UMA vez, com até `PARALELISMO_PROFUNDO` abas em paralelo (mesma sessão/
+// cookies, um `browserContext` só — ver ADR 0020 histórica) pra manter a
+// duração na faixa de 35-40min pedida pelo usuário (uma rodada 100% serial,
+// testada ao vivo, levou ~99min pra só 136 de ~2270 livros — cobertura
+// baixa demais). Só roda na primeira extração bem-sucedida do dia — depois
+// disso, `coordenadas_ucs_mineradas` pode ficar desatualizada pro livro que
+// foi reatribuído durante o dia (ADR 0028, Consequências), mas o roster de
+// HOJE já foi capturado direto da fonte, então não depende mais dela pra
+// saber quais UCs cada livro realmente tem.
 async function coletarDadosAcompanhamento(modoProfundo = false) {
   const headless = process.env.COPEL_HEADLESS !== 'false';
   const browser = await chromium.launch({ headless, slowMo: headless ? 100 : 300 });
@@ -498,46 +558,76 @@ async function coletarDadosAcompanhamento(modoProfundo = false) {
       return { livros, roster: [] };
     }
 
+    // Fila própria (cópia) — `livros` continua intacto pra ser retornado e
+    // importado em contr_execucao_leitura como sempre.
+    const filaLivros = [...livros];
+    const totalAbas = Math.min(PARALELISMO_PROFUNDO, filaLivros.length);
     log(
-      `[Coleta Acomp] 🔬 Primeira extração de hoje — modo profundo: abrindo OS de ${livros.length} ` +
-        'livro(s), 1 por vez (pode levar 30-40min).',
+      `[Coleta Acomp] 🔬 Primeira extração de hoje — modo profundo: abrindo OS de ${filaLivros.length} ` +
+        `livro(s) com ${totalAbas} aba(s) em paralelo` +
+        (TIMEOUT_PROFUNDO_MS === null ? ' — SEM teto de tempo, roda até esgotar a fila.' : '.'),
     );
-    const roster = [];
-    const estadoDiagnostico = { recuperacaoSalvo: false, osSalvo: false };
     const inicioProfundo = Date.now();
-    let processados = 0;
-    let livrosComUc = 0;
-    for (const alvo of livros) {
-      if (Date.now() - inicioProfundo > TIMEOUT_PROFUNDO_MS) {
-        logErro(
-          `[Coleta Acomp] ⏱️ Modo profundo excedeu ${TIMEOUT_PROFUNDO_MIN}min — parando em ` +
-            `${processados}/${livros.length} livro(s). ` +
-            (roster.length > 0
-              ? `Roster parcial (${roster.length} UC(s)) já coletado fica valendo hoje.`
-              : 'Nenhuma UC coletada ainda — o próximo ciclo tenta o modo profundo de novo, do zero.'),
-        );
-        break;
-      }
-      const linhasUc = await coletarUcsDoLivro(page, alvo, estadoDiagnostico);
-      // etapa normalizada pro mesmo padrão "só o número, 2 dígitos" usado no
-      // resto do app (ver copelImportService.js#limparEtapa) — alvo.etapa
-      // aqui já vem só o número (numeroDaEtapa), só falta o padStart.
-      const etapaNormalizada = alvo.etapa ? String(alvo.etapa).padStart(2, '0') : null;
-      for (const uc of linhasUc) {
-        if (uc.uc) roster.push({ livro: alvo.livro, etapa: etapaNormalizada, unidadeConsumidora: uc.uc });
-      }
-      if (linhasUc.length > 0) livrosComUc++;
-      processados++;
-      if (processados % 25 === 0) {
-        log(
-          `[Coleta Acomp] 🔬 Progresso modo profundo: ${processados}/${livros.length} livro(s) ` +
-            `(${livrosComUc} com UC até agora, ${roster.length} UC(s) no roster).`,
-        );
-      }
+
+    // Abas extras compartilham a MESMA sessão (cookies) do `browserContext`
+    // já aberto — `context.newPage()`, não `browser.newPage()` (que criaria
+    // um context novo e isolado, exigindo login de novo em cada aba e
+    // derrubando a sessão das outras, ver ADR 0020 histórica). Cada aba
+    // extra ainda precisa da própria `aplicarFiltroEBuscar` pra ter
+    // `window.update`/o formulário disponíveis NAQUELA página.
+    const paginas = [page];
+    for (let i = 1; i < totalAbas; i++) {
+      const novaPagina = await context.newPage();
+      await novaPagina.goto(URL_ACOMPANHAMENTO, { timeout: 60000 });
+      await aplicarFiltroEBuscar(novaPagina);
+      paginas.push(novaPagina);
     }
+
+    const roster = [];
+    const estatisticas = { processados: 0, livrosComUc: 0, total: filaLivros.length };
+
+    const trabalho = Promise.all(
+      paginas.map((pg, i) => worker(pg, ` [Aba ${i + 1}/${totalAbas}]`, filaLivros, roster, estatisticas)),
+    );
+    // Rede de segurança: se algum worker escapar do try/catch interno depois
+    // do timeout já ter vencido a corrida abaixo, essa rejeição não teria
+    // mais ninguém esperando por ela — sem isto, viraria unhandled rejection.
+    trabalho.catch(() => {});
+
+    // TIMEOUT_PROFUNDO_MS null (COPEL_TIMEOUT_PROFUNDO_MIN=0) = sem teto —
+    // só espera os workers de verdade, sem corrida contra relógio nenhum.
+    let resultado;
+    if (TIMEOUT_PROFUNDO_MS === null) {
+      await trabalho;
+      resultado = 'concluido';
+    } else {
+      const timeoutProfundo = new Promise(resolve => setTimeout(() => resolve('timeout'), TIMEOUT_PROFUNDO_MS));
+      resultado = await Promise.race([trabalho.then(() => 'concluido'), timeoutProfundo]);
+    }
+
+    const duracaoProfundoMin = ((Date.now() - inicioProfundo) / 60000).toFixed(1);
+    if (resultado === 'timeout') {
+      logErro(
+        `[Coleta Acomp] ⏱️ Modo profundo excedeu ${TIMEOUT_PROFUNDO_MIN_RAW}min — parando em ` +
+          `${estatisticas.processados}/${estatisticas.total} livro(s) (fila ainda tinha ${filaLivros.length} ` +
+          `livro(s) pendente(s)) após ${duracaoProfundoMin}min. ` +
+          (roster.length > 0
+            ? `Roster parcial (${roster.length} UC(s)) já coletado fica valendo hoje.`
+            : 'Nenhuma UC coletada ainda — o próximo ciclo tenta o modo profundo de novo, do zero.'),
+      );
+    } else {
+      log(`[Coleta Acomp] ⏱️ Modo profundo terminou de verdade (fila esgotada) em ${duracaoProfundoMin}min.`);
+    }
+
+    // Fecha só as abas extras — a principal fecha junto com o browser no
+    // finally da função. Se o timeout venceu a corrida, algum worker pode
+    // ainda estar no meio de uma operação numa dessas páginas — fechar aqui
+    // e o browser inteiro logo depois é o que realmente interrompe ele.
+    await Promise.all(paginas.slice(1).map(p => p.close().catch(() => {})));
+
     log(
-      `[Coleta Acomp] ✅ Modo profundo concluído: ${processados}/${livros.length} livro(s) processado(s), ` +
-        `${livrosComUc} com UC, ${roster.length} UC(s) no roster de hoje.`,
+      `[Coleta Acomp] ✅ Modo profundo concluído: ${estatisticas.processados}/${estatisticas.total} livro(s) ` +
+        `processado(s), ${estatisticas.livrosComUc} com UC, ${roster.length} UC(s) no roster de hoje.`,
     );
     return { livros, roster };
   } finally {

@@ -121,6 +121,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Scraper de Acompanhamento ganha um "modo profundo": a primeira extração bem-sucedida de cada dia
+  volta a abrir a OS de cada livro (30-90min, só essa vez) pra aprender de verdade quais UCs foram
+  enviadas a leitura — fecha a lacuna de `coordenadas_ucs_mineradas` poder estar desatualizada pra
+  um livro reatribuído no dia. Gravado numa tabela nova dedicada
+  (`roster_ucs_extracao_diaria`), sem tocar em nenhuma tela/consulta existente. Todo ciclo seguinte
+  do mesmo dia continua no modo rápido de sempre (~30s-3min, sem abrir OS). Ver [ADR
+  0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
+
 - Cada UC da timeline (aba Trilho) agora também mostra a etapa, ao lado do livro. Ver Adendo 14 da
   [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 

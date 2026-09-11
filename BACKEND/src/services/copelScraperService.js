@@ -1,10 +1,29 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-const { log, logErro } = require('../utils/logTempo');
+const { log, logWarn, logErro } = require('../utils/logTempo');
 
 const DIR_DIAGNOSTICO = path.join(__dirname, '..', '..', 'diagnosticos');
 const URL_ACOMPANHAMENTO = 'https://www.copel.com/lis/acompanhamentoAction.do#';
+
+// Teto de duração só do MODO PROFUNDO (abrir OS livro a livro, ver
+// coletarUcsDoLivro/coletarDadosAcompanhamento mais abaixo) — o modo rápido
+// nunca precisa disso, sempre termina em segundos. Protege o job Massivas
+// (comSessaoExclusiva serializa os dois, ver copelSessaoLock.js) de ficar
+// preso indefinidamente atrás de um modo profundo que travou. Ao estourar,
+// para com o que já foi coletado até agora — não é perda permanente: como
+// "já rodei hoje" só passa a ser verdade quando pelo menos 1 UC é gravada em
+// roster_ucs_extracao_diaria (ver rosterUcsAcompanhamentoService.js), um
+// timeout que não coletou nada faz o PRÓXIMO ciclo tentar o modo profundo de
+// novo do zero.
+const TIMEOUT_PROFUNDO_MIN = Math.max(5, parseInt(process.env.COPEL_TIMEOUT_PROFUNDO_MIN || '90', 10));
+const TIMEOUT_PROFUNDO_MS = TIMEOUT_PROFUNDO_MIN * 60 * 1000;
+
+// Quantas vezes tenta abrir a OS de UM livro (incluindo recuperar sessão
+// perdida) antes de desistir dele — nesse caso o livro simplesmente não
+// entra no roster de hoje (a linha de SITUAÇÃO dele em contr_execucao_leitura,
+// vinda do modo rápido de sempre, não é afetada).
+const MAX_TENTATIVAS_ABRIR_OS = 3;
 
 async function salvarDiagnostico(page, motivo) {
   try {
@@ -112,13 +131,13 @@ function numeroDaEtapa(texto) {
   return match ? match[1] : null;
 }
 
-// Extrai id da OS a partir do href
+// Extrai id da OS e URL de destino a partir do href
 // `javascript:update('12105126','editarTarefasLeituraAction.do?...')` do
-// link "número da OS" de cada linha — usado só como chave de dedup (o
-// osId é o identificador globalmente único de cada livro/OS na página,
-// diferente do "número do livro" exibido, que é só um rótulo e pode não
-// ser único entre etapas). Este scraper não abre mais OS nenhuma (ver
-// coletarDadosAcompanhamento) — só lê a lista já carregada no DOM.
+// link "número da OS" de cada linha — osId é o identificador globalmente
+// único de cada livro/OS na página (diferente do "número do livro" exibido,
+// que é só um rótulo e pode não ser único entre etapas), usado tanto pra
+// dedup na montagem da lista quanto, no modo profundo, pra abrir a OS via
+// `update(osId, url)` sem precisar clicar em nada (ver abrirEExtrairOs).
 function extrairDadosOs(href) {
   const match = String(href ?? '').match(/update\('(\d+)'\s*,\s*'([^']*)'\)/);
   return match ? { osId: match[1], url: match[2] } : null;
@@ -157,20 +176,237 @@ async function aplicarFiltroEBuscar(page) {
   await aguardarTodasEtapasCarregadas(page);
 }
 
+// --- MODO PROFUNDO: abrir a OS de cada livro, 1 por vez, só na primeira
+// extração bem-sucedida do dia (ver coletarDadosAcompanhamento e
+// rosterUcsAcompanhamentoService.js). Esta seção reaproveita a lógica de
+// abertura de OS que existiu neste arquivo antes da ADR 0028 (removida
+// porque abrir OS o CICLO INTEIRO, o dia todo, deixava o site instável) —
+// trazida de volta AQUI, restrita a rodar só 1x por dia, sem paralelismo
+// (nenhuma das 5-8 abas simultâneas que causavam a instabilidade histórica).
+
+// Extrai a tabela #tabFixedHeader da aba/tela de detalhe (aberta ao chamar
+// update(), ver abrirEExtrairOs) — uma linha por UC/medidor do livro.
+// Índices confirmados contra o HTML real na época (ver histórico desta ADR):
+// 1=UC, 2=equip., 3=tipo espec., 5=faturar?, 7=leit. atual (input), 8=código
+// (input). leit. atual e código são <input readonly value="..."> — o valor
+// visível está no atributo value, não no innerText do <td>.
+async function extrairLinhasDetalheOs(paginaDetalhe) {
+  return paginaDetalhe.evaluate(() => {
+    const table = document.querySelector('#tabFixedHeader');
+    if (!table) return [];
+    const valorCelula = td => {
+      const input = td.querySelector('input');
+      return (input ? input.value : td.innerText).trim();
+    };
+    return Array.from(table.querySelectorAll('tbody tr')).map(tr => {
+      const tds = Array.from(tr.querySelectorAll('td'));
+      return {
+        uc: tds[1] ? valorCelula(tds[1]) : '',
+        equipamento: tds[2] ? valorCelula(tds[2]) : '',
+        tipoEspecificacao: tds[3] ? valorCelula(tds[3]) : '',
+        faturamento: tds[5] ? valorCelula(tds[5]) : '',
+        leituraAtual: tds[7] ? valorCelula(tds[7]) : '',
+        codigo: tds[8] ? valorCelula(tds[8]) : '',
+      };
+    });
+  });
+}
+
+async function contarLinhasTabFixedHeader(paginaDetalhe) {
+  return paginaDetalhe
+    .locator('#tabFixedHeader tbody tr')
+    .count()
+    .catch(() => 0);
+}
+
+// A tabela de UCs pode montar as linhas via JS de forma assíncrona/
+// incremental depois de #tabFixedHeader já existir no DOM — extrair assim
+// que o elemento aparece corre o risco de pegar só a 1ª linha. Espera a
+// contagem de linhas parar de crescer entre duas checagens antes de extrair.
+async function aguardarTabelaEstabilizar(paginaDetalhe) {
+  let anterior = -1;
+  for (let tentativa = 0; tentativa < 20; tentativa++) {
+    const atual = await contarLinhasTabFixedHeader(paginaDetalhe);
+    if (atual > 0 && atual === anterior) return atual;
+    anterior = atual;
+    await paginaDetalhe.waitForTimeout(500);
+  }
+  return anterior;
+}
+
+// Fecha a tela de detalhe da OS quando ela abriu na MESMA página (sem
+// popup) — usa o botão "CANCELAR" em vez de page.goBack(): goBack() não
+// restaura o estado JS da lista de livros (filtro/paginação via AJAX),
+// deixando os livros seguintes inacessíveis. Fallback pra goBack() só se o
+// botão não existir.
+async function fecharTelaDetalheMesmaPagina(page) {
+  const botaoCancelar = page.getByRole('button', { name: /cancelar/i }).or(
+    page.locator('input[type="button"][value*="CANCELAR" i], input[type="submit"][value*="CANCELAR" i]'),
+  );
+  if ((await botaoCancelar.count()) > 0) {
+    await botaoCancelar.first().click();
+  } else {
+    logWarn('[Coleta Acomp] ⚠️ Botão CANCELAR não encontrado — usando page.goBack() como fallback.');
+    await page.goBack().catch(() => {});
+  }
+}
+
+// Checa rapidamente se a página está num estado utilizável (a função
+// update() e o formulário principal existem) ANTES de tentar abrir a OS —
+// mais barato que descobrir isso só depois de um timeout de 20s esperando
+// popup/"DADOS DE EXECUÇÃO".
+async function paginaUtilizavel(page) {
+  return page
+    .evaluate(() => typeof window.update === 'function' && document.forms.length > 0)
+    .catch(() => false);
+}
+
+// Tenta trazer a página de volta ao estado funcional: renavega pra URL de
+// Acompanhamento e refaz filtro + busca. Até 3 tentativas com folga entre
+// elas (transitório: sobrecarga momentânea do lado do servidor Copel, já
+// documentado no histórico desta ADR). Diagnóstico salvo só uma vez por
+// execução do modo profundo (via estadoDiagnostico compartilhado).
+const MAX_TENTATIVAS_RECUPERAR_BUSCA = 3;
+
+async function recuperarBusca(page, estadoDiagnostico) {
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_RECUPERAR_BUSCA; tentativa++) {
+    await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(erro => {
+      logErro(`[Coleta Acomp] ⚠️ Falha ao renavegar (tentativa ${tentativa}/${MAX_TENTATIVAS_RECUPERAR_BUSCA}): ${erro.message}`);
+    });
+    try {
+      await aplicarFiltroEBuscar(page);
+      return true;
+    } catch (erro) {
+      logErro(`[Coleta Acomp] ⚠️ Falha ao refazer a busca (tentativa ${tentativa}/${MAX_TENTATIVAS_RECUPERAR_BUSCA}): ${erro.message}`);
+      if (tentativa >= MAX_TENTATIVAS_RECUPERAR_BUSCA) {
+        if (!estadoDiagnostico.recuperacaoSalvo) {
+          estadoDiagnostico.recuperacaoSalvo = true;
+          await salvarDiagnostico(page, 'profundo_recuperacao_falhou');
+        }
+        return false;
+      }
+      await page.waitForTimeout(3000);
+    }
+  }
+  return false;
+}
+
+// Abre a OS de um único livro chamando DIRETO a função JS `update(osId,url)`
+// que o próprio site define (é literalmente tudo que o link "número da OS"
+// faz). Não depende de a linha estar visível — não precisa localizar nem
+// expandir a etapa do livro. Lança erro se a OS não abrir a tempo (o
+// chamador, coletarUcsDoLivro, decide se tenta de novo).
+async function abrirEExtrairOs(page, alvo) {
+  let popup = null;
+  let usouMesmaPagina = false;
+  try {
+    // waitForEvent('popup') precisa ser registrado ANTES de disparar a
+    // navegação — mas isso deixa a promise "solta" rejeitando sozinha por
+    // timeout enquanto o código ainda está no evaluate(). `.catch(() => {})`
+    // preventivo em CADA nível evita unhandled rejection.
+    const promPopup = page.waitForEvent('popup', { timeout: 20000 });
+    promPopup.catch(() => {});
+    const promMesmaPagina = page
+      .getByText('DADOS DE EXECUÇÃO', { exact: false })
+      .first()
+      .waitFor({ timeout: 20000, state: 'visible' });
+    promMesmaPagina.catch(() => {});
+
+    const esperaPopup = promPopup.then(p => ({ tipo: 'popup', p }));
+    esperaPopup.catch(() => {});
+    const esperaMesmaPagina = promMesmaPagina.then(() => ({ tipo: 'mesmaPagina' }));
+    esperaMesmaPagina.catch(() => {});
+
+    const combinada = Promise.any([esperaPopup, esperaMesmaPagina]);
+    combinada.catch(() => {});
+
+    const executou = await page.evaluate(
+      ({ osId, url }) => {
+        if (typeof window.update !== 'function') return false;
+        window.update(osId, url);
+        return true;
+      },
+      { osId: alvo.osId, url: alvo.url },
+    );
+    if (!executou) {
+      throw new Error('função update() indisponível nesta página (sessão/busca perdida)');
+    }
+
+    const resultado = await combinada;
+
+    if (resultado.tipo === 'popup') {
+      popup = resultado.p;
+      await popup.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+    } else {
+      usouMesmaPagina = true;
+      await page.waitForSelector('#tabFixedHeader', { timeout: 15000 });
+    }
+
+    const paginaDetalhe = popup || page;
+    await aguardarTabelaEstabilizar(paginaDetalhe);
+    return await extrairLinhasDetalheOs(paginaDetalhe);
+  } finally {
+    if (popup) {
+      await popup.close().catch(() => {});
+    } else if (usouMesmaPagina) {
+      await fecharTelaDetalheMesmaPagina(page).catch(async erroFechar => {
+        logWarn(
+          `[Coleta Acomp] ⚠️ Falha ao fechar tela de detalhe do livro '${alvo.livro}': ${erroFechar.message} — renavegando pra lista.`,
+        );
+        await page.goto(URL_ACOMPANHAMENTO, { timeout: 60000 }).catch(() => {});
+        await aplicarFiltroEBuscar(page).catch(() => {});
+      });
+    }
+  }
+}
+
+// Processa UM livro do modo profundo: confirma que a página está saudável
+// (recupera se não estiver) e delega a abrirEExtrairOs, com retry. Retorna
+// sempre um array (vazio se desistir) — um livro sem UC coletada não perde a
+// linha de SITUAÇÃO em contr_execucao_leitura (essa vem do modo rápido,
+// sempre executado antes, ver coletarDadosAcompanhamento).
+async function coletarUcsDoLivro(page, alvo, estadoDiagnostico) {
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ABRIR_OS; tentativa++) {
+    if (!(await paginaUtilizavel(page))) {
+      logWarn(`[Coleta Acomp] 🔁 Sessão/busca perdida (livro '${alvo.livro}') — recuperando.`);
+      const recuperou = await recuperarBusca(page, estadoDiagnostico);
+      if (!recuperou) continue;
+    }
+    try {
+      return await abrirEExtrairOs(page, alvo);
+    } catch (erro) {
+      logWarn(
+        `[Coleta Acomp] ⚠️ Tentativa ${tentativa}/${MAX_TENTATIVAS_ABRIR_OS} falhou pro livro '${alvo.livro}': ${erro.message}`,
+      );
+    }
+  }
+  logErro(
+    `[Coleta Acomp] ❌ Livro '${alvo.livro}' desistido após ${MAX_TENTATIVAS_ABRIR_OS} tentativas — sem UC no roster de hoje pra ele.`,
+  );
+  if (!estadoDiagnostico.osSalvo) {
+    estadoDiagnostico.osSalvo = true;
+    await salvarDiagnostico(page, `profundo_os_${alvo.livro}_falhou`);
+  }
+  return [];
+}
+
 // Coleta de Acompanhamento: login + 1 busca + leitura da lista de livros já
-// carregada no DOM — sem abrir OS nenhuma. A extração por OS (abrir cada
-// livro pra ler UC por UC) foi removida: o site se mostrou instável sob uso
-// repetido de `update()` (a chamada que abre uma OS) — a taxa de "sessão
-// perdida" ficou igualmente alta com 1 conta ou com até 10 contas
-// dedicadas em paralelo, isolando completamente sessão/login entre elas,
-// o que descarta colisão de sessão como causa e aponta pra instabilidade
-// do próprio site sob esse padrão de uso, não pra arquitetura de scraping.
-// Esta lista (situação/colaborador/datas por livro) é só pra saber a
-// SITUAÇÃO do livro — quais UCs cada livro tem vem de coordenadas_ucs_
-// mineradas (minerada à parte) e quais foram realizadas vem de
-// base_dados_leitura (extração "Controle de Empreiteiras", ADR 0027); ver
-// monitoramentoService.js/atividadeColaboradoresService.js.
-async function coletarDadosAcompanhamento() {
+// carregada no DOM — a lista em si (situação/colaborador/datas por livro)
+// nunca abre OS nenhuma, é só pra saber a SITUAÇÃO do livro; alimenta
+// contr_execucao_leitura, 1 linha por livro, igual desde a ADR 0028 (o site
+// se mostrou instável sob abertura repetida de OS o dia INTEIRO, então essa
+// parte continua rápida e sem abrir nada, em TODO ciclo).
+//
+// MODO PROFUNDO (`modoProfundo=true`, ver rosterUcsAcompanhamentoService.js
+// pra quando isso é decidido): além da lista acima, abre a OS de cada livro
+// UMA vez, serialmente (nunca em paralelo — foi o paralelismo, não a
+// abertura de OS em si, que historicamente detonava a taxa de "sessão
+// perdida", ver Adendos da ADR 0020). Só roda na primeira extração
+// bem-sucedida do dia — depois disso, `coordenadas_ucs_mineradas` pode ficar
+// desatualizada pro livro que foi reatribuído durante o dia (ADR 0028,
+// Consequências), mas o roster de HOJE já foi capturado direto da fonte,
+// então não depende mais dela pra saber quais UCs cada livro realmente tem.
+async function coletarDadosAcompanhamento(modoProfundo = false) {
   const headless = process.env.COPEL_HEADLESS !== 'false';
   const browser = await chromium.launch({ headless, slowMo: headless ? 100 : 300 });
   try {
@@ -256,8 +492,54 @@ async function coletarDadosAcompanhamento() {
     }
 
     log(`[Coleta Acomp] 📋 ${livros.length} livro(s) encontrado(s) em ${totalEtapas} etapa(s).`);
-    log('[Coleta Acomp] ✅ Extração concluída.');
-    return livros;
+
+    if (!modoProfundo) {
+      log('[Coleta Acomp] ✅ Extração concluída (modo rápido, sem abrir OS).');
+      return { livros, roster: [] };
+    }
+
+    log(
+      `[Coleta Acomp] 🔬 Primeira extração de hoje — modo profundo: abrindo OS de ${livros.length} ` +
+        'livro(s), 1 por vez (pode levar 30-40min).',
+    );
+    const roster = [];
+    const estadoDiagnostico = { recuperacaoSalvo: false, osSalvo: false };
+    const inicioProfundo = Date.now();
+    let processados = 0;
+    let livrosComUc = 0;
+    for (const alvo of livros) {
+      if (Date.now() - inicioProfundo > TIMEOUT_PROFUNDO_MS) {
+        logErro(
+          `[Coleta Acomp] ⏱️ Modo profundo excedeu ${TIMEOUT_PROFUNDO_MIN}min — parando em ` +
+            `${processados}/${livros.length} livro(s). ` +
+            (roster.length > 0
+              ? `Roster parcial (${roster.length} UC(s)) já coletado fica valendo hoje.`
+              : 'Nenhuma UC coletada ainda — o próximo ciclo tenta o modo profundo de novo, do zero.'),
+        );
+        break;
+      }
+      const linhasUc = await coletarUcsDoLivro(page, alvo, estadoDiagnostico);
+      // etapa normalizada pro mesmo padrão "só o número, 2 dígitos" usado no
+      // resto do app (ver copelImportService.js#limparEtapa) — alvo.etapa
+      // aqui já vem só o número (numeroDaEtapa), só falta o padStart.
+      const etapaNormalizada = alvo.etapa ? String(alvo.etapa).padStart(2, '0') : null;
+      for (const uc of linhasUc) {
+        if (uc.uc) roster.push({ livro: alvo.livro, etapa: etapaNormalizada, unidadeConsumidora: uc.uc });
+      }
+      if (linhasUc.length > 0) livrosComUc++;
+      processados++;
+      if (processados % 25 === 0) {
+        log(
+          `[Coleta Acomp] 🔬 Progresso modo profundo: ${processados}/${livros.length} livro(s) ` +
+            `(${livrosComUc} com UC até agora, ${roster.length} UC(s) no roster).`,
+        );
+      }
+    }
+    log(
+      `[Coleta Acomp] ✅ Modo profundo concluído: ${processados}/${livros.length} livro(s) processado(s), ` +
+        `${livrosComUc} com UC, ${roster.length} UC(s) no roster de hoje.`,
+    );
+    return { livros, roster };
   } finally {
     await browser.close().catch(() => {});
   }

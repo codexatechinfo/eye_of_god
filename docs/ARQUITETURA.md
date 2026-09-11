@@ -156,3 +156,8 @@ sequenceDiagram
 - [ADR 0012](adr/0012-resumo-operacional-massivas-livros.md) — cards das abas
   Massivas/Monitoramento de Livros trocados por uma barra de resumo (agentes em campo,
   comunicação, progresso, faixas de dias via `prazo_reg_livros`).
+- [ADR 0039](adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md) — scraper de
+  Acompanhamento ganha um "modo profundo" que roda só na 1ª extração bem-sucedida do dia (abre a
+  OS de cada livro, 30-90min) pra aprender o roster real de UCs por livro, gravado em
+  `roster_ucs_extracao_diaria` (tabela nova, dedicada); todo ciclo seguinte do mesmo dia continua
+  no modo rápido de sempre (ADR 0028).

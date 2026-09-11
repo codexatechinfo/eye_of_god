@@ -80,11 +80,12 @@ test('usuário não grava linha carimbando empresa alheia (with check no insert)
 // calendario_leitura, cidades_localidades e tab_ligacao_coordenadas eram
 // referência compartilhada (sem empresa_id) até a ADR 0009 — cada empresa
 // pode ter seu próprio contrato/região, então passaram a isolar como as
-// demais. scalefusion, segsat e segsat_posicoes (integrações de
-// posição/bateria e de mapeamento placa↔colaborador) já nasceram com a
-// mesma policy — testadas aqui junto por conveniência, mesmo padrão de
+// demais. scalefusion, segsat, segsat_posicoes e roster_ucs_extracao_diaria
+// (posição/bateria, mapeamento placa↔colaborador e o roster diário de UC
+// por livro do modo profundo de Acompanhamento) já nasceram com a mesma
+// policy — testadas aqui junto por conveniência, mesmo padrão de
 // verificação (fail-closed + isolamento cross-empresa).
-for (const tabela of ['calendario_leitura', 'cidades_localidades', 'tab_ligacao_coordenadas', 'scalefusion', 'segsat', 'segsat_posicoes']) {
+for (const tabela of ['calendario_leitura', 'cidades_localidades', 'tab_ligacao_coordenadas', 'scalefusion', 'segsat', 'segsat_posicoes', 'roster_ucs_extracao_diaria']) {
   test(`${tabela}: sem contexto de tenant, nenhuma linha é visível (fail-closed)`, async () => {
     const total = await comContexto(null, null, async client => {
       const { rows } = await client.query(`SELECT count(*)::int AS n FROM ${tabela}`);

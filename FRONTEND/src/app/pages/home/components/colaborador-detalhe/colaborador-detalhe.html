@@ -126,23 +126,40 @@
          "realizadas"+"a realizar" e com o novo "livros em execução/total"
          combinado abaixo, nenhum dos dois existe no protótipo. -->
     <div class="grid grid-cols-3 gap-1.5 mb-3">
-      <div class="rounded-md border border-linha bg-sup-2 px-2 py-1.5">
+      <!-- Estes 3 cards funcionam como filtro da timeline abaixo (pedido
+           explícito do usuário) — clicar de novo no mesmo limpa o filtro. -->
+      <button
+        type="button"
+        (click)="toggleFiltroTimeline('realizadas')"
+        class="rounded-md border px-2 py-1.5 text-left transition-colors cursor-pointer"
+        [ngClass]="filtroTimeline() === 'realizadas' ? 'border-ok bg-ok/10' : 'border-linha bg-sup-2 hover:border-ok/50'"
+      >
         <div class="font-mono text-[15px] font-bold text-ok tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalRealizadas ?? 0 }}</div>
         <div class="text-[9.5px] font-semibold text-fraco truncate">Realizadas</div>
-      </div>
+      </button>
 
-      <div class="rounded-md border border-linha bg-sup-2 px-2 py-1.5">
+      <button
+        type="button"
+        (click)="toggleFiltroTimeline('a_realizar')"
+        class="rounded-md border px-2 py-1.5 text-left transition-colors cursor-pointer"
+        [ngClass]="filtroTimeline() === 'a_realizar' ? 'border-azul bg-azul/10' : 'border-linha bg-sup-2 hover:border-azul/50'"
+      >
         <div class="font-mono text-[15px] font-bold text-txt tabular-nums">{{ colaboradoresService.atividadeDe(nome)?.totalPendentes ?? 0 }}</div>
         <div class="text-[9.5px] font-semibold text-fraco truncate">A realizar</div>
-      </div>
+      </button>
 
       <!-- Impedimentos: qualquer UC do dia cujo código atual não seja 000
            (leitura normal) nem 099 (sem leitura, não é problema de campo) —
            pedido explícito do usuário, ver ehCodigoDeImpedimento() no service. -->
-      <div class="rounded-md border border-linha bg-sup-2 px-2 py-1.5">
+      <button
+        type="button"
+        (click)="toggleFiltroTimeline('impedimentos')"
+        class="rounded-md border px-2 py-1.5 text-left transition-colors cursor-pointer"
+        [ngClass]="filtroTimeline() === 'impedimentos' ? 'border-critico bg-critico/10' : 'border-linha bg-sup-2 hover:border-critico/50'"
+      >
         <div class="font-mono text-[15px] font-bold tabular-nums" [ngClass]="(colaboradoresService.atividadeDe(nome)?.totalImpedimentos ?? 0) > 0 ? 'text-critico' : 'text-txt'">{{ colaboradoresService.atividadeDe(nome)?.totalImpedimentos ?? 0 }}</div>
         <div class="text-[9.5px] font-semibold text-fraco truncate">Impedimentos</div>
-      </div>
+      </button>
 
       <!-- Leituras/min — média sobre TEMPO TRABALHADO (exclui pausas), não
            mais o tempo total visto (distorcia o ritmo real). -->
@@ -244,8 +261,18 @@
       </ng-container>
     </div>
 
-    <div class="text-[10px] font-bold text-tenue uppercase tracking-wide mb-1.5">
-      Execução do dia (ordem cronológica)
+    <div class="flex items-center justify-between gap-2 mb-1.5">
+      <div class="text-[10px] font-bold text-tenue uppercase tracking-wide">
+        Execução do dia (ordem cronológica)
+      </div>
+      <button
+        type="button"
+        *ngIf="filtroTimeline()"
+        (click)="filtroTimeline.set('')"
+        class="shrink-0 text-[9.5px] font-semibold text-azul hover:text-azul-t cursor-pointer"
+      >
+        limpar filtro
+      </button>
     </div>
     <div class="text-center text-tenue text-[11px] py-4" *ngIf="!jornadaCarregada()">
       Carregando timeline...
@@ -256,11 +283,17 @@
     >
       Nenhuma atividade registrada {{ colaboradoresService.rotuloDataAtividade() }}.
     </div>
+    <div
+      class="text-center text-tenue text-[11px] py-4"
+      *ngIf="jornadaCarregada() && pontosOrdenados().length && !pontosFiltrados().length"
+    >
+      Nenhum ponto com esse filtro.
+    </div>
     <ol
       class="relative"
-      *ngIf="jornadaCarregada() && pontosOrdenados().length"
+      *ngIf="jornadaCarregada() && pontosFiltrados().length"
     >
-      <ng-container *ngFor="let item of pontosOrdenados(); let i = index">
+      <ng-container *ngFor="let item of pontosFiltrados(); let i = index">
         <!-- Separador de deslocamento entre dois pontos cronologicamente
              consecutivos — laranja/destacado quando o intervalo passou do
              limite (>5min urbana / >15min rural) e vira "pausa". -->

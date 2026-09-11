@@ -705,4 +705,44 @@ código — registrado aqui só pra não perder o contexto da explicação caso 
   Adendo 10.
 - Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+
+## Adendo 13 — Rodada 13: KPIs "Realizadas"/"A realizar"/"Impedimentos" viram filtro da timeline
+
+Usuário pediu que esses 3 cards do grid de indicador (`colaborador-detalhe.html`) funcionassem como
+filtro da timeline logo abaixo deles.
+
+Implementado: `filtroTimeline` (signal, `'realizadas' | 'a_realizar' | 'impedimentos' | ''`) em
+`colaborador-detalhe.ts`, mesmo padrão de toggle já usado em `toggleCategoria`
+(`lista-colaboradores.ts`) — clicar de novo no mesmo card limpa o filtro. Os 3 `<div>` viraram
+`<button>`, com estado ativo (borda + fundo na cor do próprio KPI: ok/azul/critico). Novo computed
+`pontosFiltrados()` aplica o filtro em cima de `pontosOrdenados()` (que continua existindo, sem
+filtro, usado pro estado "sem nenhuma atividade no dia" — distinto de "sem resultado pro filtro
+atual", que ganhou sua própria mensagem). Botão "limpar filtro" aparece ao lado do título "Execução
+do dia" quando algum filtro está ativo.
+
+**Definição de cada filtro** (mesma semântica dos próprios KPIs): "Realizadas" = qualquer ponto com
+`codigo` preenchido (inclui impedimentos — mesma definição de `totalRealizadas` no service, não é
+exclusivo); "A realizar" = `!codigo`; "Impedimentos" = `codigo` preenchido E `ehCodigoDeImpedimento()`.
+
+**Simplificação consciente**: os separadores de "deslocamento"/"mudou de livro"/"mudou de município"
+entre cartões continuam mostrando o intervalo real calculado pelo backend (sempre correto, é uma
+propriedade do próprio ponto) — mas com um filtro ativo, o cartão logo acima na tela pode não ser o
+predecessor cronológico de verdade (os pontos entre eles ficam ocultos pelo filtro). A informação
+continua correta, só não tem mais uma "âncora visual" perfeita acima dela; não pareceu problema grave
+o bastante pra justificar reconstruir os separadores por cima do resultado filtrado.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness confirmando: clicar
+num card ativa o destaque (borda/fundo na cor certa) e mostra "limpar filtro"; clicar de novo (ou no
+botão limpar) volta ao estado normal.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Projeção "tempo pra fechar o serviço" — desligada por pedido do usuário, código preservado
+  comentado em `colaborador-cracha.ts` pra reativar quando pedido.
+- Esmaecimento de pontos/segmentos futuros diretamente no mapa (Leaflet) — não implementado, ver
+  Adendo 10.
+- Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Aba Risco — inalterada.

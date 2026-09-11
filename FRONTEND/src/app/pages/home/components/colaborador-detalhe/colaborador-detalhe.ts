@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, Input, QueryList, ViewChildren, computed, effect } from '@angular/core';
+import { Component, ElementRef, HostListener, Input, QueryList, ViewChildren, computed, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
   ColaboradoresService,
@@ -131,6 +131,27 @@ export class ColaboradorDetalhe {
     const nome = this.nomeAberto();
     if (!nome) return [];
     return this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos ?? [];
+  });
+
+  // Os 3 KPIs "Realizadas"/"A realizar"/"Impedimentos" funcionam como
+  // filtro da timeline abaixo deles — pedido explícito do usuário. Clicar
+  // de novo no mesmo filtro limpa (mesmo padrão de toggleCategoria em
+  // lista-colaboradores.ts). "Realizadas" mostra TODAS as UCs com código
+  // preenchido (inclusive impedimentos — mesma definição de
+  // totalRealizadas no service, impedimento é um subconjunto, não exclui).
+  filtroTimeline = signal<'realizadas' | 'a_realizar' | 'impedimentos' | ''>('');
+
+  toggleFiltroTimeline(valor: 'realizadas' | 'a_realizar' | 'impedimentos'): void {
+    this.filtroTimeline.set(this.filtroTimeline() === valor ? '' : valor);
+  }
+
+  pontosFiltrados = computed(() => {
+    const filtro = this.filtroTimeline();
+    const pontos = this.pontosOrdenados();
+    if (!filtro) return pontos;
+    if (filtro === 'a_realizar') return pontos.filter(p => !p.codigo);
+    if (filtro === 'impedimentos') return pontos.filter(p => !!p.codigo && this.ehImpedimento(p.codigo));
+    return pontos.filter(p => !!p.codigo); // 'realizadas'
   });
 
   // undefined = ainda não chegou a primeira resposta de /colaboradores/jornada

@@ -103,6 +103,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Adicionado
 
+- Grid de indicador do painel de detalhe (aba Trilho): os 3 cards "Realizadas"/"A realizar"/
+  "Impedimentos" agora funcionam como filtro da timeline logo abaixo — clicar filtra só os pontos
+  daquela categoria, clicar de novo (ou "limpar filtro") volta a mostrar tudo. Ver Adendo 13 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 - Régua de tempo (playback do dia, aba Trilho) — abaixo do mapa, com play/pause/velocidade/ir pro
   início ou fim: uma marca colorida por ponto do dia, arraste ou clique pra ir direto num instante.
   Reativa uma feature do protótipo de referência que tinha ficado fora do escopo inicial deste

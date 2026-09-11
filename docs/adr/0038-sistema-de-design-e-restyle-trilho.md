@@ -788,11 +788,24 @@ a aba está ativa. (2) Bloco "Última importação" (canto direito do cabeçalho
 apontou que essa informação já aparece na identidade "Olho de Deus · supervisão de campo · coleta
 HH:MM" adicionada ao lado do logo A2L na rodada 8, ficando duplicada.
 
+**Correção imediata nos pins** — ao ver o mapa real (print com dezenas de marcadores lado a lado),
+usuário apontou dois problemas na primeira versão do pin: (1) ficaram grandes demais perto do
+tamanho anterior (`iconSize` tinha ido de ~20×22 pro novo pin pra 32×50, sem redução); (2) o furo
+central, pra valer o nome, tinha que deixar o mapa aparecer atrás — a primeira versão só desenhava
+um `<circle fill="#fff">` por cima, então o "furo" era na real um disco branco opaco, não
+transparência de verdade. Corrigido: `iconSize`/`iconAnchor` reduzidos de `[32,50]`/`[16,50]` pra
+`[18,28]`/`[9,28]` (mesma proporção, só menor — perto do tamanho das formas antigas); o círculo
+branco foi removido e cada metade colorida passou a embutir o próprio contorno do círculo no `d` do
+`<path>`, com `fill-rule="evenodd"` — isso recorta um furo de verdade (mostra o que está atrás,
+tiles do mapa) sem precisar de `clipPath`/`id` (mesma preocupação de clonagem por marcador do
+parágrafo acima, resolvida sem introduzir nenhum id).
+
 ### Verificação
 
-`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness confirmando: os pins
-bicolores batem com a referência (metade clara/escura, furo branco, ponta embaixo); cabeçalho com
-labels em Title Case, só o ativo (Trilho) com peso médio, sem o bloco duplicado de última importação.
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness confirmando: pins no
+tamanho reduzido (18×28), furo realmente transparente (fundo do teste aparece atrás, não branco);
+cabeçalho com labels em Title Case, só o ativo (Trilho) com peso médio, sem o bloco duplicado de
+última importação.
 
 ### Pendências (fora desta ADR, reafirmadas)
 

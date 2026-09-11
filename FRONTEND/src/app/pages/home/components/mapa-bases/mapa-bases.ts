@@ -78,19 +78,23 @@ function iconePin(corClara: string, corEscura: string): L.DivIcon {
   // HTML inválido/arriscado (o navegador pode resolver a referência errada
   // entre marcadores). Cada metade fecha sozinha ao longo da linha central
   // (x=0), sem precisar recortar nada.
-  const metadeEsquerda = 'M0,-16 C-8.837,-16 -16,-8.837 -16,0 C-16,9 0,32 0,32 Z';
-  const metadeDireita = 'M0,-16 C8.837,-16 16,-8.837 16,0 C16,9 0,32 0,32 Z';
+  // Furo central é recorte de verdade (evenodd), não um círculo branco por
+  // cima — cada metade já embute o subcaminho do círculo no próprio `d`, sem
+  // precisar de clipPath/id (mesmo motivo do parágrafo acima: nada de id
+  // repetido entre marcadores clonados).
+  const circuloFuro = 'M6.5,-3 A6.5,6.5 0 1,0 -6.5,-3 A6.5,6.5 0 1,0 6.5,-3 Z';
+  const metadeEsquerda = `M0,-16 C-8.837,-16 -16,-8.837 -16,0 C-16,9 0,32 0,32 Z ${circuloFuro}`;
+  const metadeDireita = `M0,-16 C8.837,-16 16,-8.837 16,0 C16,9 0,32 0,32 Z ${circuloFuro}`;
   return L.divIcon({
     html: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="50" viewBox="-16 -18 32 50" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))">
-        <path d="${metadeEsquerda}" fill="${corClara}" />
-        <path d="${metadeDireita}" fill="${corEscura}" />
-        <circle cx="0" cy="-3" r="6.5" fill="#fff" />
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="28" viewBox="-16 -18 32 50" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))">
+        <path d="${metadeEsquerda}" fill="${corClara}" fill-rule="evenodd" />
+        <path d="${metadeDireita}" fill="${corEscura}" fill-rule="evenodd" />
       </svg>
     `,
     className: '',
-    iconSize: [32, 50],
-    iconAnchor: [16, 50],
+    iconSize: [18, 28],
+    iconAnchor: [9, 28],
   });
 }
 

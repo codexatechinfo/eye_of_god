@@ -54,9 +54,11 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Alterado
 
-- Ícones de colaborador no mapa (aba Trilho) trocados por pin bicolor com furo branco (moto azul,
-  pedestre laranja no lugar do vermelho original), no padrão de referência do usuário. Ver Adendo 14
-  da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+- Ícones de colaborador no mapa (aba Trilho) trocados por pin bicolor (moto azul, pedestre laranja
+  no lugar do vermelho original), no padrão de referência do usuário. Tamanho corrigido em seguida
+  pra ficar perto do anterior (estava saindo grande demais) e o furo central virou recorte de
+  verdade (transparente, mostra o mapa atrás) em vez de um disco branco opaco. Ver Adendo 14 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
 - Cabeçalho (aba Trilho) ganhou o bloco de identidade "Olho de Deus · supervisão de campo · coleta
   HH:MM" ao lado do logo A2L — fazia parte do padrão do protótipo desde a rodada 4, mas nunca tinha

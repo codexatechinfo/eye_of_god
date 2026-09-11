@@ -746,3 +746,60 @@ botão limpar) volta ao estado normal.
 - Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Aba Risco — inalterada.
+
+## Adendo 14 — Rodada 14: pins do mapa, pausa não vira mais "reincidência", etapa na timeline, cabeçalho
+
+Usuário reportou 4 pontos nesta rodada, com referências visuais pros itens 1 e 4:
+
+**Ícones de colaborador no mapa** — usuário mandou 2 imagens de pin de localização (bicolor,
+círculo com furo branco no meio, afunilando numa ponta embaixo): um azul, um laranja. Pedido direto
+de substituição do losango/gota da rodada 3. Implementado `iconePin()` (novo helper em
+`mapa-bases.ts`) — pin desenhado como DOIS caminhos independentes (metade clara + metade escura,
+cada um fechando sozinho na linha central) em vez de um único caminho com `clip-path`/`id`: como
+`ICONE_MOTO`/`ICONE_PEDESTRE` são clonados pelo Leaflet uma vez POR MARCADOR no mapa (centenas de
+colaboradores), um `id` de clip-path fixo repetido em todo marcador seria HTML inválido/arriscado
+(referência `url(#id)` podendo resolver pro elemento errado). Cores reaproveitam os pares de tokens
+já existentes (`azul`/`azul-t` pra moto, `laranja`/`laranja-t` pra pedestre) em vez dos hex exatos da
+imagem de referência — mesma forma, paleta da casa. Ancorado na PONTA de baixo agora (não mais no
+centro como losango/gota) — convenção padrão de pin de mapa, e o furo branco marca visualmente onde
+seria o "corpo" do ícone. Pedestre deixa de ser vermelho (`#dc2626`, decisão da ADR original) e vira
+laranja — a referência nova do usuário mostra as duas cores, resolve o "pendente" que ainda estava em
+aberto desde o Adendo 1.
+
+**Pausa não deve mais colorir o cartão da timeline como reincidência** — `corSegmento()`
+(`colaborador-detalhe.ts`) tinha uma regra da rodada 2 que forçava "crítico" (mesma cor de uma
+reincidência de verdade) sempre que `tipo_intervalo === 'pausa'`, mesmo numa leitura NORMAL (código
+000) — usuário reportou visualmente com print que isso deixava uma leitura normal indistinguível de
+uma reincidência real. Removida essa regra — a cor do cartão agora segue exclusivamente o código
+real da leitura (via `corDaUc`); o ícone de pausa (duas barras, já mostrado no lugar da bolinha)
+continua indicando a pausa, só não recolore mais o cartão inteiro.
+
+**Etapa na timeline** — cada UC da timeline (`colaborador-detalhe.html`) passou a mostrar também a
+etapa, logo depois do livro (`UC ... · Livro ... · Etapa ...`), tanto no cartão compacto quanto no
+card de detalhe expandido. Campo já existia em `PontoJornada.etapa`, só não era exibido.
+
+**Cabeçalho** — terceira rodada de ajuste nesta mesma área (rodadas 3/4 já tinham corrigido
+estrutura/labels antes). Duas correções pontuais que ainda faltavam: (1) labels dos 5 botões de aba
+eram MAIÚSCULAS ("TRILHO", "AGENTES"...) — protótipo usa Title Case ("Trilho", "Agentes"...), e todos
+tinham `font-bold` fixo — protótipo só aplica peso médio (500) no botão ATIVO, o inativo fica no peso
+normal (`#abas .ab` não define `font-weight`, só `.ab.on{font-weight:500}`). Corrigido: labels
+viraram Title Case, `font-bold` removido da classe base, `font-medium` só entra via `ngClass` quando
+a aba está ativa. (2) Bloco "Última importação" (canto direito do cabeçalho) removido — usuário
+apontou que essa informação já aparece na identidade "Olho de Deus · supervisão de campo · coleta
+HH:MM" adicionada ao lado do logo A2L na rodada 8, ficando duplicada.
+
+### Verificação
+
+`npx tsc --noEmit` e `npx ng build --configuration production` limpos. Harness confirmando: os pins
+bicolores batem com a referência (metade clara/escura, furo branco, ponta embaixo); cabeçalho com
+labels em Title Case, só o ativo (Trilho) com peso médio, sem o bloco duplicado de última importação.
+
+### Pendências (fora desta ADR, reafirmadas)
+
+- Projeção "tempo pra fechar o serviço" — desligada por pedido do usuário, código preservado
+  comentado em `colaborador-cracha.ts` pra reativar quando pedido.
+- Esmaecimento de pontos/segmentos futuros diretamente no mapa (Leaflet) — não implementado, ver
+  Adendo 10.
+- Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
+- Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
+- Aba Risco — inalterada.

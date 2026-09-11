@@ -169,15 +169,17 @@ export class ColaboradorDetalhe {
     return corDaUc(item, this.colaboradoresService.regimeSucessivoPorUc());
   }
 
-  // Cor do cartão "f-seg" da timeline (protótipo) — reaproveita corDaUc
-  // (mesma fonte de verdade do mapa) mas acrescenta um caso que só existe
-  // aqui: pausa (>limite por etapa) vira crítico, mesmo numa leitura
-  // normal, pra destacar o tempo parado — pedido explícito da rodada 2 do
-  // restyle (ver ADR 0038 Adendo 2).
+  // Cor do cartão "f-seg" da timeline — reaproveita corDaUc (mesma fonte de
+  // verdade do mapa) sem nenhum caso especial pra pausa. A rodada 2 tinha
+  // pausa forçando "crítico" mesmo numa leitura NORMAL (código 000), pra
+  // destacar o tempo parado — usuário reportou que isso fazia uma leitura
+  // normal aparecer com a MESMA cor de uma reincidência de verdade,
+  // confundindo os dois casos. O ícone de pausa (duas barras, já mostrado
+  // no lugar da bolinha) continua indicando a pausa visualmente — só a COR
+  // do cartão agora segue exclusivamente o código real da leitura.
   corSegmento(item: PontoJornada): 'neutro' | 'ok' | 'alerta' | 'critico' {
     const cor = this.corDoPonto(item);
     if (cor === 'cinza') return 'neutro';
-    if (item.tipo_intervalo === 'pausa') return 'critico';
     if (cor === 'vermelho') return 'critico';
     if (cor === 'laranja') return 'alerta';
     return 'ok';

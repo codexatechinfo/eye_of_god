@@ -63,44 +63,47 @@ function normalizarParaComparacao(texto: string): string {
     .trim();
 }
 
-// Icones do colaborador no mapa — silhueta simples no padrão do protótipo
-// de referência (olho.html, função desenhaAgente): losango pra quem anda de
-// moto, gota (círculo + "cauda" triangular) pra quem anda a pé. Não é
-// ilustração — é a diferença que precisa ficar clara de relance, a cor já
-// diz o resto. Substitui a versão anterior (traçado SVG exato via potrace
-// de fotos reais) por pedido explícito do usuário, mesmo sabendo que é o
-// mesmo tipo de simplificação já rejeitada em rodadas anteriores — ver ADR
-// 0038 Adendo 2. Geometria (pontos do losango, raio/offset da gota) copiada
-// 1:1 das coordenadas do canvas do protótipo, só redesenhada em SVG.
-function iconeMoto(): L.DivIcon {
+// Ícones do colaborador no mapa — pin de localização bicolor (círculo com
+// furo branco no meio, afunilando numa ponta embaixo), pedido explícito do
+// usuário com as duas referências visuais (moto azul, pedestre laranja).
+// Substitui o losango/gota da rodada anterior. Ancorado na PONTA de baixo
+// (não mais no centro) — é a convenção padrão de pin de mapa, a ponta é
+// que marca a coordenada exata. Metade clara/escura usando os mesmos pares
+// de tokens já estabelecidos (azul/azul-t, laranja/laranja-t), não os hex
+// arbitrários da referência — mesma forma, paleta da casa.
+function iconePin(corClara: string, corEscura: string): L.DivIcon {
+  // Metade esquerda/direita como DOIS caminhos independentes (não um clip-
+  // path com id) — divIcon clona este HTML uma vez por marcador no mapa
+  // (centenas de colaboradores), e um `id` fixo repetido em todos eles é
+  // HTML inválido/arriscado (o navegador pode resolver a referência errada
+  // entre marcadores). Cada metade fecha sozinha ao longo da linha central
+  // (x=0), sem precisar recortar nada.
+  const metadeEsquerda = 'M0,-16 C-8.837,-16 -16,-8.837 -16,0 C-16,9 0,32 0,32 Z';
+  const metadeDireita = 'M0,-16 C8.837,-16 16,-8.837 16,0 C16,9 0,32 0,32 Z';
   return L.divIcon({
     html: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="-10 -11 20 22" style="filter:drop-shadow(0 1px 2px rgba(11,46,89,.35))">
-        <path d="M0,-9 L8,0 L0,9 L-8,0 Z" fill="#006DFF" stroke="#fff" stroke-width="1.6"/>
+      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="50" viewBox="-16 -18 32 50" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))">
+        <path d="${metadeEsquerda}" fill="${corClara}" />
+        <path d="${metadeDireita}" fill="${corEscura}" />
+        <circle cx="0" cy="-3" r="6.5" fill="#fff" />
       </svg>
     `,
     className: '',
-    iconSize: [20, 22],
-    iconAnchor: [10, 11],
+    iconSize: [32, 50],
+    iconAnchor: [16, 50],
   });
 }
 
-// Cor do pedestre segue #dc2626 (não o token --critico) — decisão já
-// tomada e documentada na ADR 0038: usuário comparou lado a lado e achou
-// mais saturado/puro que o token, pediu explicitamente pra manter. Vale
-// pra qualquer formato do ícone, não só o traçado anterior.
+function iconeMoto(): L.DivIcon {
+  return iconePin('#006DFF', '#0057CC');
+}
+
+// Cor do pedestre passa de #dc2626 (vermelho) pra laranja — pedido
+// explícito do usuário com referência visual (pin azul/pin laranja),
+// substitui a decisão anterior de manter o vermelho mais saturado (ver ADR
+// 0038 Adendo 1) — não é mais relevante, o formato do ícone mudou junto.
 function iconePedestre(): L.DivIcon {
-  return L.divIcon({
-    html: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="22" viewBox="-8 -10 16 22" style="filter:drop-shadow(0 1px 2px rgba(11,46,89,.35))">
-        <circle cx="0" cy="-2.5" r="6.4" fill="#dc2626" stroke="#fff" stroke-width="1.6"/>
-        <path d="M0,3.4 L4.2,10.5 L-4.2,10.5 Z" fill="#dc2626" stroke="#fff" stroke-width="1.6"/>
-      </svg>
-    `,
-    className: '',
-    iconSize: [16, 22],
-    iconAnchor: [8, 10],
-  });
+  return iconePin('#F28C28', '#C96F16');
 }
 
 const ICONE_MOTO = iconeMoto();

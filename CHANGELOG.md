@@ -24,6 +24,18 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Cartão da timeline (aba Trilho) forçava a cor de "reincidência" (crítico) em qualquer pausa,
+  mesmo quando a leitura em si era normal (código 000) — ficava indistinguível de uma reincidência
+  de verdade. A cor do cartão agora segue só o código real da leitura; o ícone de pausa continua
+  indicando a pausa, sem recolorir o cartão. Ver Adendo 14 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
+- Cabeçalho (aba Trilho): labels das abas estavam em maiúsculas e todas com peso de fonte igual —
+  agora em Title Case (Trilho/Agentes/Livros/Massivas/Importação) e só a aba ativa fica com peso
+  médio, igual ao protótipo. Removido o bloco "Última importação" do canto direito, redundante com
+  a identidade "Olho de Deus · coleta HH:MM" já mostrada ao lado do logo A2L. Ver Adendo 14 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 - Campo de busca da lista de colaboradores (aba Trilho) mostrava o contorno de foco padrão do
   navegador dentro do wrapper customizado, parecendo uma caixa dentro da caixa — adicionado
   `outline-none` nele e nos outros campos da mesma barra (data/regional/cargo).
@@ -41,6 +53,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
 ### Alterado
+
+- Ícones de colaborador no mapa (aba Trilho) trocados por pin bicolor com furo branco (moto azul,
+  pedestre laranja no lugar do vermelho original), no padrão de referência do usuário. Ver Adendo 14
+  da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
 - Cabeçalho (aba Trilho) ganhou o bloco de identidade "Olho de Deus · supervisão de campo · coleta
   HH:MM" ao lado do logo A2L — fazia parte do padrão do protótipo desde a rodada 4, mas nunca tinha
@@ -102,6 +118,9 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
 ### Adicionado
+
+- Cada UC da timeline (aba Trilho) agora também mostra a etapa, ao lado do livro. Ver Adendo 14 da
+  [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
 - Grid de indicador do painel de detalhe (aba Trilho): os 3 cards "Realizadas"/"A realizar"/
   "Impedimentos" agora funcionam como filtro da timeline logo abaixo — clicar filtra só os pontos

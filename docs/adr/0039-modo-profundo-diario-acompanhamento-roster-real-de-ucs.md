@@ -205,11 +205,111 @@ ligado) quanto no caminho "terminou de verdade (fila esgotada)".
 
 `roster_ucs_extracao_diaria` de hoje apagada (`DELETE ... WHERE data_extracao = CURRENT_DATE`,
 4593 linhas) e o backend reiniciado com `COPEL_PARALELISMO_ACOMP=1` + `COPEL_TIMEOUT_PROFUNDO_MIN=0`
-— roda serial, sem teto, até esgotar os 1760 livros de hoje. Resultado (tempo total e cobertura
-final) fica pra registrar quando terminar — ver CHANGELOG/próxima atualização desta ADR.
+— roda serial, sem teto, até esgotar os 1760 livros de hoje.
+
+Acompanhado ao vivo por ~45min: ritmo bem mais estável que as rodadas 1/2 (100% de sucesso nos
+primeiros 100 livros, ~27s/livro), mas a extrapolação pro catálogo inteiro (1613 livros) apontava
+**~12 horas** pra terminar — usuário pediu a estimativa (calculada a partir do ritmo real: 100
+livros/27s) e depois mandou derrubar o processo (`pode derrubar`). Como a gravação só acontece no
+fim do ciclo inteiro (uma única transação, junto com o import de `contr_execucao_leitura`), derrubar
+no meio não deixou nada parcial gravado — `roster_ucs_extracao_diaria` voltou a 0 sozinha, sem
+inconsistência. No mesmo fôlego, mediu-se também o equivalente pro modo de 5 abas (Rodada 2,
+267 livros em 91min): **~10 horas** pro catálogo inteiro — ou seja, nem serial nem paralelo (nas
+condições do portal nesta sessão) chegavam perto da faixa de 35-40min original.
 
 ### Verificação
 
-`node --check` e `npm test` (20/20) depois de cada mudança. Comportamento do teto desligado
-verificado por leitura de código (sem teste automatizado dedicado — o cenário só se comprova rodando
-de verdade contra o portal, o que já está em andamento nesta sessão).
+`node --check` e `npm test` (20/20) depois de cada mudança.
+
+## Adendo 2 — causa raiz real: não precisa de navegador nenhum pra abrir uma OS; POST HTTP direto
+## resolve tudo (100% de cobertura, minutos em vez de horas)
+
+Com nem serial nem paralelo (via Playwright) chegando perto de um tempo aceitável, usuário perguntou
+se dava pra abrir mão de tirar prints/analisar visualmente em vez de ler o DOM — investigado e
+descartado (não ataca o gargalo real: a lentidão/instabilidade vem de ABRIR a OS num browser de
+verdade — popup, render, polling de tabela — não de COMO os dados são lidos depois). A pergunta
+certa era outra: será que dá pra abrir a OS sem navegador nenhum?
+
+### Investigação ao vivo: capturando a requisição HTTP real
+
+Script descartável (Playwright só pra login+busca) interceptando `page.on('request')` durante uma
+abertura de OS real revelou: **1 único POST** pra
+`https://www.copel.com/lis/editarTarefasLeituraAction.do?acompanhamento=S`, replicando o corpo
+INTEIRO do `forms[0]` da página de busca (todos os campos hidden `org.apache.struts.taglib.html.TOKEN`,
+`tarefasEtapaNN` — lista de osIds de cada etapa carregada — e `countUCsXXXXXXXX` — quantas UCs cada
+osId tem, ambos já confirmados existir desde a busca inicial), só trocando `actionType` de `search`
+pra `home` e `id` pro osId alvo. Confirma o que o comentário histórico já suspeitava (ADR 0020): o
+`update(osId,url)` do site é literalmente só isso — settar 2 campos e dar submit no form que já
+existe na página.
+
+### Teste isolado: replicar o POST sem navegador nenhum
+
+Com as cookies da sessão + o corpo do form capturados, um novo script (`fetch` puro do Node, sem
+Playwright) reabriu as MESMAS 11 OS já testadas — 11/11 com sucesso, tabela extraída corretamente
+(contagem de UCs por OS batendo exato com os `countUCsXXXXX` do form original), **~230ms por
+chamada** (contra ~20-27s via browser). Escalado pra 300 requisições seguidas (ciclando as mesmas 47
+OS disponíveis, sem pausa nenhuma): **300/300 (100%), latência estável (p50 232ms, p95 322ms), zero
+degradação** — a instabilidade histórica de "sessão perdida" vinha do peso de abrir popup/renderizar/
+aguardar num browser real centenas de vezes, não de um limite real do lado do servidor.
+
+### Reescrita do modo profundo: HTTP direto, sem navegador, sem abas
+
+`copelScraperService.js` reescrito — removidos por completo `worker()`, `PARALELISMO_PROFUNDO`,
+`abrirEExtrairOs` (versão popup/mesma-página do Playwright), `fecharTelaDetalheMesmaPagina`,
+`paginaUtilizavel`, `recuperarBusca`, `aguardarTabelaEstabilizar`/`contarLinhasTabFixedHeader` (DOM) —
+toda a máquina de gerenciar abas/popup/fechar tela deixou de fazer sentido: cada chamada HTTP é
+isolada, não tem "tela" pra fechar nem "sessão de aba" pra recuperar. Substituídos por:
+
+- `capturarEstadoParaHttp(page)` — lê as cookies do `browserContext` (via Playwright, 1x, depois do
+  login+busca) e todos os campos do `forms[0]` (via `page.evaluate`), retorna `{cookieHeader,
+  camposBase}`.
+- `abrirOsViaHttp(cookieHeader, camposBase, alvo)` — `fetch` POST direto, sem Playwright.
+- `extrairLinhasDetalheOsDoHtml(html)` — mesma extração de sempre (índices de coluna 1=UC,
+  2=equip., 3=tipo espec., 5=faturar?, 7=leit. atual, 8=código), mas por regex sobre o HTML da
+  resposta em vez de `page.evaluate` no DOM.
+- `coletarUcsDoLivroViaHttp` — retry simples (3 tentativas, 500ms de folga) pra falha de rede
+  pontual, não mais recuperação de sessão (não precisou, ver testes abaixo).
+- Loop principal do modo profundo virou um `for` serial simples — sem fila compartilhada, sem
+  `Promise.all` de workers. HTTP é rápido o bastante que nem faz sentido paralelizar.
+
+Teto de tempo (`TIMEOUT_PROFUNDO_MS`) mantido como rede de segurança (não mais limitador esperado —
+ver comentário atualizado no topo do arquivo).
+
+### Verificação — extração completa real, duas vezes, com e sem banco
+
+**Teste 1 (sem banco, função isolada, só validando a extração em si):** 1091/1091 livros (100%),
+132.204 UCs, **18,3min no total** (17,6min só o modo profundo).
+
+**Teste 2 (ciclo completo real, através do backend + Postgres, banco de verdade):**
+- 1º ciclo do dia — detectou `roster_ucs_extracao_diaria` vazia, entrou em modo profundo:
+  **1556/1556 livros (100%), 227.444 UCs**, em 31,6min — gravado com sucesso em
+  `contr_execucao_leitura` (1556 linhas) E `roster_ucs_extracao_diaria` (227.444 linhas).
+  Confirmado direto no banco (`SELECT count(*)`), não só no log.
+- 2º ciclo (3min depois, mesmo dia) — detectou roster já existente, voltou sozinho pro modo rápido
+  (`✅ Extração concluída (modo rápido, sem abrir OS)`, ~95s no total) — roster **não foi tocado**,
+  continuou exatamente 227.444/1556.
+
+Uma instabilidade de ambiente (não do código) atrapalhou a primeira tentativa desta rodada: o
+container `supabase-db` (WSL) reiniciou sozinho no meio do teste (`FATAL: terminating connection due
+to administrator command`), derrubando a conexão Postgres e crashando o processo Node (erro não
+tratado) — descartado como ruído de infraestrutura local, não reproduzido nas tentativas seguintes.
+
+### Consequências (atualiza a ADR original)
+
+- **Meta original do usuário (35-40min) superada com folga** — extração completa do dia agora leva
+  ~18-32min (variando com o total de livros do dia), a maior parte sendo rede/latência real contra o
+  portal, não mais limitada por instabilidade de sessão.
+- `PARALELISMO_PROFUNDO`/`COPEL_PARALELISMO_ACOMP` removidos por completo — não fazem mais sentido
+  sem abas. `.env.example` atualizado.
+- `comSessaoExclusiva` bloqueia o Massivas por só ~20-30min agora (era horas) — reduz bastante o
+  impacto que a ADR original já documentava como consequência aceita.
+- Risco novo, específico do HTTP direto: se o site mudar os NOMES dos campos do formulário (ex.: uma
+  atualização do Struts/da aplicação), a extração quebra sem aviso claro (não existe mais nenhuma
+  interação visual/DOM que denunciaria a mudança de forma óbvia) — mitigado pela detecção de
+  `#tabFixedHeader` ausente na resposta (`extrairLinhasDetalheOsDoHtml` retorna `null`, trata como
+  falha, salva diagnóstico de texto com o HTML recebido).
+
+### Verificação
+
+`node --check` e `npm test` (20/20). Testado ao vivo contra o portal Copel real duas vezes (com e
+sem banco), números confirmados direto no Postgres, não só no log da aplicação — ver seção acima.

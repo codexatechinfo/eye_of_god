@@ -313,3 +313,53 @@ tratado) — descartado como ruído de infraestrutura local, não reproduzido na
 
 `node --check` e `npm test` (20/20). Testado ao vivo contra o portal Copel real duas vezes (com e
 sem banco), números confirmados direto no Postgres, não só no log da aplicação — ver seção acima.
+
+## Adendo 3 — consumo do roster: timeline e mapa (aba Trilho) passam a mostrar só UC confirmada
+
+Usuário pediu pra fechar o ciclo: com o roster diário funcionando, a timeline e o mapa da aba Trilho
+devem mostrar, como "a fazer" (pontos ainda não realizados), só as UCs que de fato foram confirmadas
+no roster de HOJE — não mais o que `coordenadas_ucs_mineradas` diz por conta própria (que pode estar
+desatualizada pra um livro reatribuído, o problema original que esta ADR resolve).
+
+### Onde entra
+
+`atividadeColaboradoresService.js#obterJornadaColaborador` — a única função que alimenta tanto a
+timeline (`colaborador-detalhe`) quanto o mapa (`mapa-bases`) da aba Trilho, via o mesmo endpoint
+`GET /colaboradores/jornada` (frontend: `colaboradores.service.ts`, sinal `jornadaPorColaborador`,
+consumido pelos dois componentes — nenhum outro lugar duplica essa consulta). A consulta de
+"pendentes" (UCs do livro que o colaborador ainda não leu hoje) trocou a fonte: antes lia
+`coordenadas_ucs_mineradas` direto pra saber "quais UCs este livro tem"; agora lê
+`roster_ucs_extracao_diaria` (filtrado por `data_extracao = CURRENT_DATE`) pra ISSO, e continua
+usando `coordenadas_ucs_mineradas` só pra ENRIQUECER com coordenada/endereço (`LEFT JOIN` por UC —
+~2,6% das UCs do roster de hoje ainda não têm correspondência lá; mesmo sem coordenada a UC continua
+na timeline, só não aparece no mapa). `DISTINCT` acrescentado — o roster tem mais de uma linha por UC
+quando ela tem `tipo_especificacao` diferente (CON/GTP/ERA, mesmo achado da ADR 0020), sem isso a UC
+apareceria repetida na lista.
+
+Escopo deliberadamente restrito à aba Trilho (pedido explícito: "na timeline e no mapa") — as
+consultas equivalentes em `monitoramentoService.js` (aba Monitoramento de Livros, tela separada) não
+foram tocadas.
+
+### Formato de `livro` conferido ao vivo antes de implementar
+
+`roster_ucs_extracao_diaria.livro` vem do mesmo scraper/DOM que grava `contr_execucao_leitura.livro`
+(6 dígitos com zero à esquerda, ex. `"014827"`) — diferente de `coordenadas_ucs_mineradas.livro`, que
+diverge por zero à esquerda (achado já documentado em vários pontos do código). Conferido direto no
+banco: `roster_ucs_extracao_diaria.livro::int` bate exato com `contr_execucao_leitura.livro::int`
+pro mesmo livro físico (ex.: `"000215"` nas duas) — o `livrosInt` já calculado na função (a partir de
+`base_dados_leitura.livro::int`) funciona sem nenhuma normalização extra.
+
+### Consequência aceita: sem roster de hoje ainda, timeline mostra só o que já foi realizado
+
+Se a extração profunda do dia ainda não rodou (ou falhou o dia inteiro), `roster_ucs_extracao_diaria`
+fica vazia pra hoje — a lista de "pendentes" vem vazia junto (timeline mostra só o realizado, sem
+nenhum "a fazer"), em vez de arriscar mostrar UC de um livro que pode já ter sido reatribuído. Trocar
+"nada" por "talvez errado" foi decisão deliberada, consistente com o motivo desta ADR inteira.
+
+### Verificação
+
+`node --check` e `npm test` (20/20). Testado ao vivo contra o Postgres real: consulta isolada contra
+um livro com pendentes reais (`014827`, 402 UCs) devolveu linhas com UC/coordenada/sequência
+corretas; `obterJornadaColaborador` chamada de ponta a ponta (transação com `ROLLBACK`, sem dado de
+teste) pra um colaborador com jornada completa no dia (459 realizados, 0 pendentes — livro já
+finalizado) confirmou o caminho sem erro e nenhum "pendente" com livro fora do roster de hoje.

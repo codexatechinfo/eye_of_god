@@ -24,6 +24,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Timeline e mapa (aba Trilho) mostravam como "a fazer" qualquer UC que `coordenadas_ucs_mineradas`
+  listasse pro livro — tabela minerada à parte, que pode ficar desatualizada pra um livro
+  reatribuído recentemente. Agora usam o roster real do dia (`roster_ucs_extracao_diaria`, ver ADR
+  0039) pra saber quais UCs o livro de fato tem — `coordenadas_ucs_mineradas` continua entrando só
+  pra coordenada/endereço. Se a extração do dia ainda não rodou, a timeline mostra só o que já foi
+  realizado (sem "a fazer" nenhum) em vez de arriscar mostrar UC errada. Ver Adendo 3 da [ADR
+  0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
+
 - Cartão da timeline (aba Trilho) forçava a cor de "reincidência" (crítico) em qualquer pausa,
   mesmo quando a leitura em si era normal (código 000) — ficava indistinguível de uma reincidência
   de verdade. A cor do cartão agora segue só o código real da leitura; o ícone de pausa continua

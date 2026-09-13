@@ -1031,13 +1031,32 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
   // NÃO foram realizadas NO CICLO ATUAL — usuário pediu pra ver no
   // mapa/timeline não só o que já foi feito, mas o que falta, pra ter noção
   // da rota completa (mesmo raciocínio de "setor planejado" no mapa, agora
-  // ponto a ponto). Roster vem de coordenadas_ucs_mineradas (mesma fonte já
-  // usada em obterEventosPorLivrosAteData/monitoramentoService.js pra saber
-  // quais UCs existem num livro). "Realizada" tem o MESMO corte por
-  // data_recebimento do ciclo atual usado em ja_realizado_antes acima e em
-  // obterEventosPorLivrosAteData — sem ele, uma UC lida num ciclo ANTERIOR
-  // do mesmo número de livro (reaproveitado todo mês) contaria como já
-  // feita no ciclo ATUAL, e sumiria da lista de pendentes por engano.
+  // ponto a ponto).
+  //
+  // Roster vem de roster_ucs_extracao_diaria (ADR 0039) — a extração real de
+  // HOJE, capturada abrindo a OS de cada livro no portal — em vez de
+  // coordenadas_ucs_mineradas direto: essa tabela é minerada à parte e pode
+  // ficar desatualizada pra um livro reatribuído recentemente (ver ADR 0028,
+  // Consequências), mostrando UC de um livro que na prática já não é mais
+  // dele. coordenadas_ucs_mineradas continua entrando, só pra ENRIQUECER
+  // com coordenada/endereço (join por UC) — LEFT JOIN porque ~2,6% das UCs
+  // do roster de hoje ainda não têm correspondência lá (mesma UC pode não
+  // ter sido re-minerada ainda), e mesmo sem coordenada a UC continua
+  // aparecendo na timeline (só não no mapa). DISTINCT porque o roster tem
+  // mais de uma linha por UC quando ela tem `tipo_especificacao` diferente
+  // (CON/GTP/ERA — grandezas de medição distintas do mesmo equipamento, ver
+  // ADR 0020) — sem isso a mesma UC apareceria repetida na lista.
+  //
+  // Se a extração profunda de hoje ainda não rodou (ou falhou o dia
+  // inteiro), este roster vem vazio — a timeline mostra só o que já foi
+  // realizado, sem nenhum "a fazer" ainda, em vez de arriscar mostrar UC de
+  // um livro que pode ter sido reatribuído.
+  //
+  // "Realizada" tem o MESMO corte por data_recebimento do ciclo atual usado
+  // em ja_realizado_antes acima e em obterEventosPorLivrosAteData — sem
+  // ele, uma UC lida num ciclo ANTERIOR do mesmo número de livro
+  // (reaproveitado todo mês) contaria como já feita no ciclo ATUAL, e
+  // sumiria da lista de pendentes por engano.
   const livroStringPorInt = new Map(rows.map(r => [Number(r.livro), r.livro]));
   const livrosInt = [...livroStringPorInt.keys()].filter(Number.isFinite);
   const { rows: pendentesRows } = await db.query(
@@ -1061,12 +1080,14 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
           OR to_date(b.data_da_leitura, 'DD/MM/YYYY') >= to_date(c.data_recebimento, 'DD/MM/YYYY')
         )
     )
-    SELECT m.unidade_consumidora AS uc, m.livro::int AS livro_int, m.etapa,
+    SELECT DISTINCT r.unidade_consumidora AS uc, r.livro::int AS livro_int, r.etapa,
       m.latitude, m.longitude, m.nom_municipio, m.localidade, m.endereco,
       m.classe_principal, m.sequencia
-    FROM coordenadas_ucs_mineradas m
-    WHERE m.livro::int = ANY($1::int[])
-      AND NOT EXISTS (SELECT 1 FROM realizadas r WHERE r.livro_int = m.livro::int AND r.uc = m.unidade_consumidora)
+    FROM roster_ucs_extracao_diaria r
+    LEFT JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = r.unidade_consumidora
+    WHERE r.livro::int = ANY($1::int[])
+      AND r.data_extracao = CURRENT_DATE
+      AND NOT EXISTS (SELECT 1 FROM realizadas re WHERE re.livro_int = r.livro::int AND re.uc = r.unidade_consumidora)
     `,
     [livrosInt, dataBr],
   );

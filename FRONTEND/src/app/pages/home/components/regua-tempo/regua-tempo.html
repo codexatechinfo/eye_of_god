@@ -35,6 +35,12 @@
     <span class="font-mono text-[10px] text-tenue">{{ relogioExtremo(extremos.ini) }} — {{ relogioExtremo(extremos.fim) }}</span>
   </div>
   <div class="pb-1">
-    <canvas #canvas class="w-full block cursor-ew-resize touch-none" (pointerdown)="aoPonteiroBaixo($event)"></canvas>
+    <!-- height:52px direto no elemento (não só via canvasEl.style.height em
+         desenhar()) — sem isso, entre o canvas aparecer no DOM (quando
+         reguaExtremos() vira não-nulo) e o primeiro desenhar() rodar de
+         verdade (via ResizeObserver, ngAfterViewInit), um <canvas> sem
+         altura definida usa os 150px padrão do navegador — um flash visível
+         de área em branco embaixo do mapa antes do desenho real aparecer. -->
+    <canvas #canvas style="height: 52px" class="w-full block cursor-ew-resize touch-none" (pointerdown)="aoPonteiroBaixo($event)"></canvas>
   </div>
 </div>

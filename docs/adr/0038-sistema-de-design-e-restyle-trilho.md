@@ -816,3 +816,37 @@ cabeçalho com labels em Title Case, só o ativo (Trilho) com peso médio, sem o
 - Performance: segunda consulta lenta (`obterBaselineDigitadosPorLivro`) ainda pendente.
 - Duplicidade de "PAULO SERGIO DA SILVA" — mesma pendência do Adendo 3.
 - Aba Risco — inalterada.
+
+## Adendo 15 — flash de área em branco embaixo do mapa ao carregar um colaborador
+
+Usuário reportou (com print) uma área grande em branco embaixo do mapa/crachá ao clicar num
+colaborador, e depois apontou a régua de tempo (Adendo 10) como suspeita.
+
+### Investigação
+
+A régua já tem `*ngIf="reguaExtremos() as extremos"` (`regua-tempo.html`) — não deveria renderizar
+nada até a jornada carregar, e `desenhar()` (`regua-tempo.ts`) sempre fixa
+`canvasEl.style.height = '52px'` a cada desenho, então não é um canvas crescendo sem limite. Achada
+uma brecha real, mas pequena: o `<canvas>` só ganha altura explícita quando `desenhar()` roda de
+verdade (via `ResizeObserver` registrado em `ngAfterViewInit`) — entre o elemento aparecer no DOM
+(assim que `reguaExtremos()` vira não-nulo) e esse primeiro desenho acontecer, um `<canvas>` sem
+altura no CSS cai no padrão do próprio navegador (150px) — um flash breve de área em branco antes do
+desenho real (52px) tomar o lugar.
+
+### Correção
+
+`style="height: 52px"` direto no `<canvas>` (`regua-tempo.html`) — mesmo valor que `desenhar()` já
+fixa via JS, só que garantido desde o primeiro frame, sem depender do `ResizeObserver` rodar antes.
+
+### Avaliação honesta
+
+Essa brecha é real, mas é um flash de no máximo ~150px de altura — não necessariamente explica
+"metade da tela" em branco que o usuário descreveu. Corrigido de qualquer forma (baixo risco, fecha
+uma lacuna real), mas fica como hipótese parcial, não confirmada como causa completa — se o problema
+persistir depois desta correção, precisa de investigação adicional (idealmente com o console do
+navegador aberto no momento em que acontece, já que não há como reproduzir sem login nesta sessão).
+
+### Verificação
+
+`npx tsc --noEmit` limpo. Não testado ao vivo contra o app real (sem login nesta sessão) — fica pro
+usuário confirmar se o "flash" branco melhorou ou desapareceu.

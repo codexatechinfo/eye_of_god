@@ -24,6 +24,13 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Régua de tempo (aba Trilho) podia mostrar um flash de área em branco embaixo do mapa ao abrir um
+  colaborador — o `<canvas>` da régua só ganhava altura (52px) quando o primeiro desenho rodava;
+  antes disso caía no padrão do navegador (150px sem estilo nenhum). Altura fixada direto no HTML
+  desde o primeiro frame. Ver Adendo 15 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md) — avaliação honesta lá: pode não ser a
+  causa completa do que o usuário reportou ("metade da tela" em branco é mais que 150px).
+
 - Timeline e mapa (aba Trilho) mostravam como "a fazer" qualquer UC que `coordenadas_ucs_mineradas`
   listasse pro livro — tabela minerada à parte, que pode ficar desatualizada pra um livro
   reatribuído recentemente. Agora usam o roster real do dia (`roster_ucs_extracao_diaria`, ver ADR

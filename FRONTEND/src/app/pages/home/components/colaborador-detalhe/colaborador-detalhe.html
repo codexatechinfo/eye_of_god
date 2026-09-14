@@ -304,6 +304,22 @@
           <span>+{{ duracaoFormatada(item.intervalo_anterior_segundos) }} desloc {{ distanciaFormatada(item.distancia_anterior_metros) }} · {{ item.velocidade_m_por_min?.toFixed(1) }} m/min</span>
         </li>
 
+        <!-- Marcador de sistema: livro passou de um colaborador pra outro
+             HOJE (ver obterTrocasDeColaboradorHoje, backend) — aparece na
+             timeline de AMBOS os envolvidos, mesmo sem nenhuma UC realizada
+             por um deles ainda. Mesmo padrão visual das linhas "Mudou de
+             livro/município" abaixo (linha de sistema full-width com
+             ícone), cor própria (navy) pra não confundir com transição
+             geográfica. -->
+        <li *ngIf="item.tipo_evento === 'troca_colaborador'" class="mb-1.5 ml-1">
+          <div class="rounded-md border border-navy/30 bg-navy/10 px-2 py-1 text-navy text-[9.5px] font-semibold flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 3l4 4-4 4" /><path d="M20 7H4" /><path d="M8 21l-4-4 4-4" /><path d="M4 17h16" />
+            </svg>
+            Livro {{ item.livro }} passou de {{ item.colaborador_de }} pra {{ item.colaborador_para }} às {{ item.hora_import }}
+          </div>
+        </li>
+
         <!-- Mudança de LIVRO e/ou MUNICÍPIO entre este ponto e o anterior —
              só existe cruzando o dia inteiro (não fazia sentido dentro de
              um livro só). Cores dedicadas (fúcsia/teal), distintas de tudo
@@ -329,6 +345,7 @@
              corSegmento() — neutro (não realizada), ok (normal), alerta
              (impedimento), crítico (pausa OU impedimento reincidente). -->
         <li
+          *ngIf="item.tipo_evento !== 'troca_colaborador'"
           #linhaUc
           [attr.data-uc]="item.uc"
           class="relative mb-1.5 rounded-md border overflow-hidden cursor-pointer transition-colors"

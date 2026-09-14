@@ -145,13 +145,17 @@ export class ColaboradorDetalhe {
     this.filtroTimeline.set(this.filtroTimeline() === valor ? '' : valor);
   }
 
+  // Marcador de sistema ("livro passou de X pra Y") não é nem "realizada"
+  // nem "a realizar" nem "impedimento" — fica sempre visível, qualquer que
+  // seja o filtro ativo (ou nenhum), pra não sumir uma informação relevante
+  // (troca de dono do livro) atrás de um filtro de UC.
   pontosFiltrados = computed(() => {
     const filtro = this.filtroTimeline();
     const pontos = this.pontosOrdenados();
     if (!filtro) return pontos;
-    if (filtro === 'a_realizar') return pontos.filter(p => !p.codigo);
-    if (filtro === 'impedimentos') return pontos.filter(p => !!p.codigo && this.ehImpedimento(p.codigo));
-    return pontos.filter(p => !!p.codigo); // 'realizadas'
+    if (filtro === 'a_realizar') return pontos.filter(p => p.tipo_evento === 'troca_colaborador' || (!p.codigo && p.tipo_evento === 'pendente'));
+    if (filtro === 'impedimentos') return pontos.filter(p => p.tipo_evento === 'troca_colaborador' || (!!p.codigo && this.ehImpedimento(p.codigo)));
+    return pontos.filter(p => p.tipo_evento === 'troca_colaborador' || !!p.codigo); // 'realizadas'
   });
 
   // undefined = ainda não chegou a primeira resposta de /colaboradores/jornada

@@ -272,6 +272,15 @@ export interface PontoJornada {
   livro_colaborador_atual: string | null;
   livro_reatribuido: boolean;
   livro_pendente: boolean;
+  // 'uc' (realizada, uc preenchida) | 'pendente' (a realizar) |
+  // 'troca_colaborador' (marcador de sistema — o livro passou de um
+  // colaborador pra outro hoje, ver obterTrocasDeColaboradorHoje no
+  // backend). Marcador de sistema não tem uc/coordenada — só
+  // colaborador_de/colaborador_para preenchidos, aparece na timeline de
+  // AMBOS os colaboradores envolvidos, mesmo sem nenhuma UC realizada.
+  tipo_evento: 'uc' | 'pendente' | 'troca_colaborador';
+  colaborador_de: string | null;
+  colaborador_para: string | null;
 }
 
 // Última UC que o colaborador realizou, em qualquer dia — usada pra

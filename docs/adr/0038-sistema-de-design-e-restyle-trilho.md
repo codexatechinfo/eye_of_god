@@ -850,3 +850,66 @@ navegador aberto no momento em que acontece, já que não há como reproduzir se
 
 `npx tsc --noEmit` limpo. Não testado ao vivo contra o app real (sem login nesta sessão) — fica pro
 usuário confirmar se o "flash" branco melhorou ou desapareceu.
+
+## Adendo 16 — timeline mostra a movimentação do livro entre colaboradores, não só o que cada um leu
+
+Usuário mostrou um print real: colaborador com "7 Realizadas" no KPI mas "Nenhuma UC realizada hoje"
+na timeline. Investigado: as 7 UCs foram lidas por OUTRO colaborador, ANTES do livro ser reatribuído
+— o KPI conta progresso do LIVRO (independente de quem leu), a timeline mostra só o que ESTE
+colaborador leu HOJE. Não é bug, mas é confuso sem explicação — usuário pediu uma solução: mostrar,
+na timeline de CADA colaborador que passou pelo livro hoje, um marcador indicando a movimentação
+("livro passou de X pra Y"), mesmo que um deles não tenha lido nenhuma UC ainda.
+
+### Decisões (perguntadas e confirmadas com o usuário antes de implementar)
+
+1. Recorte de tempo: **só hoje** (não o ciclo inteiro do livro, que pode ter começado dias atrás).
+2. Onde aparece: **na timeline de CADA colaborador envolvido** (não uma visão nova por livro).
+3. Como indicar: **uma linha/marcador de sistema** ("Livro passou de X pra Y"), não só uma cor
+   diferente nos pontos.
+
+### Backend (`atividadeColaboradoresService.js`)
+
+`obterTrocasDeColaboradorHoje(db, colaborador, dataBr)` (nova) — detecta troca de `colaborador` num
+livro comparando ciclos consecutivos de `contr_execucao_leitura` (LAG por livro, ordenado por
+hora_import/id), pra todo livro que ESTE colaborador esteve associado hoje (atual ou anteriormente).
+
+`obterJornadaColaborador` alterada em 3 pontos:
+- O corte que antes retornava `semDado:true` só quando o colaborador não tinha lido nenhuma UC hoje
+  (`livrosHojeInt` vazio) agora TAMBÉM considera `trocas` — só desiste se os dois estiverem vazios.
+  Sem isso, quem acabou de RECEBER um livro (sem ter lido nada ainda) nunca veria a movimentação.
+- `livrosInt` (usado pra buscar pendentes, ver Adendo 3) passou a incluir também os livros só de
+  `trocas` — mesmo motivo: mostrar pendentes do livro recém-recebido, não só dos livros já lidos.
+- `combinados` ganhou uma etapa nova: os marcadores de troca (`trocaPontos`, um por evento
+  detectado, com a hora real) entram na ordem CRONOLÓGICA junto com as UCs realizadas (não no fim
+  junto com os pendentes, que não têm hora real). Cada ponto final ganhou `tipo_evento` ('uc' |
+  'pendente' | 'troca_colaborador') e, só nos marcadores, `colaborador_de`/`colaborador_para`.
+
+Também corrigido de quebra: `inicio`/`fim` da jornada, que antes indexavam `rows[0]`/`rows[last]`
+direto (quebraria se `rows` viesse vazio, cenário novo possível agora) — passaram a vir de
+`cronologicos` (realizados + trocas, sempre não-vazio quando a função chega até aqui).
+
+### Frontend
+
+`PontoJornada` (`colaboradores.service.ts`) ganhou `tipo_evento`/`colaborador_de`/`colaborador_para`.
+`colaborador-detalhe.html`: novo `<li>` pro marcador (`*ngIf="item.tipo_evento === 'troca_colaborador'"`),
+mesmo padrão visual das linhas "Mudou de livro/município" já existentes (linha de sistema full-width
+com ícone), cor própria (navy) pra não confundir com transição geográfica (roxo/teal). O card de UC
+normal ganhou `*ngIf="item.tipo_evento !== 'troca_colaborador'"` pra não tentar renderizar campos de
+UC (uc/endereço/etc.) num marcador que não tem nenhum. `pontosFiltrados()` (`colaborador-detalhe.ts`)
+ajustado pra marcador de troca aparecer SEMPRE, qualquer que seja o filtro KPI ativo (Realizadas/A
+realizar/Impedimentos) — não é nem uma coisa nem outra, não devia sumir atrás de um filtro de UC.
+
+Mapa (`mapa-bases.ts`) não precisou de nenhuma mudança — já filtra por `latitude && longitude` antes
+de desenhar qualquer coisa (`validos`/`pontosValidosDoDia`), e o marcador de troca não tem
+coordenada — passa direto sem erro, só não aparece no mapa (esperado, é uma linha de sistema da
+timeline, não um ponto geográfico).
+
+### Verificação
+
+`node --check`/`npm test` (20/20) no backend, `npx tsc --noEmit` e `npx ng build --configuration
+production` limpos no frontend. Testado ao vivo contra dado real: livro `040472` reatribuído hoje de
+LUIS ANDRE BONATO pra FELIPE DE OLIVEIRA FERREIRA às 20:21:19 — chamando `obterJornadaColaborador`
+pros dois nomes (transação com `ROLLBACK`), os dois retornam `semDado:false` mesmo com
+`totalRealizadas:0`, e cada um vê exatamente o(s) marcador(es) de troca que o envolve (LUIS via 3
+marcadores, um por livro que ele perdeu hoje; FELIPE via 1, o livro que ele recebeu). Verificação
+visual do marcador via harness (CSS real compilado) — cor navy distinta do roxo de "mudou de livro".

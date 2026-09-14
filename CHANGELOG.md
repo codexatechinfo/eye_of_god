@@ -5,6 +5,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ## [Não lançado]
 
+### Adicionado
+
+- Timeline (aba Trilho) mostra agora quando um livro muda de colaborador durante o dia — uma linha
+  "Livro X passou de A pra B às HH:MM" aparece na timeline de AMBOS os envolvidos, mesmo que um
+  deles ainda não tenha lido nenhuma UC. Resolve a confusão de ver "7 Realizadas" no KPI mas
+  "Nenhuma UC realizada hoje" na timeline — o KPI conta progresso do livro (de qualquer um que já
+  leu), a timeline agora deixa claro quando esse progresso é de outra pessoa. Ver Adendo 16 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Performance
 
 - Endpoint `/colaboradores/localizacoes` (aba Trilho — alimenta os marcadores do mapa, chamado no

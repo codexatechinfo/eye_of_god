@@ -39,6 +39,24 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Marcador roxo de "trabalho anterior" (ver item acima) não aparecia no mapa quando o último ponto
+  do colaborador anterior caía perto de onde o colaborador atual está agora — o avatar dele (pane
+  600 do Leaflet) escondia o círculo roxo (pane 400 padrão) por completo. Corrigido com um pane
+  dedicado, sempre acima. Ver Adendo 17 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
+- Resumo de "trabalho anterior" (ver item acima) contava a leitura ORIGINAL inteira do livro em vez
+  de só a releitura atual — um livro de RELEITURA chegou a mostrar "292 UCs já lidas antes de hoje"
+  quando o real eram 5. Corrigido restringindo a busca ao roster real de hoje
+  (`roster_ucs_extracao_diaria`), não a todo o histórico de leituras daquele número de livro. Ver
+  Adendo 18 da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
+- UCs pendentes ("a realizar") sumiam da timeline de TODO colaborador, todos os dias, entre ~21h e
+  meia-noite (horário de Brasília) — a consulta comparava o roster do dia (gravado em hora local) com
+  `CURRENT_DATE` do Postgres (UTC), que nessa janela já tinha virado o dia seguinte. Corrigido usando
+  a data vista (hora local) em vez de `CURRENT_DATE`. Ver Adendo 18 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 - Régua de tempo (aba Trilho) podia mostrar um flash de área em branco embaixo do mapa ao abrir um
   colaborador — o `<canvas>` da régua só ganhava altura (52px) quando o primeiro desenho rodava;
   antes disso caía no padrão do navegador (150px sem estilo nenhum). Altura fixada direto no HTML

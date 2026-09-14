@@ -1008,6 +1008,20 @@ async function obterTrocasDeColaboradorHoje(db, colaborador, dataBr) {
 // Devolve 1 linha por (livro, colaborador anterior): total de UCs distintas
 // e a ÚLTIMA leitura dele (uc/data/hora/coordenada) — usada pro marcador
 // roxo no mapa ("até aqui foi o anterior").
+//
+// Restrito ao ROSTER real do dia (roster_ucs_extracao_diaria, ADR 0039), não
+// a `base_dados_leitura` inteira por número de livro — o corte por
+// ciclo_atual sozinho não basta quando o livro atual é RELEITURA: a data de
+// recebimento da OS de releitura pode coincidir com (ou vir logo depois) uma
+// IMPORTAÇÃO EM LOTE da leitura ORIGINAL inteira do mesmo livro (centenas de
+// UCs, todas de uma vez, mesmo dia) — sem o roster, essa leitura original
+// inteira passava no corte de data e contava como "trabalho anterior" do
+// ciclo de releitura, quando na prática a releitura só reabre um punhado de
+// UCs específicas (as que tiveram impedimento). Usuário reportou um caso
+// real: livro de releitura mostrando "292 UCs já lidas antes" — impossível
+// pro tamanho real de uma releitura — e apontou pra checar as conexões.
+// Roster vazio (extração de hoje não rodou) = trabalhoAnterior vazio pro
+// livro, mesmo fallback conservador já usado na query de pendentes acima.
 async function obterTrabalhoAnteriorPorLivro(db, colaborador, livros, dataBr) {
   if (!livros.length) return [];
   const { rows } = await db.query(
@@ -1019,6 +1033,11 @@ async function obterTrabalhoAnteriorPorLivro(db, colaborador, livros, dataBr) {
         AND data_import ~ '^\\d{2}/\\d{2}/\\d{4}$'
         AND to_date(data_import, 'DD/MM/YYYY') <= to_date($3, 'DD/MM/YYYY')
       ORDER BY livro::int, id DESC
+    ), roster_livro AS (
+      SELECT DISTINCT livro::int AS livro_int, unidade_consumidora AS uc
+      FROM roster_ucs_extracao_diaria
+      WHERE livro::int = ANY($2::int[])
+        AND data_extracao = to_date($3, 'DD/MM/YYYY')
     ), leituras_anteriores AS (
       SELECT b.livro::int AS livro_int, b.nome_do_usuario AS colaborador, b.unidade_consumidora AS uc,
         b.data_da_leitura, b.hora_da_leitura
@@ -1033,6 +1052,9 @@ async function obterTrabalhoAnteriorPorLivro(db, colaborador, livros, dataBr) {
           c.data_recebimento IS NULL
           OR c.data_recebimento !~ '^\\d{2}/\\d{2}/\\d{4}$'
           OR to_date(b.data_da_leitura, 'DD/MM/YYYY') >= to_date(c.data_recebimento, 'DD/MM/YYYY')
+        )
+        AND EXISTS (
+          SELECT 1 FROM roster_livro rl WHERE rl.livro_int = b.livro::int AND rl.uc = b.unidade_consumidora
         )
     ), contagem AS (
       SELECT livro_int, colaborador, count(DISTINCT uc)::int AS total_ucs
@@ -1178,6 +1200,19 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
   // realizado, sem nenhum "a fazer" ainda, em vez de arriscar mostrar UC de
   // um livro que pode ter sido reatribuído.
   //
+  // Corrigido: `r.data_extracao = CURRENT_DATE` (Postgres, UTC) virou
+  // `to_date($2, 'DD/MM/YYYY')` (dataBr, hora local do Brasil) — mesma
+  // classe de bug já corrigida em rosterUcsAcompanhamentoService.js (ADR
+  // 0039 Adendo 4/5), só que aqui não tinha sido flagrado ainda: entre
+  // ~21h e meia-noite (horário de Brasília), o servidor Postgres (UTC) já
+  // virou o dia enquanto o roster de HOJE continua gravado com a data local
+  // (ainda ontem em UTC) — `CURRENT_DATE` nessa janela não batia com
+  // NENHUMA linha do roster de hoje, zerando pendentes (e a timeline
+  // inteira, já que troca/trabalhoAnterior não preenchem `pontos` sozinhos)
+  // pra QUALQUER colaborador, todo santo dia, nessa janela de ~3h. Usuário
+  // reportou ao vivo, testado dentro dessa mesma janela (Postgres
+  // CURRENT_DATE=14/09, hora local do Brasil ainda 13/09).
+  //
   // "Realizada" tem o MESMO corte por data_recebimento do ciclo atual usado
   // em ja_realizado_antes acima e em obterEventosPorLivrosAteData — sem
   // ele, uma UC lida num ciclo ANTERIOR do mesmo número de livro
@@ -1235,7 +1270,7 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
     FROM roster_ucs_extracao_diaria r
     LEFT JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = r.unidade_consumidora
     WHERE r.livro::int = ANY($1::int[])
-      AND r.data_extracao = CURRENT_DATE
+      AND r.data_extracao = to_date($2, 'DD/MM/YYYY')
       AND NOT EXISTS (SELECT 1 FROM realizadas re WHERE re.livro_int = r.livro::int AND re.uc = r.unidade_consumidora)
     `,
     [livrosInt, dataBr],

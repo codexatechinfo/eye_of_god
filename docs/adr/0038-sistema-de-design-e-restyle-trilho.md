@@ -995,3 +995,66 @@ ALVES PEREIRA (caso originalmente reportado pelo usuário) — antes desta mudan
 "JACKSON KELVYNN FERNANDES REBECA", totalUcs: 292, ultimaUc: "116726644", ultimaData: "11/09/2026",
 ultimaHora: "09:33:09", latitude: null, longitude: null}]`. Verificação visual do pill roxo via
 harness (CSS real compilado).
+
+## Adendo 18 — "trabalho anterior" contava a leitura ORIGINAL inteira, não só a releitura; e pendentes zerando ~3h por dia
+
+Usuário testou de novo ao vivo (GUILHERME AUGUSTO ALVES PEREIRA, livro 034992 recebido de JACKSON
+KELVYNN FERNANDES REBECA) e reportou 3 problemas na mesma tela: (1) o ponto roxo continuava sem
+aparecer no mapa; (2) o resumo dizia "292 UCs já lidas antes de hoje" pra um livro de RELEITURA —
+impossível pro tamanho real de uma releitura, pediu pra checar as conexões; (3) nenhuma UC pendente
+aparecia na timeline, mesmo o KPI mostrando "472 A realizar". Duas causas raiz distintas, as duas
+confirmadas com consulta direta no banco antes de mexer em qualquer código.
+
+### Causa 1 (itens 1 e 2) — `obterTrabalhoAnteriorPorLivro` não distinguia o ciclo de LEITURA original do de RELEITURA
+
+O corte por `ciclo_atual`/`data_recebimento` (Adendo 17) não basta sozinho: o livro 034992 teve sua
+LEITURA original inteira (292 UCs, por JACKSON) importada em lote no MESMO dia (11/09/2026) em que a
+OS de RELEITURA atual foi recebida — as duas datas colidem, então o corte por data deixava passar a
+leitura original inteira como se fosse "trabalho anterior" do ciclo de releitura. Confirmado direto
+no banco: as 292 leituras de JACKSON tinham `status_releitura = 'N'` e `mes_ref_livro = '01/09/2026'`
+(a leitura mensal original), enquanto o roster REAL de hoje pra esse livro
+(`roster_ucs_extracao_diaria`, ADR 0039) tem só 5 UCs — e JACKSON leu exatamente essas 5 no mesmo dia
+11/09, cedo de manhã. `status_releitura` não é confiável como filtro direto (populado em <0,1% das
+linhas da tabela toda, provavelmente um campo mal alimentado pela importação) — a correção usa
+`roster_ucs_extracao_diaria` como fonte de verdade em vez disso, o mesmo princípio já usado na query
+de pendentes (Adendo 3): nova CTE `roster_livro` (UCs do roster de hoje por livro) e
+`leituras_anteriores` ganhou `AND EXISTS (... roster_livro ...)`, restringindo a leitura histórica às
+UCs que REALMENTE pertencem à OS atual. Resultado pro caso do GUILHERME: `totalUcs` caiu de 292 pra
+5, `ultimaUc` passou a ser a UC 74340859 (tem coordenada em `coordenadas_ucs_mineradas`, ao contrário
+da 116726644 que o cálculo errado citava antes) — o ponto roxo agora aparece. Reconfirmado contra o
+caso do NELSON (Adendo 17, que continuava correto): os totais caíram de forma igualmente plausível
+(6→1, 33→8, 34→2 UCs), todos com coordenada válida.
+
+### Causa 2 (item 3) — `r.data_extracao = CURRENT_DATE` na query de pendentes usa UTC, roster usa hora local
+
+Bug de timezone da MESMA classe já corrigida em `rosterUcsAcompanhamentoService.js` (ADR 0039 Adendo
+4/5), só que numa query diferente que não tinha sido revisada na época (ficou anotado como pendência
+de revisão futura). A query de "pendentes" dentro de `obterJornadaColaborador` filtrava
+`r.data_extracao = CURRENT_DATE` — `CURRENT_DATE` do Postgres é UTC, mas o roster é gravado com
+`hojeLocal()` (hora do Brasil, UTC-3). Entre ~21h e meia-noite (horário de Brasília), o servidor
+Postgres já virou o dia em UTC enquanto o roster de hoje continua gravado com a data local (ainda
+"ontem" do ponto de vista do servidor) — `CURRENT_DATE` nessa janela não batia com NENHUMA linha do
+roster de hoje, zerando os pendentes (e a timeline inteira, pra quem não tem troca nem realização
+própria hoje) de QUALQUER colaborador, todos os dias, por ~3h. Confirmado ao vivo, testado dentro
+dessa mesma janela: `SELECT CURRENT_DATE` no Postgres devolveu `2026-09-14`, `new
+Date().toLocaleDateString('en-CA')` no Node devolveu `2026-09-13`. Corrigido trocando `CURRENT_DATE`
+por `to_date($2, 'DD/MM/YYYY')` (a data VISTA, `dataBr`, já vem do frontend em hora local — mesmo
+padrão já usado no resto da função e em `monitoramentoService.js`).
+
+Resultado pro GUILHERME: `pontos.length` foi de 0 pra 472 — bate exatamente com o "472 A realizar" do
+KPI. Como bônus, os números agora fecham entre si: "7 Realizadas" do KPI = soma das UCs já feitas nos
+livros 032247 (2) e 034992 (5) que o roster confirma pra esses livros — nenhuma delas feita pelo
+GUILHERME hoje (daí "Nenhuma UC realizada hoje" no popup do mapa, `totalRealizadas: 0` bate certo).
+
+Encontrados (não corrigidos nesta rodada, fora do escopo do que foi reportado) mais dois usos de
+`CURRENT_DATE` cru no backend — `colaboradoresService.js` (comparação de datas de afastamento) e
+`monitoramentoService.js` (comparação de `mes_ref` por mês) — risco bem menor (só afeta borda de
+mês/dia, não uma janela diária de 3h), mas mesma classe de bug. Sinalizado como tarefa separada.
+
+### Verificação
+
+`node --check` no backend, `npm test` (20/20). Testado ao vivo (transação com `ROLLBACK`) nos dois
+casos reais: GUILHERME AUGUSTO ALVES PEREIRA (`trabalhoAnterior` 292→5 UCs, coordenada válida,
+`pontos.length` 0→472) e NELSON MACHADO GONCALVES (`trabalhoAnterior` recalculado pra totais bem
+menores e plausíveis, coordenadas mantidas válidas). Sem mudança de frontend nesta rodada — os dois
+fixes são só de backend/SQL.

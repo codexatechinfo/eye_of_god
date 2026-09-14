@@ -803,6 +803,17 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     this.mapa.createPane('paneRastroGps');
     this.mapa.getPane('paneRastroGps')!.style.zIndex = '450';
 
+    // Pane pro marcador roxo de "trabalho anterior" — acima até do
+    // markerPane padrão (600, onde vivem os L.divIcon de avatar/pausa/
+    // último ponto). Sem isso o circleMarker (overlayPane, 400) fica
+    // escondido debaixo do avatar do próprio colaborador sempre que o
+    // último ponto do colaborador anterior cai perto de onde o atual está
+    // trabalhando agora (o caso mais comum, já que é o mesmo livro/bairro)
+    // — usuário reportou "faltou exibir os pontos no mapa" com dado real
+    // confirmado no banco, a causa era essa, não falta de dado.
+    this.mapa.createPane('paneTrabalhoAnterior');
+    this.mapa.getPane('paneTrabalhoAnterior')!.style.zIndex = '650';
+
     const ruas = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
       maxZoom: 18,
@@ -1257,7 +1268,8 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       if (!item.latitude || !item.longitude) continue;
       const latLng: L.LatLngTuple = [Number(item.latitude), Number(item.longitude)];
       L.circleMarker(latLng, {
-        radius: 7,
+        pane: 'paneTrabalhoAnterior',
+        radius: 8,
         color: '#fff',
         weight: 2,
         fillColor: COR_SEGMENTO_MUDOU_LIVRO,

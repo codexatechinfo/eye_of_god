@@ -967,6 +967,24 @@ Redesenha do zero a cada chamada (`clearLayers()` + recriar), diferente do diffi
 do mesmo carregamento de jornada, então não precisa da lógica de reaproveitar/mover marcador entre
 refreshes de 60s.
 
+### Correção — marcador escondido atrás do avatar do próprio colaborador
+
+Usuário testou ao vivo (NELSON MACHADO GONCALVES, livros recebidos de JOSIANE APARECIDA ANZOLIN) e
+reportou: os pills roxos apareciam na timeline, mas nenhum ponto roxo aparecia no mapa. Dado
+confirmado correto no banco (coordenadas válidas pras 3 UCs) e bundle do `ng serve` já continha o
+código novo — não era falta de dado nem build desatualizado. Causa real: `L.circleMarker` vive no
+`overlayPane` padrão do Leaflet (zIndex 400), enquanto o avatar do colaborador (`L.divIcon`, usado
+pelo marcador "vista há Xmin" em `grupoAgenteAtual`) vive no `markerPane` padrão (zIndex 600) — como
+o último ponto do colaborador anterior tende a cair bem perto de onde o atual está trabalhando agora
+(mesmo livro/bairro, é o caso mais comum), o avatar renderiza por cima e esconde o círculo roxo por
+completo, com zero relação com a ordem em que os grupos foram adicionados ao mapa. Mesma classe de
+bug que o pane dedicado do "Rastro executado" já resolveu (comentário em `ngAfterViewInit`).
+
+Corrigido com um pane próprio, `paneTrabalhoAnterior` (zIndex 650, acima até do `markerPane`) —
+`atualizarMarcadoresTrabalhoAnterior()` passa `pane: 'paneTrabalhoAnterior'` no `L.circleMarker`, e o
+raio subiu de 7 pra 8 pra destacar melhor. Agora o ponto roxo sempre desenha por cima de qualquer
+outro marcador na mesma coordenada.
+
 ### Verificação
 
 `node --check` no backend. `npx tsc --noEmit -p tsconfig.app.json` e `npx ng build --configuration

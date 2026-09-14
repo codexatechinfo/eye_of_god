@@ -133,6 +133,15 @@ export class ColaboradorDetalhe {
     return this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos ?? [];
   });
 
+  // Resumo do que outro(s) colaborador(es) já fizeram ANTES de hoje nos
+  // livros deste painel (ver ADR) — mostrado acima da timeline cronológica,
+  // não misturado nela (pode ser de qualquer dia anterior).
+  trabalhoAnterior = computed(() => {
+    const nome = this.nomeAberto();
+    if (!nome) return [];
+    return this.colaboradoresService.jornadaPorColaborador().get(nome)?.trabalhoAnterior ?? [];
+  });
+
   // Os 3 KPIs "Realizadas"/"A realizar"/"Impedimentos" funcionam como
   // filtro da timeline abaixo deles — pedido explícito do usuário. Clicar
   // de novo no mesmo filtro limpa (mesmo padrão de toggleCategoria em

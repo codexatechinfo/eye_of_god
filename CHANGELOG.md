@@ -14,6 +14,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   leu), a timeline agora deixa claro quando esse progresso é de outra pessoa. Ver Adendo 16 da [ADR
   0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+- Estendido pro caso do livro já vir sendo trabalhado por outro(s) colaborador(es) em dia(s)
+  ANTERIOR(es) (não só troca no mesmo dia, ver item acima): a timeline do colaborador atual mostra um
+  resumo — "Livro X — Fulano já leu N UCs antes de hoje · última em DD/MM/AAAA HH:MM:SS" — e o mapa
+  marca em roxo o último ponto que esse colaborador anterior executou. Ver Adendo 17 da [ADR
+  0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Performance
 
 - Endpoint `/colaboradores/localizacoes` (aba Trilho — alimenta os marcadores do mapa, chamado no

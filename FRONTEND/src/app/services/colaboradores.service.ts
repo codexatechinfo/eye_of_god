@@ -394,6 +394,23 @@ export interface JornadaColaborador {
   // Timeline ponto-a-ponto do dia — painel lateral (colaborador-detalhe.ts)
   // e mapa (mapa-bases.ts) consomem daqui, não mais de um livro isolado.
   pontos?: PontoJornada[];
+  // Trabalho de OUTRO(S) colaborador(es) em dias ANTERIORES a hoje, nos
+  // livros deste painel — complementa os marcadores 'troca_colaborador' de
+  // `pontos` (que só cobrem troca DENTRO de hoje). Não é cronológico (pode
+  // ser de qualquer dia anterior) — resumo separado, não mistura com
+  // `pontos`.
+  trabalhoAnterior?: TrabalhoAnteriorLivro[];
+}
+
+export interface TrabalhoAnteriorLivro {
+  livro: string;
+  colaborador: string;
+  totalUcs: number;
+  ultimaUc: string | null;
+  ultimaData: string | null;
+  ultimaHora: string | null;
+  latitude: string | null;
+  longitude: string | null;
 }
 
 interface JornadaResponse extends JornadaColaborador {

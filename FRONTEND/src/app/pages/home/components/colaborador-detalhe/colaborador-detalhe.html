@@ -274,6 +274,26 @@
         limpar filtro
       </button>
     </div>
+    <!-- Trabalho de outro(s) colaborador(es) em dias ANTERIORES a hoje, nos
+         livros deste painel (ver ADR) — sempre no TOPO, antes da timeline
+         cronológica de hoje (não é um "ponto do dia", pode ser de qualquer
+         dia anterior). Cor roxa — mesma do marcador correspondente no mapa
+         (ver mapa-bases.ts), pra ligar visualmente as duas coisas. -->
+    <div *ngIf="trabalhoAnterior().length" class="mb-2 flex flex-col gap-1">
+      <div
+        *ngFor="let t of trabalhoAnterior()"
+        class="rounded-md border border-roxo/30 bg-roxo/10 px-2 py-1.5 text-roxo-t text-[9.5px] font-semibold flex items-start gap-1.5"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+        </svg>
+        <span>
+          Livro {{ t.livro }} — {{ t.colaborador }} já leu {{ t.totalUcs }} UC{{ t.totalUcs === 1 ? '' : 's' }}
+          antes de hoje · última em {{ t.ultimaData }} {{ t.ultimaHora }}
+        </span>
+      </div>
+    </div>
+
     <div class="text-center text-tenue text-[11px] py-4" *ngIf="!jornadaCarregada()">
       Carregando timeline...
     </div>

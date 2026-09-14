@@ -9,6 +9,7 @@ import {
   MunicipioLimite,
   PontoGpsHistorico,
   PontoJornada,
+  TrabalhoAnteriorLivro,
 } from '../../../../services/colaboradores.service';
 import { ColaboradorCracha } from '../colaborador-cracha/colaborador-cracha';
 import { ReguaTempo } from '../regua-tempo/regua-tempo';
@@ -420,6 +421,16 @@ export class MapaBases implements AfterViewInit, OnDestroy {
   // ngAfterViewInit, não entra no painel Camadas.
   private grupoAgenteAtual = L.layerGroup();
   private nomeAgenteEmDestaque: string | null = null;
+  // "Trabalho anterior" — último ponto executado por colaborador(es) que
+  // tiveram o(s) mesmo(s) livro(s) em dia(s) ANTERIOR ao aberto agora (troca
+  // de colaborador entre dias, não a de hoje — essa já tem seu próprio
+  // marcador de sistema na timeline, ver troca_colaborador). Sempre
+  // redesenhado do zero a cada troca de colaborador/refresh — a lista é
+  // curta (um por colaborador anterior por livro) e não muda dentro do
+  // mesmo carregamento de jornada, então não precisa do diffing por UC que
+  // pontosJornada usa. Fora de grupoAgentes de propósito, mesmo motivo de
+  // grupoAgenteAtual: não é uma camada do painel, sempre visível.
+  private grupoTrabalhoAnterior = L.layerGroup();
   private grupoSetorPlanejado = L.layerGroup(); // camada 4: casco convexo por livro
   private grupoLimitesMunicipais = L.layerGroup(); // camada 5: contorno IBGE
   private grupoRastroGps = L.layerGroup(); // camada 1: rastro GPS real do dia
@@ -481,6 +492,14 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       // "último ponto" junto com a régua de tempo.
       this.colaboradoresService.reguaInstante();
       this.atualizarRotaJornada(nome, pontos);
+    });
+    // "Trabalho anterior" (roxo) — efeito próprio porque a fonte é
+    // trabalhoAnterior (fora de pontos, ver comentário no service), não a
+    // lista cronológica que atualizarRotaJornada consome.
+    effect(() => {
+      const nome = this.colaboradoresService.colaboradorSelecionado();
+      const trabalhoAnterior = nome ? this.colaboradoresService.jornadaPorColaborador().get(nome)?.trabalhoAnterior ?? [] : [];
+      this.atualizarMarcadoresTrabalhoAnterior(trabalhoAnterior);
     });
     // Marcador do colaborador da jornada aberta sai de grupoAgentes (toggle)
     // e vai pro grupo sempre-visível — independente do estado de "Demais
@@ -833,6 +852,7 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     this.alternarGrupo(this.grupoParadasGaps, this.camadaParadasGaps());
     // Sempre no mapa — não é uma camada do painel, não tem toggle.
     this.grupoAgenteAtual.addTo(this.mapa);
+    this.grupoTrabalhoAnterior.addTo(this.mapa);
 
     this.atualizarMarcadoresColaboradores();
     this.aplicarZoomRegional(this.colaboradoresService.filtroRegional());
@@ -1221,6 +1241,34 @@ export class MapaBases implements AfterViewInit, OnDestroy {
         this.grupoDoTipoPonto(tipo).removeLayer(marcador);
         this.pontosJornada.delete(uc);
       }
+    }
+  }
+
+  // Marcadores roxos do "trabalho anterior" — último ponto executado por
+  // colaborador(es) que tiveram o(s) mesmo(s) livro(s) do aberto agora em
+  // dia(s) ANTERIOR (pedido explícito do usuário: "no mapa deixa o ultimo
+  // ponto executado pelo(s) anterior(es) em roxo"). Redesenha do zero a cada
+  // chamada — lista curta e não muda dentro do mesmo carregamento de
+  // jornada, diferente de pontosJornada (que precisa do diff por UC pro
+  // refresh de 60s não piscar).
+  private atualizarMarcadoresTrabalhoAnterior(trabalhoAnterior: TrabalhoAnteriorLivro[]): void {
+    this.grupoTrabalhoAnterior.clearLayers();
+    for (const item of trabalhoAnterior) {
+      if (!item.latitude || !item.longitude) continue;
+      const latLng: L.LatLngTuple = [Number(item.latitude), Number(item.longitude)];
+      L.circleMarker(latLng, {
+        radius: 7,
+        color: '#fff',
+        weight: 2,
+        fillColor: COR_SEGMENTO_MUDOU_LIVRO,
+        fillOpacity: 0.95,
+      })
+        .addTo(this.grupoTrabalhoAnterior)
+        .bindTooltip(
+          `Livro ${item.livro} — ${item.colaborador} já leu ${item.totalUcs} UC${item.totalUcs === 1 ? '' : 's'} antes de hoje` +
+            (item.ultimaData ? ` · última em ${item.ultimaData} ${item.ultimaHora ?? ''}`.trimEnd() : ''),
+          { direction: 'top', offset: [0, -8] },
+        );
     }
   }
 

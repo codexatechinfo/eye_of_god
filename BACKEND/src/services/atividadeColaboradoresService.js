@@ -996,6 +996,66 @@ async function obterTrocasDeColaboradorHoje(db, colaborador, dataBr) {
   return rows;
 }
 
+// Resumo de trabalho feito por OUTRO(S) colaborador(es) em dias ANTERIORES a
+// hoje, nos livros informados — complementa obterTrocasDeColaboradorHoje
+// (que só cobre troca DENTRO de hoje): se o livro já vinha sendo lido por
+// outra pessoa em dias passados (reatribuído antes de hoje começar, fora do
+// alcance de contr_execucao_leitura de hoje), o colaborador atual ainda
+// precisa saber "quanto já foi feito antes de mim" — pedido explícito do
+// usuário. Mesmo corte por ciclo_atual (data_recebimento) já usado em
+// ja_realizado_antes — uma leitura de um ciclo ANTERIOR do mesmo número de
+// livro (reaproveitado todo mês) não conta como trabalho deste ciclo.
+// Devolve 1 linha por (livro, colaborador anterior): total de UCs distintas
+// e a ÚLTIMA leitura dele (uc/data/hora/coordenada) — usada pro marcador
+// roxo no mapa ("até aqui foi o anterior").
+async function obterTrabalhoAnteriorPorLivro(db, colaborador, livros, dataBr) {
+  if (!livros.length) return [];
+  const { rows } = await db.query(
+    `
+    WITH ciclo_atual AS (
+      SELECT DISTINCT ON (livro::int) livro::int AS livro_int, data_recebimento
+      FROM contr_execucao_leitura
+      WHERE livro::int = ANY($2::int[])
+        AND data_import ~ '^\\d{2}/\\d{2}/\\d{4}$'
+        AND to_date(data_import, 'DD/MM/YYYY') <= to_date($3, 'DD/MM/YYYY')
+      ORDER BY livro::int, id DESC
+    ), leituras_anteriores AS (
+      SELECT b.livro::int AS livro_int, b.nome_do_usuario AS colaborador, b.unidade_consumidora AS uc,
+        b.data_da_leitura, b.hora_da_leitura
+      FROM base_dados_leitura b
+      LEFT JOIN ciclo_atual c ON c.livro_int = b.livro::int
+      WHERE b.livro::int = ANY($2::int[])
+        AND b.nome_do_usuario IS NOT NULL AND b.nome_do_usuario <> $1
+        AND b.data_da_leitura ~ '^\\d{2}/\\d{2}/\\d{4}$'
+        AND b.hora_da_leitura ~ '^\\d{2}:\\d{2}:\\d{2}$'
+        AND to_date(b.data_da_leitura, 'DD/MM/YYYY') < to_date($3, 'DD/MM/YYYY')
+        AND (
+          c.data_recebimento IS NULL
+          OR c.data_recebimento !~ '^\\d{2}/\\d{2}/\\d{4}$'
+          OR to_date(b.data_da_leitura, 'DD/MM/YYYY') >= to_date(c.data_recebimento, 'DD/MM/YYYY')
+        )
+    ), contagem AS (
+      SELECT livro_int, colaborador, count(DISTINCT uc)::int AS total_ucs
+      FROM leituras_anteriores
+      GROUP BY livro_int, colaborador
+    ), ultima AS (
+      SELECT DISTINCT ON (livro_int, colaborador) livro_int, colaborador, uc, data_da_leitura, hora_da_leitura
+      FROM leituras_anteriores
+      ORDER BY livro_int, colaborador, to_date(data_da_leitura, 'DD/MM/YYYY') DESC, hora_da_leitura DESC
+    )
+    SELECT ct.livro_int, ct.colaborador, ct.total_ucs,
+      u.uc AS ultima_uc, u.data_da_leitura AS ultima_data, u.hora_da_leitura AS ultima_hora,
+      m.latitude, m.longitude
+    FROM contagem ct
+    JOIN ultima u ON u.livro_int = ct.livro_int AND u.colaborador = ct.colaborador
+    LEFT JOIN coordenadas_ucs_mineradas m ON m.unidade_consumidora = u.uc
+    ORDER BY ct.livro_int, to_date(u.data_da_leitura, 'DD/MM/YYYY') DESC, u.hora_da_leitura DESC
+    `,
+    [colaborador, livros, dataBr],
+  );
+  return rows;
+}
+
 async function obterJornadaColaborador(db, colaborador, dataBr) {
   // Livros candidatos de HOJE (pra escopar ciclo_atual abaixo sem varrer
   // contr_execucao_leitura inteira) — ja_realizado_antes só importa pros
@@ -1014,7 +1074,22 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
   // timeline, não só quem tinha o livro antes.
   const trocas = await obterTrocasDeColaboradorHoje(db, colaborador, dataBr);
 
-  if (!livrosHojeInt.length && !trocas.length) return { colaborador, data: dataBr, semDado: true };
+  // Livros que este colaborador tem ATUALMENTE hoje (roster de
+  // contr_execucao_leitura), independente de ele já ter lido algo — cobre o
+  // caso de reatribuição de um dia ANTERIOR (fora do alcance de
+  // obterTrocasDeColaboradorHoje, que só vê trocas DENTRO de hoje): mesmo
+  // sem nenhuma leitura própria hoje nem troca hoje, ele ainda precisa ver
+  // o resumo do que já foi feito antes por quem tinha o livro (ver
+  // obterTrabalhoAnteriorPorLivro) e os pendentes do livro.
+  const { rows: livrosAtuaisRows } = await db.query(
+    `SELECT DISTINCT livro::int AS livro_int FROM contr_execucao_leitura WHERE data_import = $2 AND colaborador = $1`,
+    [colaborador, dataBr],
+  );
+  const livrosAtuaisInt = livrosAtuaisRows.map(r => r.livro_int);
+
+  if (!livrosHojeInt.length && !trocas.length && !livrosAtuaisInt.length) {
+    return { colaborador, data: dataBr, semDado: true };
+  }
 
   const { rows } = await db.query(
     `
@@ -1070,11 +1145,13 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
 
   // Antes: `if (!rows.length) return {...semDado:true}` — bastava não ter
   // lido nada hoje pra timeline ficar inteiramente vazia. Agora só desiste
-  // se TAMBÉM não houver troca de colaborador envolvendo ele hoje (ver
-  // obterTrocasDeColaboradorHoje) — sem isso, quem acabou de RECEBER um
-  // livro nunca veria a movimentação nem os pendentes dele na própria
-  // timeline.
-  if (!rows.length && !trocas.length) return { colaborador, data: dataBr, semDado: true };
+  // se TAMBÉM não houver troca de colaborador hoje nem livro atualmente com
+  // ele (ver comentário do gate anterior) — sem isso, quem acabou de
+  // RECEBER um livro (hoje ou antes) nunca veria a movimentação, o trabalho
+  // anterior nem os pendentes do livro na própria timeline.
+  if (!rows.length && !trocas.length && !livrosAtuaisInt.length) {
+    return { colaborador, data: dataBr, semDado: true };
+  }
 
   // UCs do(s) mesmo(s) livro(s) que este colaborador tocou hoje que AINDA
   // NÃO foram realizadas NO CICLO ATUAL — usuário pediu pra ver no
@@ -1106,16 +1183,31 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
   // ele, uma UC lida num ciclo ANTERIOR do mesmo número de livro
   // (reaproveitado todo mês) contaria como já feita no ciclo ATUAL, e
   // sumiria da lista de pendentes por engano.
-  // Inclui também os livros só de `trocas` (ex.: colaborador acabou de
-  // RECEBER um livro, sem ter lido nada ainda — `rows` fica vazio pra ele,
-  // mas ele ainda precisa ver os pendentes desse livro na própria timeline).
+  // Inclui também os livros só de `trocas`/`livrosAtuaisInt` (ex.:
+  // colaborador acabou de RECEBER um livro, hoje ou antes, sem ter lido
+  // nada ainda — `rows` fica vazio pra ele, mas ele ainda precisa ver os
+  // pendentes desse livro na própria timeline).
   const livroStringPorInt = new Map(rows.map(r => [Number(r.livro), r.livro]));
-  for (const troca of trocas) {
-    if (!livroStringPorInt.has(troca.livro_int)) {
-      livroStringPorInt.set(troca.livro_int, String(troca.livro_int).padStart(6, '0'));
+  for (const livroInt of [...trocas.map(t => t.livro_int), ...livrosAtuaisInt]) {
+    if (!livroStringPorInt.has(livroInt)) {
+      livroStringPorInt.set(livroInt, String(livroInt).padStart(6, '0'));
     }
   }
   const livrosInt = [...livroStringPorInt.keys()].filter(Number.isFinite);
+
+  // Trabalho de OUTRO(S) colaborador(es) em dias anteriores, nesses mesmos
+  // livros — ver obterTrabalhoAnteriorPorLivro.
+  const trabalhoAnteriorRows = await obterTrabalhoAnteriorPorLivro(db, colaborador, livrosInt, dataBr);
+  const trabalhoAnterior = trabalhoAnteriorRows.map(t => ({
+    livro: livroStringPorInt.get(t.livro_int) ?? String(t.livro_int).padStart(6, '0'),
+    colaborador: t.colaborador,
+    totalUcs: t.total_ucs,
+    ultimaUc: t.ultima_uc,
+    ultimaData: t.ultima_data,
+    ultimaHora: t.ultima_hora,
+    latitude: t.latitude,
+    longitude: t.longitude,
+  }));
   const { rows: pendentesRows } = await db.query(
     `
     WITH ciclo_atual AS (
@@ -1298,15 +1390,16 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
 
   const total = trabalhadoSegundos + ociosoSegundos;
 
-  // `cronologicos` sempre tem pelo menos 1 item aqui — se estivesse vazio,
-  // já teria retornado semDado:true lá em cima (rows.length e trocas.length
-  // não podem ser os dois 0 pra chegar até aqui).
+  // `cronologicos` pode ficar vazio agora (colaborador com livro atual mas
+  // sem nenhuma leitura própria hoje nem troca hoje — só trabalho anterior/
+  // pendentes, ver gate lá em cima) — inicio/fim ficam null nesse caso, não
+  // tem "começo/fim do dia" ainda pra mostrar.
   return {
     colaborador,
     data: dataBr,
     semDado: false,
-    inicio: cronologicos[0].hora_import,
-    fim: cronologicos[cronologicos.length - 1].hora_import,
+    inicio: cronologicos.length ? cronologicos[0].hora_import : null,
+    fim: cronologicos.length ? cronologicos[cronologicos.length - 1].hora_import : null,
     trabalhadoSegundos,
     ociosoSegundos,
     distanciaMetros,
@@ -1316,6 +1409,12 @@ async function obterJornadaColaborador(db, colaborador, dataBr) {
     ocupacaoPercentual: total > 0 ? Math.round((trabalhadoSegundos / total) * 100) : null,
     totalRealizadas: rows.length,
     pontos,
+    // Trabalho de outro(s) colaborador(es) em dias ANTERIORES a hoje, nos
+    // livros relevantes pra este painel — ver obterTrabalhoAnteriorPorLivro.
+    // Não é um "ponto" cronológico do dia (pode ser de qualquer dia
+    // anterior) — fica de fora de `pontos`, consumido à parte pelo resumo
+    // no topo da timeline e pelo marcador roxo no mapa.
+    trabalhoAnterior,
   };
 }
 

@@ -913,3 +913,67 @@ pros dois nomes (transação com `ROLLBACK`), os dois retornam `semDado:false` m
 `totalRealizadas:0`, e cada um vê exatamente o(s) marcador(es) de troca que o envolve (LUIS via 3
 marcadores, um por livro que ele perdeu hoje; FELIPE via 1, o livro que ele recebeu). Verificação
 visual do marcador via harness (CSS real compilado) — cor navy distinta do roxo de "mudou de livro".
+
+## Adendo 17 — "trabalho anterior": handoff entre DIAS diferentes, resumo na timeline e último ponto em roxo no mapa
+
+O Adendo 16 cobre troca de colaborador dentro do MESMO dia (`contr_execucao_leitura`, que só guarda
+o ciclo atual). Usuário pediu a extensão pro caso em que o livro já vinha sendo trabalhado por
+outro(s) colaborador(es) em dia(s) ANTERIOR(es) ao aberto agora: mostrar quantas UCs cada um já leu
+antes de hoje, deixar a timeline do colaborador atual "começar de onde parou" (implícito — o resumo
+cobre o que falta contar, a timeline em si já lista só os pontos do colaborador aberto) e marcar no
+mapa o ÚLTIMO ponto que o(s) anterior(es) executaram, em roxo.
+
+### Backend (`atividadeColaboradoresService.js`)
+
+`obterTrabalhoAnteriorPorLivro(db, colaborador, livros, dataBr)` (nova) — pra cada livro em
+`livros`, busca em `base_dados_leitura` (fonte histórica real, não `contr_execucao_leitura`, que só
+tem o ciclo atual) toda leitura de OUTRO colaborador (`nome_do_usuario <> colaborador`) ANTES da
+data aberta. Reaplica o mesmo corte de "ciclo atual" já usado em `ja_realizado_antes` e
+`obterEventosPorLivrosAteData`: cada livro pode ter sido reutilizado (mesmo número, OS diferente),
+então uma leitura antiga só conta se for do ciclo atual (`data_da_leitura >= data_recebimento` do
+`contr_execucao_leitura` mais recente até a data aberta) — sem esse corte, um livro reciclado meses
+atrás contaria leituras de um trabalho completamente não relacionado. Agrega por
+`(livro, colaborador anterior)`: total de UCs distintas lidas e a última lida (UC + data/hora +
+coordenada, via join com `coordenadas_ucs_mineradas`).
+
+`obterJornadaColaborador` ganhou um terceiro sinal de atividade: `livrosAtuaisInt` (livros que o
+colaborador tem hoje em `contr_execucao_leitura`, atual ou não, independente de ele ter lido algo ou
+não ter havido troca hoje). Os dois pontos de corte (`semDado`) agora exigem os TRÊS sinais vazios
+(realizações, trocas de hoje, livros atuais) — sem isso, alguém que recebeu um livro há dias e ainda
+não leu nada hoje (nem houve troca HOJE) continuaria caindo em `semDado:true`, escondendo o resumo
+de trabalho anterior que é exatamente o caso que o usuário reportou (GUILHERME AUGUSTO ALVES
+PEREIRA). `livrosInt` (pendentes) também passou a incluir `livrosAtuaisInt`. Resultado exposto como
+novo campo de topo `trabalhoAnterior` (array, um item por `livro + colaborador anterior`) — fica
+FORA de `pontos` de propósito: não é cronológico nem do dia aberto, é um resumo histórico agregado.
+
+### Frontend
+
+`colaboradores.service.ts`: nova interface `TrabalhoAnteriorLivro` (`livro, colaborador, totalUcs,
+ultimaUc, ultimaData, ultimaHora, latitude, longitude`) e `JornadaColaborador.trabalhoAnterior?`.
+
+`colaborador-detalhe.ts`/`.html`: novo computed `trabalhoAnterior()` e um bloco de pills roxos (mesmo
+token de cor de "mudou de livro", reaproveitado por pedido explícito do usuário — "em roxo") acima
+da timeline, um por `(livro, colaborador anterior)`: "Livro X — Fulano já leu N UCs antes de hoje ·
+última em DD/MM/AAAA HH:MM:SS".
+
+`mapa-bases.ts`: novo grupo `grupoTrabalhoAnterior` (sempre no mapa, igual `grupoAgenteAtual` — não é
+camada do painel, não tem toggle) e `atualizarMarcadoresTrabalhoAnterior()`, num `effect` próprio que
+observa `colaboradorSelecionado()`/`jornadaPorColaborador()`. Desenha um `L.circleMarker` maior (raio
+7 vs 5 dos pontos normais, pra não confundir com "último ponto" de hoje) na cor `COR_SEGMENTO_MUDOU_LIVRO`
+(`#6D4AC7`, o mesmo roxo do Adendo 16) pra cada entrada de `trabalhoAnterior` com coordenada válida —
+ignora as que não têm (a UC da última leitura pode não estar em `coordenadas_ucs_mineradas`).
+Redesenha do zero a cada chamada (`clearLayers()` + recriar), diferente do diffing por UC que
+`pontosJornada` usa — lista curta (um marcador por colaborador anterior por livro) e não muda dentro
+do mesmo carregamento de jornada, então não precisa da lógica de reaproveitar/mover marcador entre
+refreshes de 60s.
+
+### Verificação
+
+`node --check` no backend. `npx tsc --noEmit -p tsconfig.app.json` e `npx ng build --configuration
+production` limpos no frontend (só os 2 warnings pré-existentes de orçamento de bundle e CommonJS do
+leaflet, nenhum novo). Testado ao vivo contra dado real (transação com `ROLLBACK`): GUILHERME AUGUSTO
+ALVES PEREIRA (caso originalmente reportado pelo usuário) — antes desta mudança retornava
+`semDado:true`; depois, `semDado:false` com `trabalhoAnterior: [{livro: "034992", colaborador:
+"JACKSON KELVYNN FERNANDES REBECA", totalUcs: 292, ultimaUc: "116726644", ultimaData: "11/09/2026",
+ultimaHora: "09:33:09", latitude: null, longitude: null}]`. Verificação visual do pill roxo via
+harness (CSS real compilado).

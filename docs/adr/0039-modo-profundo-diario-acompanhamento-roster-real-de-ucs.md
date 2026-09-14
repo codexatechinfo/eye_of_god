@@ -363,3 +363,66 @@ um livro com pendentes reais (`014827`, 402 UCs) devolveu linhas com UC/coordena
 corretas; `obterJornadaColaborador` chamada de ponta a ponta (transação com `ROLLBACK`, sem dado de
 teste) pra um colaborador com jornada completa no dia (459 realizados, 0 pendentes — livro já
 finalizado) confirmou o caminho sem erro e nenhum "pendente" com livro fora do roster de hoje.
+
+## Adendo 4 — mesmo problema achado nos KPIs/contadores por livro (não só timeline/mapa) — corrigido
+## com fallback pra coordenadas_ucs_mineradas quando o dia ainda não tem roster
+
+Usuário reportou números que não batiam com o portal real (print comparando: app mostrava
+"Livro 012865 · 152/62", o portal mostrava "178/0" pro mesmo livro) e já apontou a causa correta:
+"ainda está buscando de coordenadas_ucs_mineradas provavelmente".
+
+### Achado
+
+`monitoramentoService.js#obterEventosPorLivrosAteData` — função COMPARTILHADA que alimenta muito
+mais do que a timeline: `listarAtividadeHoje` (KPIs "Realizadas/A realizar/Impedimentos" e a lista
+"LIVROS HOJE" do crachá, mais a % da barra lateral, aba Trilho), `contarFonteContr`/
+`obterFaixasDias`/`detalheContr` (aba Monitoramento de Livros) e `calcularLeituraUrbana`
+(leituraUrbanaService.js, painel resumo) — sua CTE `roster` interna ainda lia
+`coordenadas_ucs_mineradas` sozinha, sem passar pelo `roster_ucs_extracao_diaria` novo. O Adendo 3
+corrigiu só `atividadeColaboradoresService.js#obterJornadaColaborador` (a lista de pontos da
+timeline/mapa) — essa outra função, usada por telas e contadores diferentes, tinha ficado de fora.
+
+### Correção: roster do dia primeiro, coordenadas_ucs_mineradas só como fallback POR LIVRO
+
+A CTE `roster` virou duas etapas: `roster_do_dia` (de `roster_ucs_extracao_diaria`, filtrado por
+`data_extracao = to_date($1, 'DD/MM/YYYY')` — a DATA SENDO CONSULTADA, não `CURRENT_DATE` fixo,
+já que a aba Trilho tem seletor de data e essa tabela só existe a partir de quando a feature foi
+criada) `UNION ALL` com `coordenadas_ucs_mineradas`, mas SÓ pros livros que `roster_do_dia` não
+cobriu (`NOT IN` contra os livros já cobertos). Fallback por LIVRO, não tudo-ou-nada — cobre dois
+casos reais: (1) a extração profunda do dia ainda não rodou (ou falhou o dia inteiro) — nenhum livro
+coberto, tudo cai pro comportamento antigo; (2) um livro específico apareceu DEPOIS que a extração do
+dia já tinha rodado (reatribuído/criado no meio do dia) — só ELE cai pro fallback, os demais livros
+já cobertos continuam usando o dado real. `livro` de `roster_ucs_extracao_diaria` já vem no formato
+de 6 dígitos (mesmo scraper que grava `contr_execucao_leitura`) — sem precisar do `LPAD` que o lado
+`coordenadas_ucs_mineradas` ainda precisa. `DISTINCT` em `roster_do_dia` pela mesma razão do Adendo 3
+(evita contar a UC 2x quando ela tem `tipo_especificacao` diferente).
+
+### Achado durante a verificação: a virada do dia limpou a "prova" mais direta
+
+Ao testar, a data mudou de 13/09 pra 14/09 no meio da sessão — `roster_ucs_extracao_diaria` só tem
+dado de 13/09 (a extração daquela sessão de testes), e HOJE (14/09) ainda não teve nenhuma extração
+rodar (backend não está no ar agora). Verificação feita então contra 13/09/2026 (a única data com
+roster real disponível): `obterEventosPorLivrosAteData(db, ['012865','014827'], '13/09/2026')`
+devolveu roster de 152 UCs pro livro 012865 (sem cobertura no roster daquele dia — caiu pro fallback
+`coordenadas_ucs_mineradas`, confirmado via SQL direto) e 349 UCs pendentes pro livro 014827 (COM
+cobertura no roster daquele dia — usou o dado real). Confirma os dois caminhos (roster real e
+fallback) funcionando lado a lado na mesma chamada, cada livro pegando a fonte certa.
+
+Livro 012865 especificamente: apareceu na lista de livros do dia exatamente no mesmo instante do
+commit do modo profundo daquela sessão (`19:06:55`), mas não tem nenhuma linha no roster — sinal de
+que a abertura da OS dele especificamente não produziu UC válida (não investigado a fundo, caso
+isolado de ~1 livro em 1556) — exatamente o tipo de situação que o fallback existe pra cobrir com
+elegância, sem zerar o livro nem quebrar a tela.
+
+### Consequência prática pro usuário
+
+Os números só ficam mais precisos DEPOIS que a extração profunda rodar no dia sendo visto — hoje
+(dia da virada, backend não está no ar) tudo ainda cai no fallback antigo, idêntico ao comportamento
+de antes desta ADR inteira. Nenhuma regressão: só passa a MELHORAR assim que houver roster do dia.
+
+### Verificação
+
+`node --check` e `npm test` (20/20) depois do fix (encontrado e corrigido de quebra um erro de
+sintaxe — um comentário SQL dentro do template literal JS usava crase, fechando a string sem
+querer). Testado contra dado real do Postgres pros dois caminhos (com e sem cobertura de roster do
+dia), ver acima.

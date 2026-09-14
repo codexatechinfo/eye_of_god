@@ -32,6 +32,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   realizado (sem "a fazer" nenhum) em vez de arriscar mostrar UC errada. Ver Adendo 3 da [ADR
   0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
 
+- KPIs "Realizadas/A realizar/Impedimentos", % da barra lateral e a lista "LIVROS HOJE" do crachá
+  (aba Trilho), mais os contadores de Monitoramento de Livros e o painel Leitura Urbana, tinham o
+  MESMO problema do item acima (função compartilhada, `obterEventosPorLivrosAteData`, também lia só
+  `coordenadas_ucs_mineradas`) — números não batiam com o portal real. Agora usa o roster real do dia
+  primeiro, caindo pra `coordenadas_ucs_mineradas` só nos livros sem cobertura nesse dia (extração
+  ainda não rodou, ou o livro apareceu depois dela já ter rodado). Ver Adendo 4 da [ADR
+  0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
+
 - Cartão da timeline (aba Trilho) forçava a cor de "reincidência" (crítico) em qualquer pausa,
   mesmo quando a leitura em si era normal (código 000) — ficava indistinguível de uma reincidência
   de verdade. A cor do cartão agora segue só o código real da leitura; o ícone de pausa continua

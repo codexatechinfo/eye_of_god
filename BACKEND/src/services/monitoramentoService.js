@@ -1174,17 +1174,37 @@ async function obterEventosPorLivrosAteData(db, livros, dataBr) {
   await db.query("SET LOCAL work_mem = '160MB'");
   const { rows } = await db.query(
     `
-    WITH roster AS (
-      -- Roster de UCs por livro vem de coordenadas_ucs_mineradas desde que
-      -- o scraper de Acompanhamento parou de abrir OS (contr_execucao_leitura
-      -- não tem mais uc). codigo_contr fica sempre NULL — codigo só existe
-      -- via base_dados_leitura (join com eventos abaixo). livro reformatado
-      -- pro padrão de 6 dígitos de contr_execucao_leitura (mesmo LPAD de
-      -- obterUltimaUcRealizadaPorColaborador, atividadeColaboradoresService.js)
-      -- pra bater com o formato que quem chama esta função já espera.
+    WITH roster_do_dia AS (
+      -- Roster de UCs por livro: prioridade é roster_ucs_extracao_diaria
+      -- (ADR 0039) — a extração REAL do dia sendo consultado (abrindo a OS
+      -- de cada livro no portal), não a mineração à parte que pode estar
+      -- desatualizada pra um livro reatribuído. livro já vem no formato de
+      -- 6 dígitos (mesmo scraper que grava contr_execucao_leitura), sem
+      -- precisar de LPAD. DISTINCT porque o roster tem mais de uma linha
+      -- por UC quando ela tem tipo_especificacao diferente (CON/GTP/ERA,
+      -- ADR 0020) — sem isso a UC seria contada 2x em digitados/naoDigitados
+      -- mais abaixo.
+      SELECT DISTINCT r.livro, r.unidade_consumidora AS uc, NULL::text AS codigo_contr
+      FROM roster_ucs_extracao_diaria r
+      WHERE r.livro ~ '^[0-9]+$' AND r.livro::int = ANY($2::int[])
+        AND r.data_extracao = to_date($1, 'DD/MM/YYYY')
+    ), livros_com_roster_do_dia AS (
+      SELECT DISTINCT livro::int AS livro_int FROM roster_do_dia
+    ), roster AS (
+      SELECT * FROM roster_do_dia
+      UNION ALL
+      -- Fallback pra coordenadas_ucs_mineradas só nos livros SEM roster do
+      -- dia (extração profunda ainda não rodou hoje, ou é uma data antes
+      -- desta feature existir) — sem isso, livro sem roster do dia sumiria
+      -- da contagem inteira em vez de cair pro comportamento antigo.
+      -- codigo_contr fica sempre NULL — codigo só existe via base_dados_
+      -- leitura (join com eventos abaixo). livro reformatado pro padrão de
+      -- 6 dígitos de contr_execucao_leitura (mesmo LPAD de
+      -- obterUltimaUcRealizadaPorColaborador, atividadeColaboradoresService.js).
       SELECT LPAD(m.livro::int::text, 6, '0') AS livro, m.unidade_consumidora AS uc, NULL::text AS codigo_contr
       FROM coordenadas_ucs_mineradas m
       WHERE m.livro ~ '^[0-9]+$' AND m.livro::int = ANY($2::int[])
+        AND m.livro::int NOT IN (SELECT livro_int FROM livros_com_roster_do_dia)
     ), ciclo_atual AS (
       -- Número de livro é REAPROVEITADO entre ciclos de leitura (mesmo
       -- "036137" vira uma OS nova todo mês) — achado ao vivo: usuário
@@ -1246,8 +1266,10 @@ async function obterEventosPorLivrosAteData(db, livros, dataBr) {
 // calcularLeituraUrbana em leituraUrbanaService.js) — reaproveita
 // obterEventosPorLivrosAteData (já cacheado, já tunado pra não cair em Seq
 // Scan) em vez de escrever outra consulta em lote do zero: cada UC do
-// roster (coordenadas_ucs_mineradas) é "digitada" quando tem evento em
-// base_dados_leitura até `dataImport`, mesma regra de
+// roster (roster_ucs_extracao_diaria do dia, com fallback pra
+// coordenadas_ucs_mineradas — ver comentário na CTE `roster` acima) é
+// "digitada" quando tem evento em base_dados_leitura até `dataImport`,
+// mesma regra de
 // extrairCodigoDeMensagem(mensagem) ?? codigo_contr já usada em
 // atividadeColaboradoresService.js (`codigo_contr` sempre NULL agora que o
 // scraper não abre mais OS, mas o fallback não precisa saber disso).

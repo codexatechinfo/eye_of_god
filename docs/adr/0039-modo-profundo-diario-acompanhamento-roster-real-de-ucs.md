@@ -426,3 +426,56 @@ de antes desta ADR inteira. Nenhuma regressão: só passa a MELHORAR assim que h
 sintaxe — um comentário SQL dentro do template literal JS usava crase, fechando a string sem
 querer). Testado contra dado real do Postgres pros dois caminhos (com e sem cobertura de roster do
 dia), ver acima.
+
+## Adendo 5 — bug real e sério: "hoje" usava CURRENT_DATE do Postgres (UTC), rotulando a extração da
+## NOITE como se fosse do dia seguinte — roster sempre ~3-21h desatualizado
+
+Rodou o backend de verdade (usuário pediu, ~21h de Brasília) pra capturar o roster do dia depois do
+fix do Adendo 4. Terminou certo (1554/1554, 227.265 UCs, 30min) — mas o usuário então apontou:
+"hoje nem é 14/09". Investigado e confirmado: era um bug real, não só um jeito confuso de mostrar
+data.
+
+### Causa raiz
+
+`rosterUcsAcompanhamentoService.js` (`precisaExtracaoProfundaHoje`/`gravarRosterDiario`) usava
+`CURRENT_DATE` do PRÓPRIO Postgres — decisão original desta ADR, com o raciocínio (documentado no
+comentário da época) de evitar um "hoje" divergente entre o timezone do processo Node e o do
+Postgres. O raciocínio partiu de uma premissa errada: não conferiu qual timezone o Postgres usa de
+fato. Confirmado ao vivo (`SHOW timezone`): **UTC**. Brasil é UTC-3 — então `CURRENT_DATE` vira o
+dia seguinte **3 horas antes da meia-noite local** (às 21h de Brasília). Resultado prático: o modo
+profundo que rodou hoje à noite (dia 13, ~21h-21h30 de Brasília) foi gravado com
+`data_extracao = 2026-09-14`, um dia inteiro adiantado.
+
+Isso não é só um rótulo errado — muda o COMPORTAMENTO do dia seguinte: amanhã de manhã, quando o
+verdadeiro dia 14 precisa da própria extração fresca, `precisaExtracaoProfundaHoje` ia achar "já
+existe roster de hoje" (o de ontem à noite, mal-rotulado) e PULAR a extração de verdade — o roster
+ficaria permanentemente ~3-21h atrasado em relação ao dia real, todo santo dia, sem nunca regenerar
+na hora certa. Exatamente o tipo de dado desatualizado que esta ADR inteira existe pra resolver —
+só que reintroduzido por um detalhe de timezone, não pela mineração externa original.
+
+### Correção
+
+`rosterUcsAcompanhamentoService.js`: "hoje" passou a ser calculado no Node
+(`new Date().toLocaleDateString('en-CA')` — timezone do PROCESSO, o mesmo já usado em todo o resto
+do app pra `data_import`/`hora_import`, ver `copelImportService.js`), não mais `CURRENT_DATE` do
+Postgres. `precisaExtracaoProfundaHoje` passa essa data como bind parameter (`$1::date`) em vez de
+`CURRENT_DATE` inline; `gravarRosterDiario` idem, em cada linha do INSERT em lote. O lado de
+LEITURA (`monitoramentoService.js`, Adendo 4) já não tinha esse problema — a data ali (`dataBr`)
+sempre veio do FRONTEND (calculada no navegador do usuário, timezone dele), nunca do Postgres.
+
+Dado já gravado corrigido diretamente no banco: as 227.265 linhas com `data_extracao = 2026-09-14`
+(a extração de hoje à noite, mal-rotulada) foram atualizadas pra `2026-09-13` (o dia local real em
+que rodou) — `UPDATE roster_ucs_extracao_diaria SET data_extracao = '2026-09-13' WHERE data_extracao
+= '2026-09-14'`, 227.265 linhas afetadas. Ficaram junto com as 227.444 já existentes de mais cedo
+naquele mesmo dia local (rodada de testes anterior desta sessão) — sem duplicar dado por engano
+(`DISTINCT` nas consultas de leitura já lida com UC repetida entre lotes diferentes do mesmo dia).
+Sem essa correção manual, o dia 14 de verdade amanheceria já "com roster" (o de hoje à noite,
+errado) e nunca rodaria a extração fresca da manhã.
+
+### Verificação
+
+`node --check` e `npm test` (20/20). Confirmado ao vivo: `SHOW timezone` do Postgres = UTC;
+`new Date().toLocaleDateString('en-CA')` no Node deste servidor devolve a data local correta
+(`2026-09-13` às 21h41 de Brasília, quando o Postgres já achava `2026-09-14`). Dado corrigido
+conferido no banco (`SELECT data_extracao, count(*) ... GROUP BY data_extracao` — 1 linha só,
+`2026-09-13`, 454.709 UCs, 1556 livros).

@@ -4,14 +4,31 @@ const { log, logErro } = require('../utils/logTempo');
 // estourar o limite de parâmetros do Postgres).
 const LOTE_MAX_LINHAS = 300;
 
-// "Já rodei o modo profundo hoje?" — usa CURRENT_DATE do PRÓPRIO Postgres
-// (não Date.now() do Node) tanto aqui quanto em gravarRosterDiario, pra não
-// arriscar um "hoje" divergente entre o timezone do processo Node e o do
-// servidor Postgres bem na virada do dia. RLS (isolamento_empresa) já
-// escopa isso pra empresa do contexto de tenant aberto em `db`.
+// "Hoje", pro propósito desta tabela, é o dia local do NEGÓCIO (Brasil,
+// UTC-3) — o mesmo "hoje" que data_import/hora_import já usam em todo o
+// resto do app (copelImportService.js, via toLocaleDateString/
+// toLocaleTimeString, sem argumento de timezone = timezone do processo
+// Node). NÃO usar CURRENT_DATE do Postgres aqui: o servidor Postgres deste
+// projeto roda em UTC (confirmado ao vivo, `SHOW timezone` = UTC), então
+// CURRENT_DATE vira o dia seguinte 3h ANTES da meia-noite local (às 21h de
+// Brasília) — descoberto ao vivo (usuário reportou "hoje nem é 14/09"
+// quando o Postgres já achava que era): o modo profundo disparava de novo
+// toda noite às ~21h, rotulando a extração de HOJE (fim de tarde/noite)
+// como se fosse a de AMANHÃ, e então amanhã de manhã (quando a extração de
+// verdade deveria rodar) o sistema já achava "já tenho roster de hoje" e
+// pulava — o roster ficava permanentemente ~3-21h desatualizado em relação
+// ao dia real, o mesmo tipo de problema que esta feature inteira existe
+// pra resolver.
+function hojeLocal() {
+  return new Date().toLocaleDateString('en-CA'); // "YYYY-MM-DD", timezone do processo Node
+}
+
+// RLS (isolamento_empresa) já escopa isso pra empresa do contexto de tenant
+// aberto em `db`.
 async function precisaExtracaoProfundaHoje(db) {
   const { rows } = await db.query(
-    'SELECT 1 FROM roster_ucs_extracao_diaria WHERE data_extracao = CURRENT_DATE LIMIT 1',
+    'SELECT 1 FROM roster_ucs_extracao_diaria WHERE data_extracao = $1::date LIMIT 1',
+    [hojeLocal()],
   );
   return rows.length === 0;
 }
@@ -27,6 +44,7 @@ async function gravarRosterDiario(db, roster, empresaId) {
 
   log(`[Coleta Acomp] 📥 Gravando roster de ${roster.length} UC(s) em 'roster_ucs_extracao_diaria'...`);
 
+  const dataHoje = hojeLocal();
   let totalInseridos = 0;
   let lotesComFalha = 0;
   const totalLotes = Math.ceil(roster.length / LOTE_MAX_LINHAS);
@@ -35,11 +53,9 @@ async function gravarRosterDiario(db, roster, empresaId) {
     const lote = roster.slice(inicio, inicio + LOTE_MAX_LINHAS);
     const valores = [];
     const placeholders = lote.map((item, i) => {
-      valores.push(empresaId, item.etapa || null, item.livro, item.unidadeConsumidora);
-      const base = i * 4;
-      // data_extracao vem de CURRENT_DATE (SQL), não de bind parameter — ver
-      // comentário de precisaExtracaoProfundaHoje sobre timezone.
-      return `($${base + 1}, CURRENT_DATE, $${base + 2}, $${base + 3}, $${base + 4})`;
+      valores.push(empresaId, dataHoje, item.etapa || null, item.livro, item.unidadeConsumidora);
+      const base = i * 5;
+      return `($${base + 1}, $${base + 2}::date, $${base + 3}, $${base + 4}, $${base + 5})`;
     });
 
     const sql = `INSERT INTO roster_ucs_extracao_diaria (empresa_id, data_extracao, etapa, livro, unidade_consumidora) VALUES ${placeholders.join(', ')}`;

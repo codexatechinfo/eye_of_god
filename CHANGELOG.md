@@ -32,6 +32,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   realizado (sem "a fazer" nenhum) em vez de arriscar mostrar UC errada. Ver Adendo 3 da [ADR
   0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
 
+- Roster diário do modo profundo (Acompanhamento) usava `CURRENT_DATE` do Postgres — que roda em
+  UTC — pra decidir "já extraí hoje?". Como o Brasil é UTC-3, isso rotulava a extração da NOITE
+  (a partir de ~21h de Brasília) como se fosse do dia seguinte, e no dia seguinte de verdade o
+  sistema achava "já tenho roster de hoje" e pulava a extração fresca — o roster ficava sempre
+  ~3-21h atrasado, todo dia. Corrigido pra usar a data local (mesmo timezone já usado em
+  `data_import`/`hora_import` no resto do app). Ver Adendo 5 da [ADR
+  0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
+
 - KPIs "Realizadas/A realizar/Impedimentos", % da barra lateral e a lista "LIVROS HOJE" do crachá
   (aba Trilho), mais os contadores de Monitoramento de Livros e o painel Leitura Urbana, tinham o
   MESMO problema do item acima (função compartilhada, `obterEventosPorLivrosAteData`, também lia só

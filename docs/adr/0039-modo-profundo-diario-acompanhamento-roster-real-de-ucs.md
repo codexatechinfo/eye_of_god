@@ -479,3 +479,63 @@ errado) e nunca rodaria a extração fresca da manhã.
 (`2026-09-13` às 21h41 de Brasília, quando o Postgres já achava `2026-09-14`). Dado corrigido
 conferido no banco (`SELECT data_extracao, count(*) ... GROUP BY data_extracao` — 1 linha só,
 `2026-09-13`, 454.709 UCs, 1556 livros).
+
+## Adendo 6 — varredura dos dois últimos usos de `CURRENT_DATE` remanescentes no projeto (2026-09-13)
+
+Depois do Adendo 5 (aqui) e da correção equivalente em
+`atividadeColaboradoresService.js#obterJornadaColaborador` (query de pendentes, `r.data_extracao =
+CURRENT_DATE` → `to_date($N, 'DD/MM/YYYY')` com `dataBr` vindo do frontend), restavam só mais dois
+pontos com `CURRENT_DATE` no código: `colaboradoresService.js` (linhas 11/14) e
+`monitoramentoService.js` (linhas 486/514, à época). Investigados um a um para confirmar se o mesmo
+risco de janela ~21h-meia-noite (horário de Brasília) se aplicava, já que nem toda comparação contra
+`CURRENT_DATE` é igual — depende de qual lado da comparação é a "data gravada" e de qual granularidade
+(dia vs. mês).
+
+### `colaboradoresService.js` — `CONDICAO_AFASTADO_HOJE`
+
+`situacao` (data de início do afastamento, embutida no texto `"A2 - DD/MM/YYYY"`) e
+`volta_afastamento` (data de retorno) vêm de importação de planilha de RH (`ativos_inativos`,
+`config/importacaoConfig.js`) — datas de negócio "puras", sem timestamp de gravação em hora local.
+Ainda assim, o risco é real: o lado que fica errado na janela ~21h-meia-noite não é o dado (que já é
+uma data-alvo fixa), é o `CURRENT_DATE` do Postgres usado para decidir "qual dia é hoje" — como o
+servidor roda em UTC (mesma constatação do Adendo 5), `CURRENT_DATE` adianta 1 dia 3h antes da meia-
+noite local. Efeito prático: (1) `to_date(...) <= CURRENT_DATE` faria um afastamento que só começa
+AMANHÃ (data local) já contar como iniciado ~3h cedo demais; (2) `volta_afastamento::date >
+CURRENT_DATE` faria um colaborador que só volta HOJE (ainda em curso, hora local) sair da condição de
+afastado ~3h antes da meia-noite, sumindo o indicador de "ausência justificada" da tela do Trilho cedo
+demais. Confirmado ao vivo, sem precisar nem esperar a janela: rodando o smoke test às 23h12 de
+Brasília (13/09), `SELECT CURRENT_DATE` do Postgres já devolvia `2026-09-14`.
+
+**Correção**: `CONDICAO_AFASTADO_HOJE` (constante) virou `condicaoAfastadoHoje(indiceParam)` (função),
+recebendo a posição do bind parameter de `dataBr` (`hojeBr()`, mesmo padrão de
+`colaboradoresController.js`/`atividadeColaboradoresService.js` — `new Date()` local formatado
+`DD/MM/YYYY`). `listarAtivos`/`listarOpcoesFiltro` passam `dataBr` como parâmetro e comparam com
+`to_date($N, 'DD/MM/YYYY')` nos dois pontos, em vez de `CURRENT_DATE`.
+
+### `monitoramentoService.js` — `joinPrazoRegLivros()` / `obterFaixasDias`
+
+`prazo_reg_livros` (também importada de planilha, `chave: ['mes_ref']`) é comparada por MÊS, não por
+dia: `preg.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')`. Aqui a janela de risco
+não é diária, é a virada de MÊS — no último dia de cada mês, entre ~21h e meia-noite de Brasília,
+`CURRENT_DATE` (UTC) já teria virado dia 1 do mês seguinte, fazendo o JOIN procurar `mes_ref` de um mês
+que a planilha tipicamente ainda nem foi reimportada (fecha depois do mês acabar) — todo livro urbano
+de leitura perderia `dias_prazo_regulatorio`/as faixas <27/33/34+ dias nessa janela, todo santo mês.
+
+**Correção escolhida**: em vez de introduzir mais um parâmetro Node (`dataBr`), usado
+`to_date(c.data_import, 'DD/MM/YYYY')` — o mesmo "agora" que este arquivo específico já usa há tempos
+para tudo que toca `contr_execucao_leitura` (`IMPORT_TS_CONTR_SQL`, `EFETIVO_PRAZO_REG_SQL` já
+comparam contra `c.data_import`, não contra o relógio real nem `CURRENT_DATE` — comentário já
+existente no arquivo: "'Agora' pro cálculo de atraso é o momento do último scrape, não o relógio
+real"). `c.data_import` é a data do próprio lote sendo processado, já disponível na tabela principal
+do `JOIN`, e mais correto arquiteturalmente que qualquer data calculada à parte: o mês relevante para
+achar o `prazo_reg_livros` de um livro é o mês em que aquele livro foi importado, não o mês do
+servidor no instante da consulta.
+
+### Verificação
+
+`node --check` nos dois arquivos. `npm test`: 20/20 (sem regressão). Testado ao vivo contra o Postgres
+real (transação com `ROLLBACK`, sem dado de teste permanecendo): `SHOW timezone` reconfirmado UTC;
+`CURRENT_DATE` batendo `2026-09-14` às 23h12 de Brasília do dia 13; `listarAtivos`/
+`listarOpcoesFiltro` (colaboradoresService.js) executados de ponta a ponta sem erro (355 ativos, 3
+cargos, 11 regionais); `obterResumo` (monitoramentoService.js, que chama `obterFaixasDias`
+internamente via `joinPrazoRegLivros` corrigido) executado sem erro, `dataImport: 13/09/2026`.

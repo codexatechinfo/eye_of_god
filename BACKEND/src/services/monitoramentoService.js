@@ -480,10 +480,18 @@ const EFETIVO_PRAZO_REG_SQL = `
   END
 `;
 
+// mes_ref é comparado contra o mês do PRÓPRIO lote (c.data_import), não
+// CURRENT_DATE do Postgres — mesmo "agora" já usado em EFETIVO_PRAZO_REG_SQL/
+// IMPORT_TS_CONTR_SQL acima (o servidor Postgres roda em UTC, ver
+// rosterUcsAcompanhamentoService.js#hojeLocal; CURRENT_DATE viraria o mês
+// seguinte 3h antes da meia-noite local no ÚLTIMO dia de cada mês, fazendo o
+// JOIN procurar prazo_reg_livros de um mês que a planilha ainda nem
+// importou e zerando "dias_prazo_regulatorio"/faixas de dias pra todo livro
+// urbano de leitura nessa janela).
 function joinPrazoRegLivros() {
   return `LEFT JOIN prazo_reg_livros preg
     ON preg.livro::int = c.livro::int
-    AND preg.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')`;
+    AND preg.mes_ref = to_char(date_trunc('month', to_date(c.data_import, 'DD/MM/YYYY')), 'YYYY-MM-DD')`;
 }
 
 function condicaoFaixaDias(faixa) {
@@ -511,7 +519,7 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
     LEFT JOIN cidades_localidades cl ON cl.local = c.localidade
     JOIN prazo_reg_livros preg
       ON preg.livro::int = c.livro::int
-      AND preg.mes_ref = to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD')
+      AND preg.mes_ref = to_char(date_trunc('month', to_date(c.data_import, 'DD/MM/YYYY')), 'YYYY-MM-DD')
     WHERE c.data_import = $1 AND c.hora_import = $2
       ${condicoesExtras.length ? 'AND ' + condicoesExtras.join(' AND ') : ''}
   `;

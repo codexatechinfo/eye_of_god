@@ -80,6 +80,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   `data_import`/`hora_import` no resto do app). Ver Adendo 5 da [ADR
   0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
 
+- Indicador de "ausência justificada" (colaborador afastado) na lista de colaboradores ativos podia
+  aparecer/sumir ~3h cedo demais, todo dia entre ~21h e meia-noite (horário de Brasília) — a condição
+  comparava a data de início/retorno do afastamento com `CURRENT_DATE` do Postgres (UTC), que nessa
+  janela já contava como o dia seguinte. Corrigido comparando com a data local (Brasil) em vez de
+  `CURRENT_DATE`. Mesmo problema (mês, não dia) no cálculo de "dias de prazo regulatório"/faixas
+  <27/33/34+ dias da aba Monitoramento de Livros: no último dia de cada mês, nessa mesma janela, o
+  sistema já procurava o prazo regulatório do mês seguinte (ainda não importado da planilha),
+  zerando esses números pra todo livro urbano de leitura. Corrigido usando o mês do próprio lote de
+  dados em vez de `CURRENT_DATE`. Ver Adendo 6 da [ADR
+  0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
+
 - KPIs "Realizadas/A realizar/Impedimentos", % da barra lateral e a lista "LIVROS HOJE" do crachá
   (aba Trilho), mais os contadores de Monitoramento de Livros e o painel Leitura Urbana, tinham o
   MESMO problema do item acima (função compartilhada, `obterEventosPorLivrosAteData`, também lia só

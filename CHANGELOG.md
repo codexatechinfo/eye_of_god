@@ -39,6 +39,12 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Mapa não dava zoom até o marcador roxo de "trabalho anterior" (ver itens abaixo) — o `fitBounds`
+  automático, ao abrir a jornada de um colaborador, só considerava os pontos DELE, nunca o último
+  ponto do colaborador anterior. O marcador era desenhado certo, só que fora da área visível.
+  Corrigido incluindo essas coordenadas no cálculo do zoom/enquadramento inicial. Ver Adendo 19 da
+  [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 - Marcador roxo de "trabalho anterior" (ver item acima) não aparecia no mapa quando o último ponto
   do colaborador anterior caía perto de onde o colaborador atual está agora — o avatar dele (pane
   600 do Leaflet) escondia o círculo roxo (pane 400 padrão) por completo. Corrigido com um pane

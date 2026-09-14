@@ -1058,3 +1058,30 @@ casos reais: GUILHERME AUGUSTO ALVES PEREIRA (`trabalhoAnterior` 292→5 UCs, co
 `pontos.length` 0→472) e NELSON MACHADO GONCALVES (`trabalhoAnterior` recalculado pra totais bem
 menores e plausíveis, coordenadas mantidas válidas). Sem mudança de frontend nesta rodada — os dois
 fixes são só de backend/SQL.
+
+## Adendo 19 — mapa não dava zoom até o marcador roxo (câmera, não o desenho)
+
+Com os dados e o pane corretos (Adendo 17/18), usuário ainda reportou não ver o ponto roxo no mapa.
+Causa: `fitBounds` (chamado uma vez, na primeira renderização da jornada de cada colaborador) só
+considerava as coordenadas de `pontos` (realizados/pendentes/troca de hoje) — nunca as de
+`trabalhoAnterior`. Se o último ponto do colaborador anterior cai fora da área coberta pelos pontos
+do colaborador ATUAL (ex.: livro que ele ainda nem começou hoje, ou simplesmente um bairro vizinho),
+o marcador roxo era desenhado corretamente, só que fora da área visível — indistinguível de "não
+está lá" pra quem olha a tela.
+
+### Correção
+
+`atualizarRotaJornada` (`mapa-bases.ts`) passou a receber `trabalhoAnterior` como terceiro parâmetro
+(efeito no construtor lê `jornada?.trabalhoAnterior` junto com `jornada?.pontos`, mesmo objeto de
+jornada). As coordenadas válidas de `trabalhoAnterior` entram no cálculo de bounds junto com as de
+`pontos` (`latLngsBounds`), sem mexer no restante da função — trajeto, casco convexo e os próprios
+marcadores continuam baseados só em `pontos`/`trabalhoAnterior` cada um na sua função, essa mudança é
+só sobre pra onde a câmera do mapa aponta.
+
+### Verificação
+
+`npx tsc --noEmit -p tsconfig.app.json` e `npx ng build --configuration production` limpos (mesmos 2
+warnings pré-existentes, nenhum novo). Confirmado que o `ng serve` já em execução recompilou e serviu
+o bundle atualizado (checado via `curl` no `main.js`, presença do código novo). Sem acesso de login
+ao app nesta sessão pra captura de tela — verificação ficou no código/bundle, câmera real depende de
+confirmação visual do usuário.

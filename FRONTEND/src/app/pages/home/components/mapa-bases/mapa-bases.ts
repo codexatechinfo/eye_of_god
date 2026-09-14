@@ -486,12 +486,13 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     });
     effect(() => {
       const nome = this.colaboradoresService.colaboradorSelecionado();
-      const pontos = nome ? this.colaboradoresService.jornadaPorColaborador().get(nome)?.pontos ?? [] : [];
+      const jornada = nome ? this.colaboradoresService.jornadaPorColaborador().get(nome) : undefined;
+      const pontos = jornada?.pontos ?? [];
       // Lido aqui (não só dentro de atualizarRotaJornada) pra este effect
       // reexecutar a cada mudança do instante — é o que move o marcador de
       // "último ponto" junto com a régua de tempo.
       this.colaboradoresService.reguaInstante();
-      this.atualizarRotaJornada(nome, pontos);
+      this.atualizarRotaJornada(nome, pontos, jornada?.trabalhoAnterior ?? []);
     });
     // "Trabalho anterior" (roxo) — efeito próprio porque a fonte é
     // trabalhoAnterior (fora de pontos, ver comentário no service), não a
@@ -1042,7 +1043,11 @@ export class MapaBases implements AfterViewInit, OnDestroy {
     return tipo === 'pausa' ? this.grupoParadasGaps : this.grupoPontos;
   }
 
-  private atualizarRotaJornada(colaboradorAberto: string | null, pontos: PontoJornada[]): void {
+  private atualizarRotaJornada(
+    colaboradorAberto: string | null,
+    pontos: PontoJornada[],
+    trabalhoAnterior: TrabalhoAnteriorLivro[] = [],
+  ): void {
     if (!this.mapa) return;
 
     if (!colaboradorAberto) {
@@ -1138,8 +1143,19 @@ export class MapaBases implements AfterViewInit, OnDestroy {
       }
     }
 
-    if (latLngs.length && this.colaboradorComBoundsAplicado !== colaboradorAberto) {
-      this.mapa.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
+    // Bounds inclui também o último ponto do(s) colaborador(es) anterior(es)
+    // (trabalhoAnterior, roxo) — sem isso o fitBounds só considerava os
+    // pontos do colaborador ABERTO, e o marcador roxo (que pode cair fora
+    // dessa área, ex. UC de um livro que ele ainda nem começou hoje) ficava
+    // desenhado mas fora da tela, indistinguível de não estar lá. Usuário
+    // reportou "não vi os pontos roxos" depois de confirmar via banco que o
+    // dado e o marcador estavam corretos — era a câmera, não o desenho.
+    const latLngsTrabalhoAnterior: L.LatLngTuple[] = trabalhoAnterior
+      .filter(item => item.latitude && item.longitude)
+      .map(item => [Number(item.latitude), Number(item.longitude)]);
+    const latLngsBounds = [...latLngs, ...latLngsTrabalhoAnterior];
+    if (latLngsBounds.length && this.colaboradorComBoundsAplicado !== colaboradorAberto) {
+      this.mapa.fitBounds(L.latLngBounds(latLngsBounds), { padding: [40, 40] });
       this.colaboradorComBoundsAplicado = colaboradorAberto;
     }
 

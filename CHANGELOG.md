@@ -52,9 +52,10 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   conexões com o banco (10 conexões, o total disponível) ficava todo preso em "idle in transaction"
   por requisições que não fechavam de forma limpa, e toda chamada nova ficava pendurada esperando
   uma conexão que nunca liberava. Corrigido com um timeout automático que encerra qualquer conexão
-  parada além de 1 minuto, e um handler de erro que faltava (sem ele, o Postgres encerrar uma
-  conexão em uso derrubava o servidor inteiro). Ver Adendo 1 da [ADR
-  0003](docs/adr/0003-rbac-multi-tenant.md).
+  parada além de 10 minutos, um handler de erro que faltava (sem ele, o Postgres encerrar uma
+  conexão em uso derrubava o servidor inteiro), e o pool aumentado de 10 pra 20 conexões (dá mais
+  margem enquanto a consulta lenta do item de performance abaixo não é otimizada). Ver Adendo 1 da
+  [ADR 0003](docs/adr/0003-rbac-multi-tenant.md).
 
 - Timeline (aba Trilho) podia travar silenciosamente numa abertura "fria" do app (antes de qualquer
   colaborador ser selecionado) — a régua de tempo tentava usar um elemento da tela que ainda não

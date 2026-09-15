@@ -194,10 +194,39 @@ citava como motivo de usar `'close'` em vez de `'finish'`, mas aparentemente nã
 Sinalizado como investigação separada — o timeout/error-handler deste Adendo torna esse vazamento
 específico inofensivo daqui pra frente, mas não explica por que ele aconteceu.
 
+### Erro meu, à parte: uma SEGUNDA instância do backend rodando em paralelo
+
+Depois da correção acima, o app voltou a ficar inacessível — mas desta vez porque EU criei o problema:
+pra testar sem acesso de login, chamei a ferramenta de preview pra "subir o backend" quando achei (por
+`netstat`) que ele estava fora do ar. Só que o processo do PRÓPRIO usuário (nodemon, PID raiz do `npm
+run dev` já rodando desde antes desta sessão) só tinha ficado momentaneamente sem responder — minha
+ferramenta subiu uma SEGUNDA instância completa (`npm --prefix ... run dev` → nodemon → `node
+src/server.js`), com seu próprio pool de conexões E seus próprios 4 jobs de coleta (Acompanhamento,
+Massivas, Scalefusion, SEGSAT) rodando em paralelo com a instância original — dobrando a pressão sobre
+o pool de conexões e sobre o próprio portal da Copel (dois logins concorrentes). Descoberto via
+`Get-CimInstance Win32_Process` (linha de comando de cada `node.exe`, não só o nome) — sem isso as duas
+árvores de processo são indistinguíveis num `tasklist` simples. Corrigido encerrando a árvore inteira
+da instância redundante (`taskkill /T /F`, incluindo os processos filhos do Playwright que ela tinha
+aberto) e terminando as conexões órfãs que sobraram no Postgres. **Lição**: antes de "subir" qualquer
+servidor achando que está fora do ar, checar a linha de comando completa dos processos existentes, não
+só se a porta está escutando — uma porta momentaneamente livre não significa ausência de supervisor.
+
+### Compounding: consulta lenta já conhecida (CHANGELOG) virou gargalo real de pool
+
+Mesmo com uma instância só e conexões limpas, `/colaboradores/ativos` continuou emperrando. Achado:
+a consulta de `roster_do_dia` (`monitoramentoService.js`, já registrada no `CHANGELOG.md` como lenta,
+investigação pendente) leva 15-30s sob o volume atual de `roster_ucs_extracao_diaria`
+(200 mil+ UCs/dia), e várias rodam ao mesmo tempo (ciclo de coleta de 3min mais requisições de
+usuário) — sozinho isso já consumia boa parte de um pool de 10. Mitigação imediata: `max: 20` no
+`Pool` (`db.js`) — Postgres tem `max_connections=100`, folga de sobra. Não resolve a lentidão da
+consulta em si, que segue pendente (mesma linha do CHANGELOG) — só dá mais margem pro resto do
+sistema não travar por causa dela.
+
 ### Verificação
 
-`node --check` em `db.js`. `npm test`: 20/20 (sem regressão). `npx tsc --noEmit -p tsconfig.app.json`
-limpo (fix da régua). Testado ao vivo, de ponta a ponta, num navegador isolado autenticado via token
-próprio: app carrega (355 colaboradores, mapa com marcadores, "Coletando dados"), clique num
-colaborador real (GUILHERME AUGUSTO ALVES PEREIRA) abre o painel sem erro no console, backend estável
-sob carga real por mais de 15s depois do fix completo.
+`node --check` em `db.js`. `npm test`: 20/20 (sem regressão, reconfirmado depois do `max: 20` também).
+`npx tsc --noEmit -p tsconfig.app.json` limpo (fix da régua). Testado ao vivo, de ponta a ponta, num
+navegador isolado autenticado via token próprio, DEPOIS de eliminar a instância duplicada e aumentar o
+pool: app carrega (355 colaboradores, mapa com marcadores, "Coletando dados"), clique num colaborador
+real (GUILHERME AUGUSTO ALVES PEREIRA) abre o painel sem erro no console, `/colaboradores/ativos`
+responde em segundos em vez de travar.

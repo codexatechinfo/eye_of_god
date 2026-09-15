@@ -70,6 +70,18 @@ async function abrirContextoTenant({ empresaId, nivel }) {
   // conexão específica pelo lado do Postgres enquanto ela está checked out
   // (idle_in_transaction_session_timeout batendo numa vazada, rede caindo,
   // admin matando a sessão) crasha o processo Node inteiro.
+  //
+  // removeAllListeners ANTES de registrar o nosso — achado ao vivo
+  // (2026-09-15): `pg-pool` reaproveita o mesmo objeto Client entre
+  // checkouts diferentes ao longo da vida do processo, e sem isso cada
+  // chamada de abrirContextoTenant empilhava mais um listener de 'error' em
+  // cima do(s) da(s) chamada(s) anterior(es) — nunca removido no release().
+  // Sintoma visto ao vivo: MaxListenersExceededWarning e o mesmo erro real
+  // logado 2x, depois 4x, crescendo a cada reuso do client. Seguro remover
+  // tudo aqui: o listener 'ocioso' que o pg-pool registra em pool.on('connect')
+  // já foi removido por ele mesmo no acquire, então não sobra nada nosso pra
+  // preservar neste ponto.
+  client.removeAllListeners('error');
   client.on('error', erro => {
     console.error('❌ Erro assíncrono num client em uso (conexão encerrada pelo Postgres):', erro.message);
   });

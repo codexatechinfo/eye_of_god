@@ -59,6 +59,16 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Extração diária do roster real de UCs (modo profundo, 30-75min) perdia o trabalho inteiro e reiniciava
+  do zero sempre que demorava mais de 10 minutos — o job abria a transação com o banco ANTES de raspar
+  o site da Copel, e o Postgres (`idle_in_transaction_session_timeout`, ver Adendo 1 abaixo) matava a
+  conexão no meio do scraping por ela ficar parada tempo demais. Aconteceu 2x na mesma noite, perdendo
+  quase 2h30 de raspagem no total. Corrigido abrindo a transação só depois do scraping terminar, na hora
+  de gravar — nunca mais durante a raspagem em si. Mesmo padrão aplicado à coleta de Massivas/Controle
+  de Empreiteiras. De brinde, corrigido também um vazamento de listener (`MaxListenersExceededWarning`)
+  que empilhava handlers de erro toda vez que o pool reaproveitava a mesma conexão física. Ver Adendo 2
+  da [ADR 0003](docs/adr/0003-rbac-multi-tenant.md).
+
 - App inteiro parava de responder ("a página não carrega") depois de um tempo em uso — o pool de
   conexões com o banco (10 conexões, o total disponível) ficava todo preso em "idle in transaction"
   por requisições que não fechavam de forma limpa, e toda chamada nova ficava pendurada esperando

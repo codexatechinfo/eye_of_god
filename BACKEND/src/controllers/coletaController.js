@@ -12,7 +12,7 @@ async function executarColeta(req, res) {
     if (!empresaId) {
       return res.status(400).json({ sucesso: false, erro: 'empresaId é obrigatório para ROOT' });
     }
-    const resultado = await executarColetaCopel(req.db, empresaId);
+    const resultado = await executarColetaCopel(empresaId);
     res.json({ sucesso: true, ...resultado });
   } catch (erro) {
     console.error('❌ Erro na coleta:', erro);

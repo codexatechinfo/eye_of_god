@@ -1,5 +1,4 @@
 const { executarColetaCopel } = require('../services/coletaCopelService');
-const { abrirContextoTenant, fecharContextoTenant } = require('../config/db');
 const { log, logWarn, logErro } = require('../utils/logTempo');
 
 // 5s (valor original) fazia sentido quando o ciclo levava 35-50min — virou
@@ -26,20 +25,17 @@ async function executarUmCiclo() {
   }
   emAndamento = true;
   log('[Coleta Acomp] ⏰ Iniciando ciclo...');
-  // abrirContextoTenant() também dentro do try: se ela lançar (ex.: erro
-  // transitório de conexão), a exceção escapava do try/catch, propagava pra
-  // fora do while em loopContinuo() e travava o loop pro resto do dia sem
-  // nunca resetar loopAtivo — sintoma real observado em produção junto com
-  // o node-cron perdendo o disparo das 07h (ver watchdog em
-  // iniciarJobColeta abaixo).
-  let client;
+  // executarColetaCopel agora gerencia suas próprias transações (curtas,
+  // nunca cobrindo o scraping — ver comentário em coletaCopelService.js),
+  // então não há client pra abrir/fechar aqui. O try/catch continua
+  // necessário: qualquer erro (inclusive de conexão) não pode escapar pro
+  // while em loopContinuo() e travar o loop pro resto do dia (sintoma real
+  // observado em produção junto com o node-cron perdendo o disparo das
+  // 07h — ver watchdog em iniciarJobColeta abaixo).
   try {
-    client = await abrirContextoTenant({ empresaId: EMPRESA_JOB_ID, nivel: 'ADMINISTRADOR' });
-    await executarColetaCopel(client, EMPRESA_JOB_ID);
-    await fecharContextoTenant(client, true);
+    await executarColetaCopel(EMPRESA_JOB_ID);
   } catch (erro) {
     logErro('[Coleta Acomp] ❌ Erro na coleta:', erro);
-    if (client) await fecharContextoTenant(client, false);
   } finally {
     emAndamento = false;
   }

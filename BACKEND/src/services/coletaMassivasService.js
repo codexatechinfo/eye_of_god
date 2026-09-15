@@ -2,6 +2,7 @@ const { coletarMassivas } = require('./copelMassivasScraperService');
 const { importarMassivas } = require('./copelMassivasImportService');
 const { importarControleEmpreiteiras } = require('./copelControleEmpreiteirasImportService');
 const { comSessaoExclusiva } = require('./copelSessaoLock');
+const { abrirContextoTenant, fecharContextoTenant } = require('../config/db');
 const { log } = require('../utils/logTempo');
 
 // "DD/MM/YYYY" — mesmo formato de data_da_leitura em base_dados_leitura.
@@ -11,10 +12,17 @@ function formatarDataBr(data) {
   return `${dia}/${mes}/${data.getFullYear()}`;
 }
 
-async function executarColetaMassivas(db, empresaId) {
+// A transação com o Postgres só abre DEPOIS do scraping — achado ao vivo
+// (2026-09-15, mesma causa raiz documentada em coletaCopelService.js): a
+// extração de Massivas + Controle de Empreiteiras (login + busca + export
+// de ontem/hoje) pode passar de 10min sob instabilidade do site da Copel, e
+// antes essa transação já vinha aberta (BEGIN) do chamador desde ANTES do
+// scraping começar — o idle_in_transaction_session_timeout (db.js, 10min)
+// mata a conexão no meio do scraping, silenciosamente, e o ciclo só
+// descobre na hora de gravar.
+async function executarColetaMassivas(empresaId) {
   log('[Massivas] 🟡 Iniciando coleta de massivas...');
   const dados = await comSessaoExclusiva(() => coletarMassivas());
-  const resultado = await importarMassivas(db, dados, empresaId);
 
   // Controle de Empreiteiras (-> base_dados_leitura), extraído dentro da
   // mesma sessão acima (ver copelMassivasScraperService.js) — ontem e hoje
@@ -31,11 +39,22 @@ async function executarColetaMassivas(db, empresaId) {
   const ontem = new Date(hoje);
   ontem.setDate(ontem.getDate() - 1);
 
-  if (dados.controleEmpreiteiras?.ontem != null) {
-    await importarControleEmpreiteiras(db, dados.controleEmpreiteiras.ontem, empresaId, formatarDataBr(ontem));
-  }
-  if (dados.controleEmpreiteiras?.hoje != null) {
-    await importarControleEmpreiteiras(db, dados.controleEmpreiteiras.hoje, empresaId, formatarDataBr(hoje));
+  const db = await abrirContextoTenant({ empresaId, nivel: 'ADMINISTRADOR' });
+  let resultado;
+  try {
+    resultado = await importarMassivas(db, dados, empresaId);
+
+    if (dados.controleEmpreiteiras?.ontem != null) {
+      await importarControleEmpreiteiras(db, dados.controleEmpreiteiras.ontem, empresaId, formatarDataBr(ontem));
+    }
+    if (dados.controleEmpreiteiras?.hoje != null) {
+      await importarControleEmpreiteiras(db, dados.controleEmpreiteiras.hoje, empresaId, formatarDataBr(hoje));
+    }
+
+    await fecharContextoTenant(db, true);
+  } catch (erro) {
+    await fecharContextoTenant(db, false);
+    throw erro;
   }
 
   log('[Massivas] ✅ Ciclo concluído (massivas + Controle de Empreiteiras encadeado).');

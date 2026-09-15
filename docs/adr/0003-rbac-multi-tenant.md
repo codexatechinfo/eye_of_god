@@ -160,6 +160,11 @@ backend inteiro parou de responder.
 Node ainda achava os clients "em uso", o TCP morto do lado do Postgres não libera o slot do lado do
 `pg.Pool` automaticamente). Precisou reiniciar o processo backend pra zerar o pool de verdade.
 
+> **Nota (2026-09-15, ver Adendo 2 abaixo)**: o `idle_in_transaction_session_timeout` descrito aqui —
+> criado pra pegar conexão HTTP vazada — acabou batendo também nos jobs de coleta de fundo, matando
+> transações legítimas que ficam paradas (idle, sem query) durante o scraping. Não é o mesmo bug: aqui
+> a causa era uma requisição HTTP que nunca fecha; lá é um job que abre a transação cedo demais.
+
 **Correção estrutural**: `idle_in_transaction_session_timeout = 60000` em toda conexão nova
 (`pool.on('connect')`, `db.js`) — o PRÓPRIO Postgres encerra qualquer transação parada além do limite,
 em vez de depender de achar a causa exata de cada vazamento possível no código do Express pra parar
@@ -230,3 +235,82 @@ navegador isolado autenticado via token próprio, DEPOIS de eliminar a instânci
 pool: app carrega (355 colaboradores, mapa com marcadores, "Coletando dados"), clique num colaborador
 real (GUILHERME AUGUSTO ALVES PEREIRA) abre o painel sem erro no console, `/colaboradores/ativos`
 responde em segundos em vez de travar.
+
+## Adendo 2 — a própria rede de segurança do Adendo 1 matava os jobs de coleta longos (2026-09-15)
+
+Na noite do modo profundo diário (ADR 0039), a 1ª extração da noite terminou o scraping com sucesso
+(1897/1897 livros, 192.235 UCs, 74,7min) e morreu exatamente na hora de gravar:
+`Client has encountered a connection error and is not queryable`. Como `gravarRosterDiario` só roda
+depois de `importarParaPostgres`, nenhuma UC foi salva — a extração inteira de quase 75 minutos foi
+perdida. O ciclo seguinte detectou "nenhum roster de hoje ainda" e começou tudo de novo do zero.
+
+### Causa raiz
+
+`coletaJob.js`/`coletaMassivasJob.js` chamavam `abrirContextoTenant()` (que já dá `BEGIN`) **antes** de
+raspar o site da Copel, não só antes do `INSERT` final — padrão explicitado desde o Adendo 1
+("os jobs de coleta abrem a transação ANTES de raspar o portal"). No modo profundo isso significa a
+transação ficar parada (idle, nenhuma query rodando, só esperando HTTP/Playwright) por até 75 minutos —
+exatamente o cenário que o `idle_in_transaction_session_timeout = 600000` (10min, Adendo 1) existe pra
+matar. A rede de segurança contra conexão HTTP vazada estava matando transações de job legítimas, só
+mais longas do que o timeout foi calibrado pra tolerar.
+
+Confirmado direto no log do Postgres (`docker logs supabase-db`), que registra o `FATAL` com PID e
+timestamp exatos:
+
+```
+2026-09-15 21:58:36 UTC  [50243] app_user@postgres  terminating connection due to idle-in-transaction timeout
+2026-09-15 22:05:03 UTC  [50242] app_user@postgres  terminating connection due to idle-in-transaction timeout
+2026-09-15 23:24:19 UTC  [57541] app_user@postgres  terminating connection due to idle-in-transaction timeout
+2026-09-15 23:28:17 UTC  [57877] app_user@postgres  terminating connection due to idle-in-transaction timeout
+```
+
+Os dois primeiros caem ~10min depois do backend subir (18:47 BRT) — batendo com a 1ª extração/ciclo de
+Massivas do dia. Os dois últimos caem ~10min depois do início da 2ª tentativa (20:13 BRT) — ou seja,
+**a 2ª extração já tinha sido morta pelo Postgres aos 20:24, mas seguiu raspando às cegas por mais uns
+50 minutos** até tentar gravar e descobrir que a conexão não existia mais.
+
+Isso também reencaixa o "vazamento misterioso" de conexões `idle in transaction` que bloqueou
+`CREATE INDEX CONCURRENTLY` mais cedo na mesma noite (ver `CHANGELOG.md`, seção Performance):
+provavelmente não era um vazamento de verdade (conexão abandonada pra sempre) — eram essas mesmas
+transações de job, legitimamente paradas por dezenas de minutos por causa deste padrão, que qualquer
+coisa esperando transações antigas terminarem (inclusive um índice concorrente) enxerga como bloqueio.
+
+### Correção
+
+Em vez de esticar o timeout (o que só adiaria o problema pro próximo scraping mais lento, e enfraqueceria
+a proteção original contra conexão HTTP vazada), a transação parou de cobrir o scraping:
+
+- `coletaCopelService.js` (`executarColetaCopel`): agora abre e fecha DUAS transações curtas — uma só
+  pra decidir `modoProfundo` (`precisaExtracaoProfundaHoje`), fechada antes do scraping começar; outra
+  aberta só depois que `coletarDadosAcompanhamento` retorna, exclusiva pra gravar (import + roster +
+  recálculo de painel). Nenhuma das duas fica aberta durante os 30-75min de scraping. A função passou a
+  gerenciar seu próprio `abrirContextoTenant`/`fecharContextoTenant` (não recebe mais `db` de fora) —
+  `coletaJob.js` e o endpoint manual (`coletaController.js`) simplificaram pra só passar `empresaId`.
+- `coletaMassivasService.js` (`executarColetaMassivas`): mesmo padrão — `coletarMassivas()` roda sem
+  segurar nenhum client; a transação abre só depois, pra `importarMassivas` + as duas chamadas de
+  `importarControleEmpreiteiras` (ontem/hoje), e fecha no fim. `coletaMassivasJob.js` simplificado do
+  mesmo jeito.
+- O `idle_in_transaction_session_timeout` de 10min (Adendo 1) continua como está — segue cobrindo o caso
+  original (requisição HTTP que nunca fecha `req.db`), que não tem relação com este bug.
+
+### Achado secundário, mesma investigação: listener de erro acumulando por reuso de client
+
+`MaxListenersExceededWarning: 11 error listeners added to [Client]` apareceu nos logs da mesma noite, e
+o mesmo erro real passou a ser logado 2x, depois 4x seguidas para o mesmo evento. Causa: `pg-pool`
+reaproveita o mesmo objeto `Client` entre checkouts diferentes ao longo da vida do processo — e
+`abrirContextoTenant` (Adendo 1) registrava `client.on('error', ...)` a cada chamada sem nunca remover
+no `release()`, empilhando um listener novo por reuso do mesmo client físico. Corrigido com
+`client.removeAllListeners('error')` logo antes de registrar o listener — seguro porque o listener
+"ocioso" que o próprio `pg-pool` mantém já foi removido por ele mesmo no momento do checkout (mesmo
+mecanismo documentado no Adendo 1), então não sobra nada nosso pra preservar ali.
+
+### Verificação
+
+`node --check` nos 6 arquivos tocados (`db.js`, `coletaCopelService.js`, `coletaJob.js`,
+`coletaController.js`, `coletaMassivasService.js`, `coletaMassivasJob.js`). `npm test`: 20/20, sem
+regressão. Script isolado (transação de teste, 15 checkouts sequenciais no mesmo client físico —
+confirmado pelo `processID`) provou o listener parando em 1 em vez de crescer. Ao vivo: nodemon
+reiniciou o backend com o fix (interrompendo de propósito a 2ª extração, que já estava com a conexão
+morta havia ~25min e nunca ia completar mesmo sem a mudança); ciclo seguinte de modo profundo entrou em
+scraping sem nenhuma conexão `app_user` parada em `pg_stat_activity` durante a raspagem — antes disso
+sempre aparecia uma `idle in transaction` crescendo pelo tempo todo do scraping.

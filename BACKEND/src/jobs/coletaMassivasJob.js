@@ -1,5 +1,4 @@
 const { executarColetaMassivas } = require('../services/coletaMassivasService');
-const { abrirContextoTenant, fecharContextoTenant } = require('../config/db');
 const { log, logWarn, logErro } = require('../utils/logTempo');
 
 const PAUSA_ENTRE_CICLOS_MS = 5000;
@@ -16,17 +15,15 @@ async function executarUmCiclo() {
   }
   emAndamento = true;
   log('[Massivas] ⏰ Iniciando ciclo...');
-  // abrirContextoTenant() também dentro do try — ver mesmo comentário em
-  // coletaJob.js (evita travar o loop pro resto do dia se a conexão falhar
-  // de forma transitória).
-  let client;
+  // executarColetaMassivas agora gerencia sua própria transação, aberta só
+  // depois do scraping (ver comentário em coletaMassivasService.js) — não
+  // há client pra abrir/fechar aqui. O try/catch continua necessário: ver
+  // mesmo comentário em coletaJob.js (evita travar o loop pro resto do dia
+  // se algo falhar de forma transitória).
   try {
-    client = await abrirContextoTenant({ empresaId: EMPRESA_JOB_ID, nivel: 'ADMINISTRADOR' });
-    await executarColetaMassivas(client, EMPRESA_JOB_ID);
-    await fecharContextoTenant(client, true);
+    await executarColetaMassivas(EMPRESA_JOB_ID);
   } catch (erro) {
     logErro('[Massivas] ❌ Erro na coleta:', erro);
-    if (client) await fecharContextoTenant(client, false);
   } finally {
     emAndamento = false;
   }

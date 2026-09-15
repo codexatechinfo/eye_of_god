@@ -1140,3 +1140,14 @@ funciona. Verificação visual do botão/caixa de mensagem via harness (CSS real
 uma pessoa em serviço de verdade, e a própria especificação registra que nem a A2L testou esse
 endpoint ao vivo por esse motivo (precisa de janela combinada/aparelho de homologação). Fica pro
 usuário testar com um colaborador real quando fizer sentido.
+
+## Adendo 21 — "a página não carrega": crash em regua-tempo.ts + pool de conexões esgotado
+
+Usuário reportou a página inteira não carregando depois do Adendo 20. Escrita completa do incidente
+(os dois problemas achados, incluindo um quase-incidente causado pela própria correção) no Adendo 1 da
+[ADR 0003](0003-rbac-multi-tenant.md) — fica lá por tocar `db.js`/`authMiddleware.js`, fora do escopo
+desta ADR. Resumo relevante aqui: `regua-tempo.ts#ngAfterViewInit` acessava o `@ViewChild` do
+`<canvas>` sem checar se ele tinha resolvido (só existe no DOM com um colaborador aberto,
+`*ngIf` em `regua-tempo.html`) — lançava numa abertura fria do app, antes de qualquer colaborador
+selecionado. Bug pré-existente, não introduzido pelo Adendo 20 — só nunca tinha sido pego porque a
+maioria das sessões continua via HMR em vez de um boot frio de verdade.

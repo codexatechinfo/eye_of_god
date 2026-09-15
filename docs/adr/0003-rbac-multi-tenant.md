@@ -118,3 +118,86 @@ hoje: só criação de usuário. Estender conforme aparecer ação nova que prec
   skill marca como buraco de segurança (ausência de identidade abrindo tudo). A policy usada
   checa que `app.nivel` **é explicitamente** `'ROOT'`, não que está ausente — contexto
   ausente continua fail-closed.
+
+## Adendo 1 — conexão vazada derrubou o app inteiro; corrigido, mas quase piorou no processo (2026-09-14)
+
+Usuário reportou "a página não carrega" depois de uma rodada de mudanças no frontend. Investigado ao
+vivo (sem acesso de login, via um token JWT assinado localmente com `JWT_SECRET` do próprio `.env`
+pra reproduzir a sessão num navegador isolado meu — nunca usado pra ações reais, só leitura/
+diagnóstico). Achados dois problemas DIFERENTES na mesma investigação, um deles quase se tornando um
+terceiro.
+
+### Problema 1 (real, mas não era a causa dominante): crash silencioso em `regua-tempo.ts`
+
+`ngAfterViewInit` acessava `this.canvasRef.nativeElement` sem checar se o `@ViewChild` resolveu — o
+`<canvas>` só existe no DOM com um colaborador aberto (`*ngIf="reguaExtremos() as extremos"`, ver
+`regua-tempo.html`), então numa abertura fria do app (ninguém selecionado ainda) `canvasRef` fica
+`undefined` e o hook lança `TypeError`. Sem try/catch do Angular ali, isso comia parte do primeiro
+ciclo de change detection — sintoma visível: sidebar de colaboradores presa em "Carregando...". Bug
+pré-existente (não introduzido pelas mudanças do dia), só nunca tinha sido notado porque a maioria das
+sessões continua via HMR em vez de um boot frio de verdade — os vários hard-refresh que pedi ao
+usuário mais cedo nesta mesma sessão provavelmente foram o gatilho real dele aparecer agora.
+Corrigido: `armarResizeObserver()` comparando o elemento PAI observado (não um booleano "já rodei
+uma vez") — cobre tanto "canvas ainda não existe" quanto "canvas foi destruído e recriado" (fechar/
+abrir colaborador), sem crashar em nenhum dos dois casos. Ver Adendo 20 da [ADR
+0038](0038-sistema-de-design-e-restyle-trilho.md) pro resto da rodada de mudanças desse dia.
+
+### Problema 2 (a causa real): pool de conexões Postgres esgotado
+
+Enquanto verificava o fix acima, `curl` direto no backend (fora do navegador, sem CORS/frontend no
+meio) também travava pra sempre — confirmando que o problema não era só frontend. `pg_stat_activity`
+mostrou **10 conexões** (o pool inteiro — `pg.Pool` sem `max` explícito usa o default de 10) presas em
+`idle in transaction` havia 28 a 40 MINUTOS. Cada requisição HTTP segura um client dedicado a
+transação inteira (`abrirContextoTenant`/`fecharContextoTenant`, liberado só quando `res.on('close')`
+dispara em `authMiddleware.js`) — alguma requisição não fechou de forma limpa (aba fechada/navegação
+no meio de uma chamada, provavelmente das minhas próprias idas e vindas testando no navegador mais
+cedo) e o client ficou preso pra sempre. Com o pool 100% esgotado, TODA chamada nova — de qualquer
+usuário, não só a minha — ficava pendurada esperando um client livre que nunca vinha. Isso, não o
+crash da régua, é o que combina com "a página não carrega": nada relacionado a lógica de tela, o
+backend inteiro parou de responder.
+
+**Ação imediata**: `pg_terminate_backend` nas 10 conexões travadas — não resolveu sozinho (o pool do
+Node ainda achava os clients "em uso", o TCP morto do lado do Postgres não libera o slot do lado do
+`pg.Pool` automaticamente). Precisou reiniciar o processo backend pra zerar o pool de verdade.
+
+**Correção estrutural**: `idle_in_transaction_session_timeout = 60000` em toda conexão nova
+(`pool.on('connect')`, `db.js`) — o PRÓPRIO Postgres encerra qualquer transação parada além do limite,
+em vez de depender de achar a causa exata de cada vazamento possível no código do Express pra parar
+de sangrar. Autocurativo pro próximo vazamento, seja lá qual for a causa.
+
+### Quase-incidente: a correção do Problema 2 quase criou um Problema 3
+
+Publicado o timeout acima, o backend crashou de novo — **~60 segundos depois**, exatamente quando o
+timeout bateu numa das conexões vazadas restantes. Causa: `pg` emite um evento `'error'` no client
+quando o Postgres encerra a conexão por trás — e um `EventEmitter` sem listener de `'error'` faz o
+Node tratar como exceção não capturada e MATAR O PROCESSO INTEIRO. Conferido no código-fonte do
+`pg-pool` instalado (`node_modules/pg-pool/index.js`): o listener de erro que o pool mantém enquanto o
+client está OCIOSO no pool é explicitamente REMOVIDO no momento do checkout
+(`_acquireClient`/`client.removeListener('error', idleListener)`) e só reanexado no `release()` — ou
+seja, um client EM USO (exatamente o caso de toda conexão vazada) fica sem nenhum listener de erro. Um
+`pool.on('error', ...)` sozinho cobre só o client ocioso DENTRO do pool, não o caso que causou o
+incidente inteiro. Corrigido anexando `client.on('error', ...)` também dentro de
+`abrirContextoTenant`, pela duração inteira da requisição, além do `pool.on('error', ...)` pro caso
+geral.
+
+**Lição**: uma rede de segurança que interage com uma lacuna PRÉ-EXISTENTE (aqui: nenhum client tinha
+handler de erro) pode acionar essa lacuna em vez de só proteger contra ela. Testado ao vivo depois da
+correção completa — backend estável por mais de 15s sob a mesma carga (cliques reais no navegador +
+os 4 jobs de coleta rodando em paralelo), sem crash.
+
+### Causa raiz do vazamento original — NÃO investigada nesta rodada
+
+Por que `res.on('close')` não disparou pra essas 10 requisições específicas fica sem resposta — mais
+provável hipótese (não confirmada): minhas próprias navegações/fechamentos de aba repetidos durante
+testes ao vivo mais cedo nesta sessão, um cenário de borda que o comentário de `authMiddleware.js` já
+citava como motivo de usar `'close'` em vez de `'finish'`, mas aparentemente não cobre 100% dos casos.
+Sinalizado como investigação separada — o timeout/error-handler deste Adendo torna esse vazamento
+específico inofensivo daqui pra frente, mas não explica por que ele aconteceu.
+
+### Verificação
+
+`node --check` em `db.js`. `npm test`: 20/20 (sem regressão). `npx tsc --noEmit -p tsconfig.app.json`
+limpo (fix da régua). Testado ao vivo, de ponta a ponta, num navegador isolado autenticado via token
+próprio: app carrega (355 colaboradores, mapa com marcadores, "Coletando dados"), clique num
+colaborador real (GUILHERME AUGUSTO ALVES PEREIRA) abre o painel sem erro no console, backend estável
+sob carga real por mais de 15s depois do fix completo.

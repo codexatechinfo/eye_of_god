@@ -42,12 +42,45 @@ export class ReguaTempo implements AfterViewInit, OnDestroy {
       this.colaboradoresService.jornadaPorColaborador();
       this.colaboradoresService.regimeSucessivoPorUc();
       this.desenhar();
+      // O <canvas> só existe no DOM com um colaborador aberto (*ngIf no
+      // template, ver regua-tempo.html) — ngAfterViewInit roda 1x só, ANTES
+      // de qualquer colaborador ser aberto na abertura fria do app, então
+      // não basta armar o ResizeObserver só lá (canvasRef ainda nem existe
+      // nesse momento). Reaproveita este effect (já reage a reguaExtremos,
+      // que é exatamente quando o canvas aparece/some) pra tentar de novo a
+      // cada disparo — armarResizeObserver() é barato e idempotente.
+      this.armarResizeObserver();
     });
   }
 
-  ngAfterViewInit(): void {
+  // Bug real achado ao vivo (2026-09-14): `ngAfterViewInit` acessava
+  // `this.canvasRef.nativeElement` sem checar se o ViewChild resolveu —
+  // numa abertura fria do app (nenhum colaborador ainda selecionado),
+  // `reguaExtremos()` começa null, o <canvas> nem existe no DOM ainda
+  // (*ngIf), e `canvasRef` fica undefined. `this.canvasRef.nativeElement`
+  // lançava TypeError dentro do hook de ciclo de vida — sem try/catch do
+  // Angular ali, isso quebrava o resto do change detection da primeira
+  // passada (sintoma real: sidebar de colaboradores presa em "Carregando...",
+  // "página não carrega"). `desenhar()` já tratava isso certo
+  // (`canvasRef?.nativeElement`); só faltava aqui.
+  //
+  // Compara pelo elemento PAI observado (não um booleano "já armei uma vez")
+  // porque o <canvas> é destruído/recriado toda vez que o colaborador
+  // fecha/abre (*ngIf) — um flag booleano nunca re-observaria o elemento
+  // NOVO depois do primeiro colaborador ser fechado.
+  private elementoObservado: HTMLElement | null = null;
+  private armarResizeObserver(): void {
+    const pai = this.canvasRef?.nativeElement.parentElement ?? null;
+    if (pai === this.elementoObservado) return;
+    this.resizeObserver?.disconnect();
+    this.elementoObservado = pai;
+    if (!pai) return;
     this.resizeObserver = new ResizeObserver(() => this.desenhar());
-    this.resizeObserver.observe(this.canvasRef.nativeElement.parentElement!);
+    this.resizeObserver.observe(pai);
+  }
+
+  ngAfterViewInit(): void {
+    this.armarResizeObserver();
   }
 
   ngOnDestroy(): void {

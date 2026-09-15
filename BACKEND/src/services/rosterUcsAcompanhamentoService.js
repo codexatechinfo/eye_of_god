@@ -23,9 +23,22 @@ function hojeLocal() {
   return new Date().toLocaleDateString('en-CA'); // "YYYY-MM-DD", timezone do processo Node
 }
 
+// Só depois das 6h da manhã (hora local) — pedido explícito do usuário: o
+// loop roda 24h, então "primeiro ciclo do dia" podia cair perto da meia-noite,
+// ANTES da Copel liberar/atualizar as OS do dia (muita releitura só é aberta
+// depois que os leituristas começam a rodar de manhã) — capturar cedo demais
+// só trocava "desatualizado à noite" por "incompleto de manhã", sem resolver
+// nada. 6h dá folga real pro dia já estar minimamente formado no portal antes
+// da extração rodar. Antes das 6h, todo ciclo continua em modo rápido — a
+// extração profunda só dispara no primeiro ciclo às 6h ou depois.
+function aptoParaExtracaoProfunda() {
+  return new Date().getHours() >= 6;
+}
+
 // RLS (isolamento_empresa) já escopa isso pra empresa do contexto de tenant
 // aberto em `db`.
 async function precisaExtracaoProfundaHoje(db) {
+  if (!aptoParaExtracaoProfunda()) return false;
   const { rows } = await db.query(
     'SELECT 1 FROM roster_ucs_extracao_diaria WHERE data_extracao = $1::date LIMIT 1',
     [hojeLocal()],

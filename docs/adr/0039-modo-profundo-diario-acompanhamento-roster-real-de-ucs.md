@@ -539,3 +539,57 @@ real (transação com `ROLLBACK`, sem dado de teste permanecendo): `SHOW timezon
 `listarOpcoesFiltro` (colaboradoresService.js) executados de ponta a ponta sem erro (355 ativos, 3
 cargos, 11 regionais); `obterResumo` (monitoramentoService.js, que chama `obterFaixasDias`
 internamente via `joinPrazoRegLivros` corrigido) executado sem erro, `dataImport: 13/09/2026`.
+
+## Adendo 7 — extração profunda rodando cedo demais (perto da meia-noite): maioria das releituras abertas durante o dia ficava sem roster
+
+Usuário reportou (2026-09-14), depois de conferir livros reais contra o portal, que "quase todos" os
+de releitura não batiam. Investigado com consulta direta no banco, comparando os livros "Em Execução"
+de hoje contra o roster de hoje:
+
+| Recebido | Total livros | Com roster |
+|---|---|---|
+| antes de hoje | 1.058 | 1.058 (100%) |
+| **hoje** | 418 | **1 (~0%)** |
+
+A correlação é 100% com a DATA DE RECEBIMENTO, não com o tipo em si — só que releitura concentra a
+maioria dos "recebidos hoje" (316 de 418) porque, diferente de leitura (atribuída em lote, geralmente
+antes do início do dia), releitura é aberta DINAMICAMENTE ao longo do dia, à medida que um impedimento
+é identificado durante a própria leitura. Como o loop de coleta roda 24h (a cada 3min,
+`coletaJob.js`), o gatilho `precisaExtracaoProfundaHoje` disparava no PRIMEIRO ciclo depois da virada
+do dia — ou seja, perto da meia-noite, antes de boa parte do dia de trabalho (e de toda a releitura
+que ele ainda vai gerar) sequer começar.
+
+Usuário confirmou um fato chave que orienta a correção: a QUANTIDADE de UCs de um livro nunca muda
+depois que ele entra no sistema — só situação/colaborador podem mudar. Ou seja, o problema não é
+"roster ficou desatualizado", é "a extração roda tarde demais (cedo demais no relógio) e nunca mais
+tenta de novo naquele dia", perdendo pra sempre tudo que é aberto depois do instante em que rodou.
+
+### Opções avaliadas
+
+**A — extração incremental contínua** (por OS/ciclo, não por dia calendário): a cada ciclo, busca só
+os livros em execução que AINDA não têm roster do ciclo atual deles, sem nunca reabrir o que já foi
+capturado. Resolve de vez (releitura aberta às 14h seria capturada minutos depois), mas exige trocar o
+gatilho E as 3 consultas que hoje exigem `data_extracao = hoje` por uma comparação contra o corte de
+`data_recebimento` (mesmo padrão já usado em `ja_realizado_antes`/`obterTrabalhoAnteriorPorLivro`).
+
+**B — mover o horário do gatilho pra depois do início do expediente**: mudança mínima (só o gatilho),
+mantém a extração 1x/dia mas mais tarde, quando o portal já reflete boa parte do dia formado.
+
+**Escolhida pelo usuário: B, às 6h da manhã.** Não elimina 100% do gap (releitura aberta depois das 6h
+continua só entrando no roster do dia seguinte), mas move o corte de "perto da meia-noite" (quando
+praticamente nada do dia ainda existe) pra "início do expediente" (quando o grosso da atribuição do
+dia já devia estar formada no portal) — troca simples, sem mexer em nenhuma query de consumo do
+roster, adiada até haver sinal de que ainda não é suficiente.
+
+### Correção
+
+`rosterUcsAcompanhamentoService.js`: nova função `aptoParaExtracaoProfunda()` (`new Date().getHours()
+>= 6`, hora local do processo — mesmo `hojeLocal()` já usado no resto do arquivo). `precisaExtracaoProfundaHoje`
+agora retorna `false` direto se ainda não são 6h, sem nem consultar o banco — antes das 6h, todo ciclo
+continua em modo rápido; a extração profunda só dispara no primeiro ciclo às 6h ou depois.
+
+### Verificação
+
+`node --check`, `npm test` (20/20, sem regressão). Não dá pra testar o disparo ao vivo sem esperar a
+virada de 6h de um dia real — lógica simples o bastante (uma comparação de hora) pra não precisar de
+mock de data pra validar.

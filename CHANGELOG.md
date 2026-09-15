@@ -39,6 +39,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Extração diária do roster real de UCs (modo profundo, aba Trilho) disparava perto da meia-noite —
+  cedo demais pra capturar releitura, que é aberta dinamicamente ao longo do próprio dia de trabalho.
+  Resultado real medido: 418 de 1.476 livros em execução no dia (28%, sendo 69% deles releitura)
+  ficavam com ZERO cobertura de roster, gerando números errados tanto na timeline (pendentes
+  zerados) quanto no painel de KPI (números vindos de uma fonte antiga e desatualizada,
+  `coordenadas_ucs_mineradas`). Corrigido movendo o horário do gatilho pra 6h da manhã (hora local) —
+  dá tempo do dia já estar formado no portal antes da extração rodar. Ver Adendo 7 da [ADR
+  0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
+
 - Mapa não dava zoom até o marcador roxo de "trabalho anterior" (ver itens abaixo) — o `fitBounds`
   automático, ao abrir a jornada de um colaborador, só considerava os pontos DELE, nunca o último
   ponto do colaborador anterior. O marcador era desenhado certo, só que fora da área visível.

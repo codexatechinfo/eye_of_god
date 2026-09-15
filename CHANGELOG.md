@@ -46,6 +46,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   `LATERAL` não melhoraram (a reescrita chegou a ficar pior, cancelada em produção antes de
   terminar). Fica pendente pra uma investigação mais a fundo.
 
+- Consultas que filtram `contr_execucao_leitura`/`roster_ucs_extracao_diaria` por
+  `livro::int = ANY(...)` (usadas na timeline/mapa do colaborador e no resumo "trabalho anterior",
+  ambos aba Trilho) caíam em Parallel Seq Scan — nenhum índice existente cobria o formato
+  `livro::int` (só havia índice sobre `livro` como texto, e o cast no WHERE impede o planner de
+  usar índice de texto). Sob carga real, isso chegou a travar requisições por vários minutos.
+  Criados dois índices funcionais (`CREATE INDEX CONCURRENTLY`, sem downtime):
+  `idx_roster_ucs_extracao_diaria_empresa_livro_int (empresa_id, (livro::int))` e
+  `idx_contr_execucao_leitura_empresa_livro_int (empresa_id, (livro::int))`. Aplicados direto no
+  banco (projeto não usa framework de migrations — sem arquivo `.sql` correspondente no
+  repositório).
+
 ### Corrigido
 
 - App inteiro parava de responder ("a página não carrega") depois de um tempo em uso — o pool de

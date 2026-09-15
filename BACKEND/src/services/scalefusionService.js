@@ -196,4 +196,55 @@ async function obterHistoricoPosicoes(db, colaborador, dataIso) {
   return rows;
 }
 
-module.exports = { coletarPosicoes, obterNomeEPrefixo, obterUltimasPosicoes, obterHistoricoPosicoes };
+// Dispositivo mais recente já visto pra este colaborador (qualquer dia — a
+// tabela `scalefusion` é histórico bruto, mesma fonte de
+// obterUltimaPosicaoPorColaborador). Um colaborador pode ter trocado de
+// aparelho; o `device_id` mais recente é o que representa o aparelho que ele
+// tem AGORA, na prática (mesmo raciocínio de "última posição conhecida" já
+// usado pro mapa).
+async function obterDeviceIdMaisRecente(db, colaborador) {
+  const { rows } = await db.query(
+    `SELECT device_id FROM scalefusion
+     WHERE colaborador = $1 AND device_id IS NOT NULL
+     ORDER BY coletado_em DESC LIMIT 1`,
+    [colaborador],
+  );
+  return rows[0]?.device_id ?? null;
+}
+
+// POST /alert (ver Especificacao_API_Scalefusion_COPEL.docx, seção 3.2) —
+// único endpoint da API com efeito no mundo real: a mensagem chega na TELA
+// do aparelho do colaborador. Os 5 campos abaixo são todos obrigatórios pela
+// especificação. ATENÇÃO (documentado na spec): device_ids usa o campo "id"
+// da resposta de /devices — que é o que gravamos em `scalefusion.device_id`
+// — nunca o IMEI nem o nome.
+async function enviarAlerta(deviceIds, senderName, messageBody, { keepRinging = true, showAsDialog = true } = {}) {
+  if (!API_BASE || !API_TOKEN) {
+    throw new Error('SCALEFUSION_API_BASE/SCALEFUSION_API_TOKEN não configurados no .env');
+  }
+  const resposta = await fetch(`${API_BASE}/alert`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      device_ids: deviceIds,
+      sender_name: senderName,
+      message_body: messageBody,
+      keep_ringing: keepRinging,
+      show_as_dialog: showAsDialog,
+    }),
+  });
+  const corpo = await resposta.json().catch(() => null);
+  if (!resposta.ok) {
+    throw new Error(corpo?.error || `Scalefusion /alert respondeu ${resposta.status}`);
+  }
+  return corpo;
+}
+
+module.exports = {
+  coletarPosicoes,
+  obterNomeEPrefixo,
+  obterUltimasPosicoes,
+  obterHistoricoPosicoes,
+  obterDeviceIdMaisRecente,
+  enviarAlerta,
+};

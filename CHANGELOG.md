@@ -20,6 +20,15 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
   marca em roxo o último ponto que esse colaborador anterior executou. Ver Adendo 17 da [ADR
   0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
 
+- Timeline do colaborador (aba Trilho) agora abre direto rolada até a última UC que ele realizou,
+  em vez de sempre no topo — não precisa mais procurar manualmente onde ele parou. Ver Adendo 20 da
+  [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
+- Cada irregularidade (impedimento) da timeline ganhou um botão "Enviar mensagem", que manda um
+  alerta direto pra tela do aparelho Scalefusion do colaborador (via `POST /alert` da API
+  Scalefusion) — texto pré-preenchido com o contexto do impedimento, editável antes de enviar. Ver
+  Adendo 20 da [ADR 0038](docs/adr/0038-sistema-de-design-e-restyle-trilho.md).
+
 ### Performance
 
 - Endpoint `/colaboradores/localizacoes` (aba Trilho — alimenta os marcadores do mapa, chamado no

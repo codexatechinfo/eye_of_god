@@ -535,6 +535,40 @@
               >
                 Street View
               </a>
+              <!-- Só pra irregularidade (impedimento) — pedido explícito do
+                   usuário. Envia pra tela do aparelho Scalefusion do
+                   colaborador, ver colaboradores.service.ts#enviarMensagem. -->
+              <button
+                *ngIf="ehImpedimento(item.codigo)"
+                type="button"
+                (click)="toggleMensagem(item)"
+                class="flex-1 text-[9.5px] font-semibold px-2 py-1 rounded-md border border-critico/40 text-critico hover:bg-critico/10 transition-colors"
+              >
+                {{ mensagemAbertaParaUc() === item.uc ? 'Cancelar' : 'Enviar mensagem' }}
+              </button>
+            </div>
+
+            <div *ngIf="mensagemAbertaParaUc() === item.uc" class="mt-2 rounded-md border border-linha bg-sup-2 p-2" (click)="$event.stopPropagation()">
+              <textarea
+                rows="3"
+                class="w-full text-[10.5px] rounded-md border border-linha bg-sup px-2 py-1.5 text-txt resize-none focus:outline-none focus:border-azul"
+                [value]="textoMensagem()"
+                (input)="textoMensagem.set($any($event.target).value)"
+                [disabled]="statusEnvioMensagem() === 'enviando'"
+              ></textarea>
+              <div class="flex items-center justify-between gap-2 mt-1.5">
+                <span *ngIf="statusEnvioMensagem() === 'sucesso'" class="text-[9.5px] font-semibold text-ok">Mensagem enviada pro aparelho.</span>
+                <span *ngIf="statusEnvioMensagem() === 'erro'" class="text-[9.5px] font-semibold text-critico">{{ erroEnvioMensagem() }}</span>
+                <span *ngIf="statusEnvioMensagem() === 'idle'"></span>
+                <button
+                  type="button"
+                  (click)="enviarMensagem()"
+                  [disabled]="!textoMensagem().trim() || statusEnvioMensagem() === 'enviando'"
+                  class="shrink-0 text-[9.5px] font-semibold px-2.5 py-1 rounded-md bg-critico text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {{ statusEnvioMensagem() === 'enviando' ? 'Enviando…' : 'Enviar' }}
+                </button>
+              </div>
             </div>
           </div>
           </div>

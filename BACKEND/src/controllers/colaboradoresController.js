@@ -4,7 +4,12 @@ const {
   obterUltimaUcRealizadaPorColaborador,
   obterJornadaColaborador,
 } = require('../services/atividadeColaboradoresService');
-const { obterUltimasPosicoes, obterHistoricoPosicoes } = require('../services/scalefusionService');
+const {
+  obterUltimasPosicoes,
+  obterHistoricoPosicoes,
+  obterDeviceIdMaisRecente,
+  enviarAlerta,
+} = require('../services/scalefusionService');
 const {
   obterUltimasPosicoes: obterUltimasPosicoesSegsat,
   obterHistoricoPosicoes: obterHistoricoPosicoesSegsat,
@@ -152,4 +157,45 @@ async function jornada(req, res) {
   }
 }
 
-module.exports = { ativos, opcoesFiltro, atividadeHoje, localizacoes, scalefusion, segsatPosicoes, gpsHistorico, jornada };
+// Timeline (aba Trilho) ganhou um botão "Enviar mensagem" em cada
+// irregularidade (impedimento) — pedido explícito do usuário. Único canal
+// real disponível hoje: a API de Scalefusion (POST /alert, ver
+// Especificacao_API_Scalefusion_COPEL.docx seção 3.2) manda a mensagem pra
+// tela do próprio aparelho do colaborador. Não existe telefone/contato
+// cadastrado em lugar nenhum do sistema — sem essa API não teria como.
+async function enviarMensagem(req, res) {
+  try {
+    const { colaborador, mensagem } = req.body || {};
+    if (!colaborador) {
+      return res.status(400).json({ sucesso: false, erro: 'Parâmetro "colaborador" é obrigatório.' });
+    }
+    const texto = (mensagem || '').trim();
+    if (!texto) {
+      return res.status(400).json({ sucesso: false, erro: 'Mensagem vazia.' });
+    }
+    const deviceId = await obterDeviceIdMaisRecente(req.db, colaborador);
+    if (!deviceId) {
+      return res
+        .status(404)
+        .json({ sucesso: false, erro: 'Nenhum dispositivo Scalefusion encontrado pra esse colaborador.' });
+    }
+    const remetente = req.usuario?.nome || 'Supervisão de Campo';
+    await enviarAlerta([Number(deviceId)], remetente, texto, { keepRinging: true, showAsDialog: true });
+    res.json({ sucesso: true });
+  } catch (erro) {
+    console.error('❌ Erro ao enviar mensagem pro colaborador:', erro);
+    res.status(500).json({ sucesso: false, erro: erro.message });
+  }
+}
+
+module.exports = {
+  ativos,
+  opcoesFiltro,
+  atividadeHoje,
+  localizacoes,
+  scalefusion,
+  segsatPosicoes,
+  gpsHistorico,
+  jornada,
+  enviarMensagem,
+};

@@ -1085,3 +1085,58 @@ warnings pré-existentes, nenhum novo). Confirmado que o `ng serve` já em execu
 o bundle atualizado (checado via `curl` no `main.js`, presença do código novo). Sem acesso de login
 ao app nesta sessão pra captura de tela — verificação ficou no código/bundle, câmera real depende de
 confirmação visual do usuário.
+
+## Adendo 20 — timeline abre na última execução; "Enviar mensagem" em cada irregularidade (Scalefusion)
+
+Dois pedidos explícitos do usuário na mesma rodada.
+
+### Timeline abre direto na última execução
+
+`colaborador-detalhe.ts`: novo `effect` no construtor, ao lado do já existente que reage a `ucFocada`
+(clique num ponto do mapa) pra rolar até a UC. Reaproveita o MESMO mecanismo (`ucFocada` +
+`scrollIntoView`) em vez de inventar um novo — só decide automaticamente PRA QUAL UC apontar assim
+que o painel abre: a última (cronologicamente) com `codigo` preenchido, buscada em `pontosOrdenados()`
+de trás pra frente. Guard `nomeComFocoInicialAplicado` (mesmo padrão de `colaboradorComBoundsAplicado`
+em `mapa-bases.ts`) garante que só aplica 1x por abertura — sem ele, o refresh de 60s ficaria
+arrastando o scroll de volta toda vez, atrapalhando quem já rolou a timeline manualmente. Se a jornada
+ainda está carregando (`pontosOrdenados()` vazio), o effect não marca nada como aplicado — quando o
+dado chegar, o effect roda de novo (lê o mesmo signal) e aplica o foco então, sem precisar de flag de
+loading separada. Colaborador sem nenhuma UC realizada (só pendente) não força foco em nada.
+
+### "Enviar mensagem" em cada irregularidade
+
+Não existe telefone/contato de colaborador cadastrado em lugar nenhum do sistema (checado: tabela de
+RH, Scalefusion, SEGSAT — nenhuma tem). Perguntado ao usuário qual canal usar — resposta: a própria
+API do Scalefusion tem uma rota de mensagem pro aparelho do colaborador. Lida a especificação
+(`Especificacao_API_Scalefusion_COPEL.docx`, seção 3.2): `POST /alert`, único endpoint da API com
+efeito real (mensagem aparece na TELA do aparelho). 5 campos obrigatórios: `device_ids` (array — usa o
+campo `id` de `/devices`, NUNCA o IMEI nem o nome, aviso explícito da própria especificação),
+`sender_name`, `message_body`, `keep_ringing`, `show_as_dialog`.
+
+**Backend**: `scalefusionService.js` ganhou `obterDeviceIdMaisRecente(db, colaborador)` (último
+`device_id` já visto pra esse colaborador na tabela `scalefusion`, mesma fonte que já alimenta a
+posição no mapa) e `enviarAlerta(deviceIds, senderName, messageBody, opções)` (POST pro endpoint,
+`keepRinging`/`showAsDialog` default `true`). Novo endpoint `POST /colaboradores/mensagem`
+(`colaboradoresController.js#enviarMensagem`, `colaboradoresRoutes.js`) — recebe `{colaborador,
+mensagem}`, busca o `device_id`, dispara o alerta com `sender_name` = nome do usuário logado
+(`req.usuario.nome`, já vem no JWT) ou "Supervisão de Campo" se faltar. 404 se o colaborador nunca
+teve device Scalefusion visto; 400 se faltar colaborador/mensagem.
+
+**Frontend**: `colaboradores.service.ts#enviarMensagem` (POST simples, sem cache/signal — é uma ação
+pontual, não dado reativo). `colaborador-detalhe.ts`/`.html`: botão "Enviar mensagem" no card expandido
+de cada UC, visível só quando `ehImpedimento(item.codigo)` (mesma condição já usada pro card de regime
+sucessivo) — abre uma caixa de texto inline (não modal separado, reaproveitando o espaço do card já
+expandido) com o texto pré-preenchido (código + mensagem do impedimento + UC/endereço), editável antes
+de enviar. Estado local (`mensagemAbertaParaUc`/`textoMensagem`/`statusEnvioMensagem`/
+`erroEnvioMensagem`) mostra enviando/sucesso/erro inline, perto do botão.
+
+### Verificação
+
+`node --check` nos 3 arquivos de backend, `npm test` (20/20). `npx tsc --noEmit -p tsconfig.app.json`
+e `npx ng build --configuration production` limpos no frontend. Confirmado no banco (transação com
+`ROLLBACK`, só leitura) que existe `device_id` real gravado pra um colaborador de teste — a busca
+funciona. Verificação visual do botão/caixa de mensagem via harness (CSS real compilado), estados
+"enviando" e "sucesso". `POST /alert` NÃO foi disparado de verdade nesta sessão — atinge o aparelho de
+uma pessoa em serviço de verdade, e a própria especificação registra que nem a A2L testou esse
+endpoint ao vivo por esse motivo (precisa de janela combinada/aparelho de homologação). Fica pro
+usuário testar com um colaborador real quando fizer sentido.

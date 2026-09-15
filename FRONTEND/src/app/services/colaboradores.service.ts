@@ -1128,4 +1128,15 @@ export class ColaboradoresService {
       });
   }
 
+  // Botão "Enviar mensagem" em cada irregularidade da timeline — pedido
+  // explícito do usuário. Sem cache/signal de serviço de propósito: é uma
+  // ação pontual disparada por um clique, não um dado carregado/reativo —
+  // quem chama (colaborador-detalhe.ts) assina o Observable direto pra
+  // mostrar enviando/sucesso/erro inline, perto do botão.
+  enviarMensagem(colaborador: string, mensagem: string) {
+    return this.http.post<{ sucesso: boolean; erro?: string }>(`${this.apiUrl}/colaboradores/mensagem`, {
+      colaborador,
+      mensagem,
+    });
+  }
 }

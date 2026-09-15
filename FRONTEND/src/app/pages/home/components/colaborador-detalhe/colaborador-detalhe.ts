@@ -42,7 +42,31 @@ export class ColaboradorDetalhe {
       const linha = this.linhas.find(ref => ref.nativeElement.dataset['uc'] === uc);
       linha?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
+    // Timeline abre direto na ÚLTIMA execução do colaborador (pedido
+    // explícito do usuário) — reaproveita o mesmo mecanismo de foco/scroll
+    // acima (ucFocada), só decidindo PRA QUAL uc apontar automaticamente
+    // assim que o painel abre. Só aplica 1x por abertura (não a cada
+    // refresh de 60s, que moveria o scroll debaixo do usuário) — o guard
+    // por nome é igual ao colaboradorComBoundsAplicado do mapa-bases.ts.
+    // Se a jornada ainda está carregando (pontos vazio), o effect só marca
+    // "aplicado" quando pontosOrdenados() de fato mudar pra algo com dado —
+    // não precisa de flag de loading à parte.
+    effect(() => {
+      const nome = this.nomeAberto();
+      if (!nome) {
+        this.nomeComFocoInicialAplicado = null;
+        return;
+      }
+      if (nome === this.nomeComFocoInicialAplicado) return;
+      const pontos = this.pontosOrdenados();
+      if (!pontos.length) return;
+      this.nomeComFocoInicialAplicado = nome;
+      const ultimaRealizada = [...pontos].reverse().find(p => !!p.codigo);
+      if (ultimaRealizada) this.colaboradoresService.ucFocada.set(ultimaRealizada.uc);
+    });
   }
+
+  private nomeComFocoInicialAplicado: string | null = null;
 
   // Posição do mousedown mais recente em qualquer lugar do documento — usada
   // por aoClicarFora pra distinguir um clique de dispensa genuíno de um
@@ -264,5 +288,47 @@ export class ColaboradorDetalhe {
   linkStreetView(item: PontoJornada): string | null {
     if (!item.latitude || !item.longitude) return null;
     return `https://www.google.com/maps?layer=c&cbll=${item.latitude},${item.longitude}`;
+  }
+
+  // "Enviar mensagem" em cada irregularidade (impedimento) da timeline —
+  // pedido explícito do usuário. Envia pra TELA do aparelho Scalefusion do
+  // colaborador (único canal real disponível, ver
+  // colaboradoresController.js#enviarMensagem) — não é um chat, é um alerta
+  // pontual. Só uma caixa de mensagem aberta por vez (mesmo padrão de
+  // ucExpandida), texto pré-preenchido com o contexto do impedimento pra
+  // agilizar, mas editável antes de enviar.
+  mensagemAbertaParaUc = signal<string | null>(null);
+  textoMensagem = signal('');
+  statusEnvioMensagem = signal<'idle' | 'enviando' | 'sucesso' | 'erro'>('idle');
+  erroEnvioMensagem = signal<string | null>(null);
+
+  toggleMensagem(item: PontoJornada): void {
+    if (this.mensagemAbertaParaUc() === item.uc) {
+      this.mensagemAbertaParaUc.set(null);
+      return;
+    }
+    this.mensagemAbertaParaUc.set(item.uc);
+    this.textoMensagem.set(
+      `Verificar impedimento (código ${item.codigo}${item.mensagem ? ' — ' + item.mensagem : ''}) na UC ${item.uc}` +
+        (item.endereco ? `, ${item.endereco}` : '') +
+        '.',
+    );
+    this.statusEnvioMensagem.set('idle');
+    this.erroEnvioMensagem.set(null);
+  }
+
+  enviarMensagem(): void {
+    const nome = this.nomeAberto();
+    const texto = this.textoMensagem().trim();
+    if (!nome || !texto || this.statusEnvioMensagem() === 'enviando') return;
+    this.statusEnvioMensagem.set('enviando');
+    this.erroEnvioMensagem.set(null);
+    this.colaboradoresService.enviarMensagem(nome, texto).subscribe({
+      next: () => this.statusEnvioMensagem.set('sucesso'),
+      error: erro => {
+        this.statusEnvioMensagem.set('erro');
+        this.erroEnvioMensagem.set(erro?.error?.erro ?? 'Falha ao enviar — tente de novo.');
+      },
+    });
   }
 }

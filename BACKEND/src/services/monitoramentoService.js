@@ -543,10 +543,11 @@ async function obterFaixasDias(db, dataImport, horaImport, filtros) {
 async function obterResumo(db, filtros) {
   await desligarNestedLoop(db);
   const fontes = fontesAtivas(filtros.tipoServico);
-  const [ultimoBatchMassivaBruto, ultimoBatchLeitura] = await Promise.all([
-    fontes.massiva ? obterUltimoBatchMassiva(db) : null,
-    fontes.leitura || fontes.releitura ? obterUltimoBatchLeitura(db) : null,
-  ]);
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade (pg enfileira por
+  // trás, com warning de depreciação que vai virar erro no pg@9).
+  const ultimoBatchMassivaBruto = fontes.massiva ? await obterUltimoBatchMassiva(db) : null;
+  const ultimoBatchLeitura = fontes.leitura || fontes.releitura ? await obterUltimoBatchLeitura(db) : null;
 
   // A coleta de massivas roda em loop contínuo (~5s) — se o último lote
   // gravado não é de HOJE, a coleta está parada (fonte externa fora do ar,
@@ -583,49 +584,53 @@ async function obterResumo(db, filtros) {
 
   const chaves = chavesAtivas(filtros.status);
 
+  // As duas funções abaixo rodam suas partes em sequência, não em
+  // Promise.all: mesmo `db` (um client por requisição — ver ADR 0003),
+  // nunca rodaram em paralelo de verdade.
   async function contarStatus(statusChave) {
     const partes = [];
     if (fontes.massiva && ultimoBatchMassiva) {
-      partes.push(contarTabela(db, statusChave, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, filtros));
+      partes.push(await contarTabela(db, statusChave, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, filtros));
     }
     if ((fontes.leitura || fontes.releitura) && ultimoBatchLeitura) {
       const tipo = fontes.leitura && fontes.releitura ? null : fontes.leitura ? 'leitura' : 'releitura';
-      partes.push(contarFonteContr(db, statusChave, tipo, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros));
+      partes.push(await contarFonteContr(db, statusChave, tipo, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros));
     }
-    return somarContagens(...(await Promise.all(partes)));
+    return somarContagens(...partes);
   }
 
   async function contarTotal(filtrosExtra = {}) {
     const combinados = { ...filtros, ...filtrosExtra };
     const partes = [];
     if (fontes.massiva && ultimoBatchMassiva) {
-      partes.push(contarTotalMassivaDeduplicado(db, chaves, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, combinados));
+      partes.push(await contarTotalMassivaDeduplicado(db, chaves, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, combinados));
     }
     if ((fontes.leitura || fontes.releitura) && ultimoBatchLeitura) {
       const tipo = fontes.leitura && fontes.releitura ? null : fontes.leitura ? 'leitura' : 'releitura';
-      partes.push(contarFonteContr(db, null, tipo, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, combinados));
+      partes.push(await contarFonteContr(db, null, tipo, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, combinados));
     }
-    return somarContagens(...(await Promise.all(partes)));
+    return somarContagens(...partes);
   }
 
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade — cada contarStatus/
+  // contarTotal já dispara suas próprias queries sequenciais (ver acima),
+  // e rodar VÁRIAS chamadas dessas ao mesmo tempo só empilharia ainda mais
+  // fila no mesmo client.
+  const pendentes = await contarStatus('pendentes');
+  const atribuidas = await contarStatus('atribuidas');
+  const emExecucao = await contarStatus('emExecucao');
+  const total = await contarTotal();
+  const noPrazo = await contarTotal({ condicaoPrazo: 'noPrazo' });
+  const prazoFinal = await contarTotal({ condicaoPrazo: 'final' });
+  const atrasadas = await contarTotal({ condicaoPrazo: 'atrasada' });
   // Faixas de dias só fazem sentido pro livro de leitura/releitura (é o que
   // tem correspondência possível em prazo_reg_livros) — sem esse lote, não
   // há o que comparar.
-  const faixasDiasPromise =
+  const faixasDias =
     (fontes.leitura || fontes.releitura) && ultimoBatchLeitura
-      ? obterFaixasDias(db, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros)
-      : Promise.resolve({ menor27: { ...CONTAGEM_ZERO }, igual33: { ...CONTAGEM_ZERO }, maior34: { ...CONTAGEM_ZERO } });
-
-  const [pendentes, atribuidas, emExecucao, total, noPrazo, prazoFinal, atrasadas, faixasDias] = await Promise.all([
-    contarStatus('pendentes'),
-    contarStatus('atribuidas'),
-    contarStatus('emExecucao'),
-    contarTotal(),
-    contarTotal({ condicaoPrazo: 'noPrazo' }),
-    contarTotal({ condicaoPrazo: 'final' }),
-    contarTotal({ condicaoPrazo: 'atrasada' }),
-    faixasDiasPromise,
-  ]);
+      ? await obterFaixasDias(db, ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros)
+      : { menor27: { ...CONTAGEM_ZERO }, igual33: { ...CONTAGEM_ZERO }, maior34: { ...CONTAGEM_ZERO } };
 
   return {
     dataImport: ultimoBatchMassiva?.dt_import ?? ultimoBatchLeitura?.data_import ?? null,
@@ -645,13 +650,15 @@ async function obterResumo(db, filtros) {
   };
 }
 
+// Sequencial, não Promise.all: mesmo `db` (um client por requisição — ver
+// ADR 0003), nunca rodou em paralelo de verdade.
 async function obterOpcoesFiltro(db, filtros = {}) {
   const fontes = fontesAtivas(filtros.tipoServico);
-  const consultas = [];
+  const regionais = new Set();
+  const etapas = new Set();
 
   if (fontes.massiva) {
-    consultas.push(
-      db.query(`
+    const regionaisMassiva = await db.query(`
         SELECT DISTINCT cl.regional
         FROM (
           SELECT local, dt_import, hr_import FROM pendentes_im
@@ -661,8 +668,10 @@ async function obterOpcoesFiltro(db, filtros = {}) {
         JOIN cidades_localidades cl ON cl.local = t.local
         WHERE cl.regional IS NOT NULL
         ORDER BY cl.regional
-      `),
-      db.query(`
+      `);
+    regionaisMassiva.rows.forEach(linha => regionais.add(linha.regional));
+
+    const etapasMassiva = await db.query(`
         SELECT DISTINCT etapa FROM (
           SELECT etapa FROM pendentes_im
           UNION ALL SELECT etapa FROM atribuidas_im
@@ -670,30 +679,22 @@ async function obterOpcoesFiltro(db, filtros = {}) {
         ) t
         WHERE etapa IS NOT NULL
         ORDER BY etapa
-      `),
-    );
+      `);
+    etapasMassiva.rows.forEach(linha => etapas.add(linha.etapa));
   }
   if (fontes.leitura || fontes.releitura) {
-    consultas.push(
-      db.query(`
+    const regionaisContr = await db.query(`
         SELECT DISTINCT cl.regional
         FROM contr_execucao_leitura c
         JOIN cidades_localidades cl ON cl.local = c.localidade
         WHERE cl.regional IS NOT NULL
         ORDER BY cl.regional
-      `),
-      db.query(`SELECT DISTINCT etapa FROM contr_execucao_leitura WHERE etapa IS NOT NULL ORDER BY etapa`),
-    );
-  }
+      `);
+    regionaisContr.rows.forEach(linha => regionais.add(linha.regional));
 
-  const resultados = await Promise.all(consultas);
-  const regionais = new Set();
-  const etapas = new Set();
-  resultados.forEach((r, i) => {
-    const alvo = i % 2 === 0 ? regionais : etapas;
-    const campo = i % 2 === 0 ? 'regional' : 'etapa';
-    r.rows.forEach(linha => alvo.add(linha[campo]));
-  });
+    const etapasContr = await db.query(`SELECT DISTINCT etapa FROM contr_execucao_leitura WHERE etapa IS NOT NULL ORDER BY etapa`);
+    etapasContr.rows.forEach(linha => etapas.add(linha.etapa));
+  }
 
   return {
     regionais: [...regionais].sort(),
@@ -704,10 +705,10 @@ async function obterOpcoesFiltro(db, filtros = {}) {
 async function obterDetalhe(db, filtros) {
   await desligarNestedLoop(db);
   const fontes = fontesAtivas(filtros.tipoServico);
-  const [ultimoBatchMassivaBruto, ultimoBatchLeitura] = await Promise.all([
-    fontes.massiva ? obterUltimoBatchMassiva(db) : null,
-    fontes.leitura || fontes.releitura ? obterUltimoBatchLeitura(db) : null,
-  ]);
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade.
+  const ultimoBatchMassivaBruto = fontes.massiva ? await obterUltimoBatchMassiva(db) : null;
+  const ultimoBatchLeitura = fontes.leitura || fontes.releitura ? await obterUltimoBatchLeitura(db) : null;
 
   // Mesma regra de obterResumo — lote de massiva que não é de hoje não entra
   // na tabela de detalhe (senão a linha ficaria parecendo situação atual).
@@ -718,14 +719,16 @@ async function obterDetalhe(db, filtros) {
     return { dataImport: null, horaImport: null, linhas: [] };
   }
 
-  const [linhasMassiva, linhasContr] = await Promise.all([
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade.
+  const linhasMassiva =
     fontes.massiva && ultimoBatchMassiva
-      ? detalheMassiva(db, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, filtros)
-      : [],
+      ? await detalheMassiva(db, ultimoBatchMassiva.dt_import, ultimoBatchMassiva.hr_import, filtros)
+      : [];
+  const linhasContr =
     (fontes.leitura || fontes.releitura) && ultimoBatchLeitura
-      ? detalheContr(db, fontes.leitura && fontes.releitura ? null : fontes.leitura ? 'leitura' : 'releitura', ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros)
-      : [],
-  ]);
+      ? await detalheContr(db, fontes.leitura && fontes.releitura ? null : fontes.leitura ? 'leitura' : 'releitura', ultimoBatchLeitura.data_import, ultimoBatchLeitura.hora_import, filtros)
+      : [];
 
   return {
     dataImport: ultimoBatchMassiva?.dt_import ?? ultimoBatchLeitura?.data_import ?? null,
@@ -894,10 +897,10 @@ function paraEpoch(dataImport, horaImport) {
 }
 
 async function obterHistoricoLivro(db, livro) {
-  const [historicoMassiva, historicoContr] = await Promise.all([
-    historicoMassivaLivro(db, livro),
-    historicoContrLivro(db, livro),
-  ]);
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade.
+  const historicoMassiva = await historicoMassivaLivro(db, livro);
+  const historicoContr = await historicoContrLivro(db, livro);
 
   const linhas = [...historicoMassiva, ...historicoContr].sort(
     (a, b) => paraEpoch(a.dataImport, a.horaImport) - paraEpoch(b.dataImport, b.horaImport),
@@ -961,17 +964,18 @@ async function obterHistoricoLivro(db, livro) {
 // por zero à esquerda.
 async function consultarUcsBrutasDoLivro(db, livro, ateData) {
   const condicaoData = ateData ? `AND to_date(data_import, 'DD/MM/YYYY') <= to_date($2, 'DD/MM/YYYY')` : '';
-  const [{ rows: ucs }, { rows: cabecalhoRows }] = await Promise.all([
-    db.query(
-      `
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade.
+  const { rows: ucs } = await db.query(
+    `
       SELECT unidade_consumidora AS uc
       FROM coordenadas_ucs_mineradas
       WHERE livro ~ '^[0-9]+$' AND livro::int = $1::int
       `,
-      [livro],
-    ),
-    db.query(
-      `
+    [livro],
+  );
+  const { rows: cabecalhoRows } = await db.query(
+    `
       SELECT situacao, colaborador, data_import, hora_import, etapa
       FROM contr_execucao_leitura
       WHERE livro = $1
@@ -979,9 +983,8 @@ async function consultarUcsBrutasDoLivro(db, livro, ateData) {
       ORDER BY id DESC
       LIMIT 1
       `,
-      ateData ? [livro, ateData] : [livro],
-    ),
-  ]);
+    ateData ? [livro, ateData] : [livro],
+  );
 
   const cabecalho = cabecalhoRows[0] || {
     situacao: null,
@@ -1519,10 +1522,10 @@ async function obterRegimeSucessivo(db, uc) {
 async function obterUcsDoLivro(db, livro, ateData) {
   // eventos (base_dados_leitura) e brutas (contr_execucao_leitura) são
   // consultas independentes — buscadas em paralelo, combinadas só depois.
-  const [eventos, brutas] = await Promise.all([
-    buscarEventosLeitura(db, livro, ateData),
-    consultarUcsBrutasDoLivro(db, livro, ateData),
-  ]);
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade.
+  const eventos = await buscarEventosLeitura(db, livro, ateData);
+  const brutas = await consultarUcsBrutasDoLivro(db, livro, ateData);
   const eventosPrimeiraPorUc = escolherPorUc(eventos, 'primeira');
   const eventosUltimaPorUc = escolherPorUc(eventos, 'ultima');
 
@@ -1625,11 +1628,11 @@ async function historicoContrLivro(db, livro) {
     WHERE livro ~ '^[0-9]+$' AND livro::int = $1::int
   `;
 
-  const [{ rows: pontos }, { rows: totalRows }, eventos] = await Promise.all([
-    db.query(sqlPontos, [livro]),
-    db.query(sqlTotalUcs, [livro]),
-    buscarEventosLeitura(db, livro),
-  ]);
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade.
+  const { rows: pontos } = await db.query(sqlPontos, [livro]);
+  const { rows: totalRows } = await db.query(sqlTotalUcs, [livro]);
+  const eventos = await buscarEventosLeitura(db, livro);
 
   const totalUcs = totalRows[0]?.total ?? 0;
   const primeiraPorUc = escolherPorUc(eventos, 'primeira');

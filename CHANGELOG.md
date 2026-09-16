@@ -59,6 +59,17 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- ~13 lugares em `monitoramentoService.js`, `atividadeColaboradoresService.js` e `colaboradoresService.js`
+  tentavam "paralelizar" 2-3 consultas com `Promise.all([db.query(...), db.query(...)])`, mas passando
+  o MESMO client de banco (uma requisição HTTP usa um único client, ver ADR 0003) — um client não roda
+  duas queries ao mesmo tempo de verdade, o `pg` só enfileirava por trás (com um aviso de depreciação
+  que vai virar erro no pg@9). Nenhuma dessas consultas "paralelas" nunca rodou em paralelo — o tempo
+  total sempre foi a soma das partes. Explica por que otimizar `obterBaselineDigitadosPorLivro`
+  isoladamente (item já registrado abaixo) não ajudava muito: ela sempre esperava as outras 2 da fila
+  terminarem primeiro. Trocado por `await` sequencial em todos os pontos — sem mudança de comportamento
+  real, já que não existia paralelismo de verdade antes. Ver Adendo 3 da [ADR
+  0003](docs/adr/0003-rbac-multi-tenant.md).
+
 - Extração diária do roster real de UCs (modo profundo) tinha um teto de 90 minutos que a interrompia
   no meio, salvando só o roster parcial coletado até ali — na 1ª extração que conseguiu terminar sem
   cair (depois do fix do vazamento de conexão, ver item abaixo), isso deixou 34 de 1.875 livros sem

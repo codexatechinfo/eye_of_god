@@ -314,3 +314,64 @@ reiniciou o backend com o fix (interrompendo de propósito a 2ª extração, que
 morta havia ~25min e nunca ia completar mesmo sem a mudança); ciclo seguinte de modo profundo entrou em
 scraping sem nenhuma conexão `app_user` parada em `pg_stat_activity` durante a raspagem — antes disso
 sempre aparecia uma `idle in transaction` crescendo pelo tempo todo do scraping.
+
+## Adendo 3 — `Promise.all` de queries no mesmo `db` nunca rodou em paralelo de verdade (2026-09-15)
+
+Com a aba de terminal do backend aberta pela primeira vez dentro desta ferramenta (antes só o usuário
+via o log, direto no VS Code), apareceu um aviso nunca visto antes: `DeprecationWarning: Calling
+client.query() when the client is already executing a query is deprecated and will be removed in
+pg@9.0`.
+
+Causa: cada requisição HTTP recebe **um único client** (`req.db`, aberto por
+`authMiddleware.anexarContextoTenant`, ver seção "Contexto de tenant" acima) — todo `set_config` de RLS é
+local a esse client/transação. Vários pontos do código, na tentativa de "paralelizar" 2-3 consultas de
+uma função, faziam `Promise.all([db.query(...), db.query(...)])` passando o MESMO `db`. Um `pg.Client`
+não roda duas queries ao mesmo tempo de verdade — a lib enfileira por trás (por isso nunca deu erro,
+só o aviso, e por pouco tempo mais: a fila silenciosa está sendo removida no pg@9). Ou seja, **nenhuma
+dessas "consultas paralelas" jamais rodou em paralelo** — o tempo total sempre foi a SOMA das partes,
+não o maior tempo entre elas, apesar do código sugerir o contrário.
+
+Isso reencaixa um mistério já registrado no `CHANGELOG.md`: `/colaboradores/atividade-hoje` tem
+`obterBaselineDigitadosPorLivro` como "uma das 3 consultas paralelas" mais lenta (~1,3s), e "tentativas
+de índice novo e reescrita com LATERAL não melhoraram". Agora faz sentido — otimizar só essa consulta
+nunca ia ajudar muito, porque ela sempre esperava as outras 2 da mesma função terminarem primeiro na
+fila do client, mesmo "paralela" no código.
+
+### Escopo — não é 1 lugar, é um padrão
+
+Encontradas e corrigidas ~13 ocorrências do mesmo padrão em 3 arquivos:
+
+- `monitoramentoService.js` — `obterResumo` (incluindo as funções internas `contarStatus`/
+  `contarTotal`, que agora também rodam suas partes em sequência), `obterOpcoesFiltro`, `obterDetalhe`,
+  `obterHistoricoLivro`, `consultarUcsBrutasDoLivro`, `obterEventosPorLivrosAteData`/função vizinha, e
+  o painel de mapa do livro.
+- `atividadeColaboradoresService.js` — `obterBaselineDigitadosMassiva`, a consulta principal de
+  `listarAtividadeHoje` (a mesma dos 3 itens do CHANGELOG), e o bloco de afastamentos/licenças/
+  suspensões.
+- `colaboradoresService.js` — `listarOpcoesFiltro`.
+
+`copelControleEmpreiteirasScraperService.js` também tem um `Promise.all`, mas é Playwright
+(`page.waitForEvent('download')` corrida com o clique do botão) — não envolve `db`, não é o mesmo bug.
+
+### Correção
+
+Trocado `Promise.all` por `await` sequencial em todos os pontos acima — **sem mudança de comportamento
+real**, já que não existia paralelismo de verdade antes (só a ilusão dele). Resolve o aviso de
+depreciação e a quebra futura no pg@9, sem ganho nem perda de performance medível.
+
+Paralelismo real exigiria abrir clients adicionais por query, repetindo o `set_config` de RLS em cada
+um — mudança bem maior no modelo de tenant-context, avaliada e explicitamente adiada (usuário optou por
+só remover o aviso, não implementar paralelismo de verdade nesta rodada).
+
+### Verificação
+
+`node --check` nos 3 arquivos. `npm test`: 20/20, sem regressão. Script isolado, dentro de
+`BEGIN`/`ROLLBACK`, escopado numa empresa real (não ROOT sem filtro — isso sozinho já é lento e não é o
+que este teste queria medir): `listarAtividadeHoje` (299 colaboradores), `obterOpcoesFiltro` (10
+regionais/34 etapas) e `listarOpcoesFiltro` (3 cargos/11 regionais) rodaram sem nenhum
+`DeprecationWarning` capturado (`process.on('warning', ...)` no próprio script de teste). `obterResumo`/
+`obterDetalhe` não foram exercitados de ponta a ponta no teste — passam por
+`obterEventosPorLivrosAteData`, já registrada como consulta lenta sob carga em investigação anterior
+desta mesma sessão (índices funcionais em `livro::int`), sem relação com este fix. Ao vivo: nodemon
+reiniciou o backend com as mudanças, ciclos de Massivas/Controle de Empreiteiras seguintes rodaram
+normalmente.

@@ -66,21 +66,23 @@ async function listarAtivos(db, { colaborador, cargo, regional } = {}) {
 
 async function listarOpcoesFiltro(db) {
   const dataBr = hojeBr();
-  const [cargos, regionais] = await Promise.all([
-    db.query(
-      `SELECT DISTINCT cargo FROM ativos_inativos WHERE (situacao = 'ATIVO' OR ${condicaoAfastadoHoje(1)}) AND cargo IS NOT NULL ORDER BY cargo`,
-      [dataBr],
-    ),
-    db.query(
-      `
+  // Sequencial, não Promise.all: as duas queries compartilham o mesmo
+  // `db` (um client só por requisição, ver ADR 0003) — um client não roda
+  // duas queries ao mesmo tempo de verdade, então o "paralelo" nunca
+  // existiu (pg enfileira por trás, com um warning de depreciação).
+  const cargos = await db.query(
+    `SELECT DISTINCT cargo FROM ativos_inativos WHERE (situacao = 'ATIVO' OR ${condicaoAfastadoHoje(1)}) AND cargo IS NOT NULL ORDER BY cargo`,
+    [dataBr],
+  );
+  const regionais = await db.query(
+    `
       SELECT DISTINCT ${REGIONAL_NORMALIZADA} AS regional
       FROM ativos_inativos
       WHERE (situacao = 'ATIVO' OR ${condicaoAfastadoHoje(1)}) AND base IS NOT NULL
       ORDER BY regional
     `,
-      [dataBr],
-    ),
-  ]);
+    [dataBr],
+  );
 
   return {
     cargos: cargos.rows.map(c => c.cargo),

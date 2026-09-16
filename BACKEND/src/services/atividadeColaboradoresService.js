@@ -145,9 +145,11 @@ function calcularDiasPrazoRegulatorio(hoje, prazoCalendario, diasFinais) {
 async function obterBaselineDigitadosMassiva(db, dataBr, pares) {
   if (!pares.leituristas.length) return new Map();
 
-  const [{ rows: baseAtribuidas }, { rows: baseExecucao }] = await Promise.all([
-    db.query(
-      `
+  // Sequencial, não Promise.all: mesmo `db` (um client só por requisição,
+  // ver ADR 0003) — nunca rodou em paralelo de verdade, o pg só enfileirava
+  // as duas por trás (com um warning de depreciação que vai virar erro).
+  const { rows: baseAtribuidas } = await db.query(
+    `
       WITH corte AS (SELECT MIN(id) AS corte FROM atribuidas_im WHERE dt_import = $1),
       pares AS (SELECT * FROM UNNEST($2::text[], $3::text[]) AS p(leiturista, livro))
       SELECT DISTINCT ON (t.leiturista, t.livro) t.leiturista, t.livro, t.qtd_digitados_nao_digitados
@@ -157,10 +159,10 @@ async function obterBaselineDigitadosMassiva(db, dataBr, pares) {
       WHERE t.id < c.corte
       ORDER BY t.leiturista, t.livro, t.id DESC
       `,
-      [dataBr, pares.leituristas, pares.livros],
-    ),
-    db.query(
-      `
+    [dataBr, pares.leituristas, pares.livros],
+  );
+  const { rows: baseExecucao } = await db.query(
+    `
       WITH corte AS (SELECT MIN(id) AS corte FROM em_execucao_im WHERE dt_import = $1),
       pares AS (SELECT * FROM UNNEST($2::text[], $3::text[]) AS p(leiturista, livro))
       SELECT DISTINCT ON (t.leiturista, t.livro) t.leiturista, t.livro, t.qtd_digitados_nao_digitados
@@ -170,9 +172,8 @@ async function obterBaselineDigitadosMassiva(db, dataBr, pares) {
       WHERE t.id < c.corte
       ORDER BY t.leiturista, t.livro, t.id DESC
       `,
-      [dataBr, pares.leituristas, pares.livros],
-    ),
-  ]);
+    [dataBr, pares.leituristas, pares.livros],
+  );
 
   const mapa = new Map();
   for (const linha of baseAtribuidas) {
@@ -364,9 +365,14 @@ async function listarAtividadeHoje(db, dataIso) {
   // separado da coluna própria (populada no import — ver
   // parseSituacaoColaborador em copelImportService.js), não precisa mais
   // ser extraído de dentro de `situacao` via regex.
-  const [{ rows: linhas }, mapaPrazoRegulatorio, baselinePorLivro] = await Promise.all([
-    db.query(
-      `
+  // Sequencial, não Promise.all: as 3 (mesmo `db`, um client por
+  // requisição — ver ADR 0003) nunca rodaram em paralelo de verdade, só
+  // enfileiradas por trás pelo pg. Era essa fila escondida — não a query
+  // em si — que fazia obterBaselineDigitadosPorLivro parecer não melhorar
+  // com índice novo (ver CHANGELOG): ela sempre esperava as outras 2
+  // terminarem primeiro, mesmo "paralela" no código.
+  const { rows: linhas } = await db.query(
+    `
       WITH linhas_dedup AS (
         -- O scraper às vezes grava a mesma UC mais de uma vez dentro do
         -- MESMO lote (mesmo hora_import, até com codigo diferente entre as
@@ -397,11 +403,10 @@ async function listarAtividadeHoje(db, dataIso) {
       GROUP BY livro, etapa, situacao, colaborador, hora_import, data_recebimento, data_prevista_limite
       ORDER BY hora_import ASC, MIN(id) ASC
       `,
-      [hoje],
-    ),
-    obterMapaPrazoRegulatorio(db, hojeIsoConsultado),
-    obterBaselineDigitadosPorLivro(db, hoje),
-  ]);
+    [hoje],
+  );
+  const mapaPrazoRegulatorio = await obterMapaPrazoRegulatorio(db, hojeIsoConsultado);
+  const baselinePorLivro = await obterBaselineDigitadosPorLivro(db, hoje);
 
   const porColaborador = new Map();
   let ultimaHoraGeral = null;
@@ -682,11 +687,11 @@ async function listarAtividadeHoje(db, dataIso) {
   // Três fontes de justificativa de ausência — atestados primeiro (tem
   // motivo/INSS, mais detalhado), licença de ativos_inativos e suspensão da
   // tabela suspensao só preenchem quem não tinha nada nas fontes anteriores.
-  const [afastamentosHoje, licencasHoje, suspensoesHoje] = await Promise.all([
-    obterAfastamentosHoje(db, hojeIsoConsultado),
-    obterLicencasAtivosInativosHoje(db, hojeIsoConsultado),
-    obterSuspensoesHoje(db, hojeIsoConsultado),
-  ]);
+  // Sequencial, não Promise.all: mesmo `db` (um client por requisição —
+  // ver ADR 0003), nunca rodou em paralelo de verdade.
+  const afastamentosHoje = await obterAfastamentosHoje(db, hojeIsoConsultado);
+  const licencasHoje = await obterLicencasAtivosInativosHoje(db, hojeIsoConsultado);
+  const suspensoesHoje = await obterSuspensoesHoje(db, hojeIsoConsultado);
   for (const [nome, info] of Object.entries(licencasHoje)) {
     if (!afastamentosHoje[nome]) afastamentosHoje[nome] = info;
   }

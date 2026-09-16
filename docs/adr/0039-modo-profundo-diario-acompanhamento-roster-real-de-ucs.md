@@ -593,3 +593,61 @@ continua em modo rápido; a extração profunda só dispara no primeiro ciclo à
 `node --check`, `npm test` (20/20, sem regressão). Não dá pra testar o disparo ao vivo sem esperar a
 virada de 6h de um dia real — lógica simples o bastante (uma comparação de hora) pra não precisar de
 mock de data pra validar.
+
+## Adendo 8 — 1ª extração profunda de verdade (2026-09-15): teto de 90min cortou 34 livros; desligado
+
+Depois do fix do vazamento de conexão que abria a transação antes do scraping (ver Adendo 2 da [ADR
+0003](0003-rbac-multi-tenant.md)), a extração profunda conseguiu, pela primeira vez, terminar e gravar
+sem cair. Resultado: 1841/1875 livros, 189.500 UCs em `roster_ucs_extracao_diaria`. Mas não foram
+100%: o log revelou um teto de duração já existente em `copelScraperService.js`
+(`COPEL_TIMEOUT_PROFUNDO_MIN`, 90min por padrão) que nenhum dos Adendos anteriores tinha acionado — as
+tentativas anteriores sempre morriam por conexão bem antes de chegar nos 90min de scraping puro. Ao
+bater o teto, o código para no livro em que estiver e salva o roster parcial já coletado (`⏱️ Modo
+profundo excedeu 90min — parando em 1841/1875 livro(s)`), o que é correto como rede de segurança
+(rodar pra sempre bloquearia o Massivas, que compartilha a mesma sessão Copel via
+`comSessaoExclusiva`) — mas incorreto como comportamento padrão pra ESTA extração especificamente: como
+`precisaExtracaoProfundaHoje` já passa a responder "não precisa mais" a partir da 1ª UC gravada, os 34
+livros que ficaram de fora NÃO são tentados de novo no mesmo dia — ficam sem roster até o dia seguinte,
+o mesmo tipo de lacuna que os Adendos 5-7 existem pra evitar.
+
+Verificação pós-extração (comparando contra o snapshot do Massivas por situação) apontou dois problemas
+que **não são causados por este teto** e ficam registrados como investigação futura, não resolvidos
+nesta rodada:
+
+- Cobertura por situação bem desigual: Pendente 91,1% (915/1.004), Atribuída 52,5% (171/326), **Em
+  Execução só 44,0% (755/1.714)**. A soma dos 3 com roster (915+171+755=1.841) bate exatamente com o
+  total gravado — nenhuma UC "sobrando" fora dessas situações —, mas o total esperado somando as 3
+  situações (3.044) é bem maior que os 1.875 livros que a Coleta Acomp encontrou raspando direto da
+  página de acompanhamento do portal. Os dois caminhos (listagem ao vivo do portal vs. snapshot do
+  Massivas) parecem enumerar populações diferentes — hipótese não confirmada, precisa de investigação
+  dedicada.
+- Os livros 008240 e 010152 — que motivaram a investigação original desta ADR — continuam com ZERO UCs
+  no roster de hoje. Não há como saber, só pelo dado salvo, se caíram nos 34 cortados pelo teto de 90min
+  ou se nunca entraram na lista de 1.875 candidatos raspados do portal.
+
+### Correção (parcial — só o teto de 90min)
+
+Usuário pediu explicitamente que o teto não corte a extração. Como o gate `precisaExtracaoProfundaHoje`
+só permite UMA tentativa "válida" por dia calendário (a partir da 1ª UC gravada, não tenta mais), não
+existe distinção real de código entre "primeira extração" e qualquer outra — toda extração profunda que
+roda é, por definição, a única do dia. `COPEL_TIMEOUT_PROFUNDO_MIN=0` setado no `.env` (opção que já
+existia no código, criada numa rodada anterior pra medir a duração real sem interromper) — desliga o
+teto por completo, deixando a extração rodar até processar todos os livros encontrados, não importa
+quanto tempo leve. Risco aceito conscientemente: se o scraping genuinamente travar (não só demorar),
+Massivas fica bloqueado indefinidamente atrás dele via `comSessaoExclusiva` — mas desde que o modo
+profundo é HTTP direto (Adendo 2 desta ADR), uma extração completa leva minutos, não horas, tornando
+esse cenário bem menos provável do que era na época em que o teto foi criado.
+
+`.env` não é observado pelo nodemon (sem `nodemon.json`/`nodemonConfig` no projeto, watch por extensão
+padrão não inclui `.env`) — a mudança só entra em vigor no próximo restart manual do backend, não no
+próximo ciclo.
+
+### Pendente pra próxima rodada
+
+- Investigar por que a listagem ao vivo do portal (1.875 livros) e o snapshot do Massivas por situação
+  (3.044 livros somando Em Execução+Atribuída+Pendente) não batem — sem entender essa divergência, não
+  dá pra afirmar que 100% dos livros "Em Execução" vão ganhar roster mesmo sem o teto de 90min.
+  Confirmar isso especificamente pra 008240 e 010152 na próxima extração completa.
+- Situação `'Em Execução (MGA-SANDRO APARECIDO LOPES\n)'` apareceu como valor distinto de `'Em
+  Execução'` na mesma consulta — sinal de sujeira de formatação na importação do Massivas (nome de
+  empreiteira colado no campo de situação, com quebra de linha). Não investigado a fundo nesta rodada.

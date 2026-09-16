@@ -59,6 +59,14 @@ Este projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 
 ### Corrigido
 
+- Extração diária do roster real de UCs (modo profundo) tinha um teto de 90 minutos que a interrompia
+  no meio, salvando só o roster parcial coletado até ali — na 1ª extração que conseguiu terminar sem
+  cair (depois do fix do vazamento de conexão, ver item abaixo), isso deixou 34 de 1.875 livros sem
+  roster do dia, e como o gate de "já rodei hoje" passa a valer a partir da 1ª UC gravada, esses 34
+  livros não são tentados de novo até o dia seguinte. Desligado via `COPEL_TIMEOUT_PROFUNDO_MIN=0`
+  no `.env` — a extração agora roda até processar todos os livros encontrados. Ver Adendo 8 da [ADR
+  0039](docs/adr/0039-modo-profundo-diario-acompanhamento-roster-real-de-ucs.md).
+
 - Extração diária do roster real de UCs (modo profundo, 30-75min) perdia o trabalho inteiro e reiniciava
   do zero sempre que demorava mais de 10 minutos — o job abria a transação com o banco ANTES de raspar
   o site da Copel, e o Postgres (`idle_in_transaction_session_timeout`, ver Adendo 1 abaixo) matava a
